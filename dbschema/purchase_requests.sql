@@ -1,0 +1,17 @@
+CREATE TABLE `purchase_requests` (
+  `id` INT NOT NULL AUTO_INCREMENT,
+  `pr_number` VARCHAR(50) NOT NULL,
+  `requested_by` INT, -- Engineer (nullable to avoid FK issues when employee not in procurement_db)
+  `purpose` TEXT,
+  `remarks` TEXT,
+  `status` ENUM('Pending', 'Approved', 'Rejected', 'For Purchase', 'Completed', 'Cancelled') DEFAULT 'Pending',
+  `approved_by` INT, -- Super Admin
+  `approved_at` TIMESTAMP NULL,
+  `rejection_reason` TEXT,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `pr_number` (`pr_number`),
+  FOREIGN KEY (`requested_by`) REFERENCES `employees`(`id`),
+  FOREIGN KEY (`approved_by`) REFERENCES `employees`(`id`)
+);
