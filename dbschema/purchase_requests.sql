@@ -4,7 +4,7 @@ CREATE TABLE `purchase_requests` (
   `requested_by` INT, -- Engineer (nullable to avoid FK issues when employee not in procurement_db)
   `purpose` TEXT,
   `remarks` TEXT,
-  `status` ENUM('Pending', 'Approved', 'Rejected', 'For Purchase', 'Completed', 'Cancelled') DEFAULT 'Pending',
+  `status` ENUM('Pending', 'For Procurement Review', 'For Super Admin Final Approval', 'For Purchase', 'PO Created', 'Completed', 'Rejected', 'Cancelled') DEFAULT 'Pending',
   `approved_by` INT, -- Super Admin
   `approved_at` TIMESTAMP NULL,
   `rejection_reason` TEXT,

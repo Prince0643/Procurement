@@ -1,6 +1,6 @@
 Procurement System Documentation
 System Overview
-An internal e-commerce procurement system with three user levels: Engineer (requester), Admin (procurement officer), and Super Admin (approver).
+An internal e-commerce procurement system with four user levels: Engineer (requester), Procurement, Admin (procurement officer), and Super Admin (approver).
 
 User Roles & Responsibilities
 1. Engineer (User)
@@ -16,27 +16,40 @@ Mark items as received
 
 Track purchase history
 
-2. Admin
+2. Procurement
+Responsibilities:
+
+Review approved PRs from Super Admin
+
+Approve PRs to proceed to next approval stage (requires rejection reason when rejecting)
+
+View all PRs and POs
+
+Monitor procurement activities
+
+Add/Edit items to the system
+
+3. Admin
 Responsibilities:
 
 Add/Edit items to the system (without quantities)
 
 Add/Edit suppliers and their pricing
 
-Receive notifications for approved PRs
-
-Create Purchase Orders (PO) for approved items
+Create Purchase Orders (PO) for fully approved items
 
 Manage supplier relationships
 
-3. Super Admin
+4. Super Admin
 Responsibilities:
 
-Approve/Reject Purchase Requests
+Initial approval of PRs from Engineer
+
+Pre-final approval of PRs before going to Admin
+
+Approve POs after Admin places order
 
 View all PRs and POs
-
-Monitor procurement activities
 
 System oversight
 
@@ -51,20 +64,42 @@ text
 Engineer → Creates PR → Purchase Requests Table
 Engineer → Adds Items to PR → Purchase Request Items Table
 Status: "Pending"
-Step 3: Approval Process (Super Admin)
+Step 3: First Approval - Super Admin
 text
 Super Admin → Reviews PR
 ↓
 If Approved:
-- Purchase Requests.status = "Approved"
+- Purchase Requests.status = "For Procurement Review"
+- Notification sent to Procurement
+↓
+If Rejected:
+- Purchase Requests.status = "Rejected"
+- Notification sent to Engineer
+Step 4: Second Approval - Procurement
+text
+Procurement → Reviews PR from Super Admin
+↓
+If Approved:
+- Purchase Requests.status = "For Super Admin Final Approval"
+- Notification sent to Super Admin
+↓
+If Rejected:
+- Purchase Requests.status = "Rejected"
+- rejection_reason required
+- Notification sent to Engineer
+Step 5: Third Approval - Super Admin
+text
+Super Admin → Reviews PR approved by Procurement
+↓
+If Approved:
+- Purchase Requests.status = "For Purchase"
 - approved_by, approved_at updated
 - Notification sent to Admin
 ↓
 If Rejected:
 - Purchase Requests.status = "Rejected"
-- rejection_reason added
 - Notification sent to Engineer
-Step 4: Procurement Process (Admin)
+Step 6: Procurement Process (Admin)
 text
 Admin receives notification
 ↓
@@ -75,10 +110,23 @@ Admin creates Purchase Order → Purchase Orders Table
 Admin adds items to PO → Purchase Order Items Table
 ↓
 Purchase Request Items.status = "For Purchase"
-Step 5: Receiving Process (Engineer)
-text
-Admin purchases items (real-world action)
 ↓
+Admin places order (real-world action)
+↓
+Notification sent to Super Admin for final approval
+Step 7: Final Approval - Super Admin
+text
+Super Admin → Reviews placed order
+↓
+If Approved:
+- Purchase Orders.status = "Confirmed"
+- Notification sent to Engineer
+↓
+If Rejected:
+- Purchase Orders.status = "Cancelled"
+- Notification sent to Admin
+Step 8: Receiving Process (Engineer)
+text
 Engineer receives items
 ↓
 Engineer marks items as received
@@ -86,6 +134,7 @@ Engineer marks items as received
 Purchase Request Items.status = "Received"
 ↓
 If all items received → Purchase Requests.status = "Completed"
+
 Database Tables
 Core Tables:
 1. employees (Existing Table)
@@ -94,7 +143,7 @@ text
 - employee_code
 - first_name, middle_name, last_name
 - email
-- position (Engineer, Admin, Super Admin)
+- position (Engineer, Procurement, Admin, Super Admin)
 - status
 - branch_id
 - created_at, updated_at
@@ -152,10 +201,10 @@ text
 - pr_number (Unique)
 - requested_by (FK to employees - Engineer)
 - purpose, remarks
-- status (Pending, Approved, Rejected, For Purchase, Completed, Cancelled)
+- status (Pending, For Procurement Review, For Super Admin Final Approval, For Purchase, Completed, Rejected, Cancelled)
 - approved_by (FK to employees - Super Admin)
 - approved_at
-- rejection_reason
+- rejection_reason (required when Procurement rejects)
 - created_at, updated_at
 7. purchase_request_items
 Items requested in each PR
@@ -222,19 +271,37 @@ Engineer Creates PR
     ↓
 Status: PENDING
     ↓
-Super Admin Reviews
+Super Admin Reviews (First)
     ↓
-    ├─→ Approved → Status: APPROVED → Admin Notified
-    │       ↓
-    │       Admin Creates PO → Status: FOR PURCHASE
-    │       ↓
-    │       Admin Buys Items → Status: PURCHASED
-    │       ↓
-    │       Engineer Receives → Status: RECEIVED
-    │       ↓
-    │       All Items Received? → Status: COMPLETED
+    ├─→ Rejected → Status: REJECTED → Engineer Notified
     │
-    └─→ Rejected → Status: REJECTED → Engineer Notified
+    └─→ Approved → Status: FOR PROCUREMENT REVIEW
+                    ↓
+                    Procurement Reviews
+                    ↓
+                    ├─→ Rejected → Status: REJECTED → Engineer Notified
+                    │
+                    └─→ Approved → Status: FOR SUPER ADMIN FINAL APPROVAL
+                                    ↓
+                                    Super Admin Reviews (Second)
+                                    ↓
+                                    ├─→ Rejected → Status: REJECTED → Engineer Notified
+                                    │
+                                    └─→ Approved → Status: FOR PURCHASE → Admin Notified
+                                                    ↓
+                                                    Admin Creates PO
+                                                    ↓
+                                                    Admin Places Order
+                                                    ↓
+                                                    Super Admin Reviews (Final)
+                                                    ↓
+                                                    ├─→ Rejected → Status: CANCELLED → Admin Notified
+                                                    │
+                                                    └─→ Approved → Engineer Notified
+                                                                    ↓
+                                                                    Engineer Receives → Status: RECEIVED
+                                                                    ↓
+                                                                    All Items Received? → Status: COMPLETED
 Key Features
 1. Item Management
 Items are added without quantities (unlike inventory system)
@@ -269,9 +336,13 @@ Item Creation: Only Admin can add/remove items
 
 PR Creation: Engineers can only create PRs for their needs
 
-Approval: Super Admin must approve all PRs
+Approval Flow: 
+- Super Admin (First): Must approve PR before going to Procurement
+- Procurement: Must approve PR before returning to Super Admin
+- Super Admin (Second): Must approve PR before going to Admin
+- Super Admin (Final): Must approve order before notifying Engineer
 
-PO Creation: Admin creates PO only after PR approval
+PO Creation: Admin creates PO only after full PR approval
 
 Receiving: Only the requesting Engineer can mark items as received
 
@@ -296,10 +367,27 @@ POST /api/purchase-orders - Create PO
 
 GET /api/purchase-requests/pending - View pending PRs
 
+Procurement Endpoints:
+GET /api/purchase-requests/awaiting-procurement - View PRs approved by Super Admin (First)
+
+PUT /api/purchase-requests/{id}/procurement-approve - Approve PR
+
+PUT /api/purchase-requests/{id}/procurement-reject - Reject PR
+
+GET /api/purchase-requests - View all PRs
+
 Super Admin Endpoints:
+GET /api/purchase-requests/first-approval - View pending PRs from Engineers
+
+GET /api/purchase-requests/second-approval - View PRs approved by Procurement
+
+GET /api/purchase-requests/final-approval - View orders awaiting final approval
+
 PUT /api/purchase-requests/{id}/approve - Approve PR
 
 PUT /api/purchase-requests/{id}/reject - Reject PR
+
+PUT /api/purchase-orders/{id}/final-approve - Final approval after order placed
 
 GET /api/reports - View reports
 

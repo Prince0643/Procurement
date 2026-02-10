@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { itemService } from './services/items'
 import { purchaseRequestService } from './services/purchaseRequests'
+import { purchaseOrderService } from './services/purchaseOrders'
 import { categoryService } from './services/categories'
+import { supplierService } from './services/suppliers'
+import { notificationService } from './services/notifications'
+import { reportService } from './services/reports'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
 import {
@@ -20,6 +24,7 @@ import {
   Search,
   Filter,
   ChevronDown,
+  ChevronUp,
   Clock,
   Eye,
   Edit,
@@ -95,9 +100,12 @@ const getStatusColor = (status) => {
     'Active': 'bg-green-100 text-green-800',
     'Inactive': 'bg-gray-100 text-gray-800',
     'Pending': 'bg-yellow-100 text-yellow-800',
-    'Approved': 'bg-yellow-100 text-yellow-800',
-    'Rejected': 'bg-red-100 text-red-800',
+    'For Procurement Review': 'bg-blue-100 text-blue-800',
+    'For Super Admin Final Approval': 'bg-indigo-100 text-indigo-800',
     'For Purchase': 'bg-purple-100 text-purple-800',
+    'PO Created': 'bg-orange-100 text-orange-800',
+    'Approved': 'bg-green-100 text-green-800',
+    'Rejected': 'bg-red-100 text-red-800',
     'Completed': 'bg-green-100 text-green-800',
     'Purchased': 'bg-indigo-100 text-indigo-800',
     'Received': 'bg-teal-100 text-teal-800',
@@ -180,19 +188,267 @@ const Badge = ({ children, status }) => (
 
 const StatusBadge = ({ status }) => <Badge status={status}>{status}</Badge>
 
+const PRDetailsModal = ({ prId, onClose }) => {
+  const [pr, setPR] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchPR = async () => {
+      try {
+        setLoading(true)
+        const data = await purchaseRequestService.getById(prId)
+        setPR(data)
+      } catch (err) {
+        setError('Failed to fetch purchase request details')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (prId) fetchPR()
+  }, [prId])
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-auto">
+        <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Purchase Request Details</h2>
+            <p className="text-sm text-gray-500 mt-1">{pr?.pr_number || ''}</p>
+          </div>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {loading && (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="text-center py-12 text-red-600">{error}</div>
+          )}
+
+          {!loading && !error && pr && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="text-sm"><span className="font-medium text-gray-700">Requested By:</span> {pr.requester_first_name} {pr.requester_last_name}</div>
+                  <div className="text-sm"><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
+                  <div className="text-sm flex items-center gap-2"><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="text-sm"><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
+                  <div className="text-sm"><span className="font-medium text-gray-700">Remarks:</span> {pr.remarks || '-'}</div>
+                </div>
+              </div>
+
+              <Card>
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900">Requested Items</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Item Code</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Item</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Qty</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Unit</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Remarks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(pr.items || []).map((item) => (
+                        <tr key={item.id} className="border-b border-gray-100">
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.item_code || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.item_name || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.quantity}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.unit || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{formatCurrency(item.unit_price || 0)}</td>
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900">{formatCurrency(item.total_price || 0)}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.remarks || '-'}</td>
+                        </tr>
+                      ))}
+                      {(pr.items || []).length === 0 && (
+                        <tr>
+                          <td colSpan="7" className="py-8 text-center text-gray-500">No items found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+const PODetailsModal = ({ poId, onClose }) => {
+  const [po, setPO] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchPO = async () => {
+      try {
+        setLoading(true)
+        const data = await purchaseOrderService.getById(poId)
+        setPO(data)
+      } catch (err) {
+        setError('Failed to fetch purchase order details')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (poId) fetchPO()
+  }, [poId])
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+      <Card className="w-full max-w-4xl max-h-[90vh] overflow-auto">
+        <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Purchase Order Details</h2>
+            <p className="text-sm text-gray-500 mt-1">{po?.po_number || ''}</p>
+          </div>
+          <Button variant="secondary" onClick={onClose}>Close</Button>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {loading && (
+            <div className="flex items-center justify-center h-40">
+              <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+          )}
+
+          {!loading && error && (
+            <div className="text-center py-12 text-red-600">{error}</div>
+          )}
+
+          {!loading && !error && po && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="text-sm"><span className="font-medium text-gray-700">Related PR:</span> {po.pr_number || '-'}</div>
+                  <div className="text-sm"><span className="font-medium text-gray-700">Supplier:</span> {po.supplier_name || '-'}</div>
+                  <div className="text-sm flex items-center gap-2"><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={po.status} /></div>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-md space-y-2">
+                  <div className="text-sm"><span className="font-medium text-gray-700">PO Date:</span> {formatDate(po.po_date || po.created_at)}</div>
+                  <div className="text-sm"><span className="font-medium text-gray-700">Expected Delivery:</span> {formatDate(po.expected_delivery_date)}</div>
+                  <div className="text-sm"><span className="font-medium text-gray-700">Total Amount:</span> {formatCurrency(po.total_amount || 0)}</div>
+                </div>
+              </div>
+
+              <Card>
+                <div className="p-4 border-b border-gray-200">
+                  <h3 className="text-sm font-semibold text-gray-900">Order Items</h3>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Item</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Qty</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Unit</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Unit Price</th>
+                        <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(po.items || []).map((item) => (
+                        <tr key={item.id} className="border-b border-gray-100">
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.item_name || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.quantity}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{item.unit || '-'}</td>
+                          <td className="py-3 px-4 text-sm text-gray-700">{formatCurrency(item.unit_price || 0)}</td>
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900">{formatCurrency(item.total_price || 0)}</td>
+                        </tr>
+                      ))}
+                      {(po.items || []).length === 0 && (
+                        <tr>
+                          <td colSpan="5" className="py-8 text-center text-gray-500">No items found</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 // ============ LAYOUT ============
 const Layout = ({ currentRole, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+  const [loadingNotifications, setLoadingNotifications] = useState(false)
   const { user, logout } = useAuth()
+
+  useEffect(() => {
+    fetchNotifications()
+  }, [])
+
+  const fetchNotifications = async () => {
+    try {
+      setLoadingNotifications(true)
+      const data = await notificationService.getAll()
+      console.log('Notifications data:', data)
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unreadCount || 0)
+    } catch (err) {
+      console.error('Failed to fetch notifications', err)
+    } finally {
+      setLoadingNotifications(false)
+    }
+  }
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await notificationService.markAsRead(id)
+      await fetchNotifications()
+    } catch (err) {
+      console.error('Failed to mark notification as read', err)
+    }
+  }
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationService.markAllAsRead()
+      await fetchNotifications()
+    } catch (err) {
+      console.error('Failed to mark all notifications as read', err)
+    }
+  }
 
   const roleNavItems = {
     engineer: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'items', label: 'Browse Items', icon: Package },
-      { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'purchase-requests', label: 'My Purchase Requests', icon: ShoppingCart },
       { id: 'history', label: 'Purchase History', icon: ClipboardList },
+    ],
+    procurement: [
+      { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'approve-prs', label: 'Approve PRs', icon: CheckCircle },
+      { id: 'items', label: 'Items', icon: Package },
+      { id: 'add-item', label: 'Add Item', icon: Plus },
+      { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
     ],
     admin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -204,22 +460,25 @@ const Layout = ({ currentRole, children }) => {
     superadmin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'approve-prs', label: 'Approve PRs', icon: CheckCircle },
+      { id: 'approve-pos', label: 'Approve POs', icon: FileText },
+      { id: 'items', label: 'Items', icon: Package },
+      { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
       { id: 'all-pos', label: 'All Purchase Orders', icon: FileText },
       { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp },
     ],
   }
 
-  const unreadNotifications = MOCK_NOTIFICATIONS.filter(n => !n.is_read).length
-
   const roleLabels = {
     engineer: 'Engineer',
+    procurement: 'Procurement',
     admin: 'Admin',
     super_admin: 'Super Admin'
   }
 
   const roleColors = {
     engineer: 'bg-yellow-100 text-yellow-800',
+    procurement: 'bg-blue-100 text-blue-800',
     admin: 'bg-green-100 text-green-800',
     super_admin: 'bg-purple-100 text-purple-800'
   }
@@ -316,24 +575,43 @@ const Layout = ({ currentRole, children }) => {
                 className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-full transition-colors"
               >
                 <Bell className="w-5 h-5" />
-                {unreadNotifications > 0 && (
+                {unreadCount > 0 && (
                   <span className="absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                    {unreadNotifications}
+                    {unreadCount}
                   </span>
                 )}
               </button>
 
               {notificationsOpen && (
                 <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
-                  <div className="p-3 border-b border-gray-200">
+                  <div className="p-3 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="font-medium text-gray-900">Notifications</h3>
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={handleMarkAllAsRead}
+                        className="text-xs text-yellow-600 hover:text-yellow-700 font-medium"
+                        disabled={loadingNotifications}
+                      >
+                        Mark all read
+                      </button>
+                    )}
                   </div>
                   <div className="max-h-64 overflow-y-auto">
-                    {MOCK_NOTIFICATIONS.length === 0 ? (
+                    {loadingNotifications ? (
+                      <div className="p-4 text-center">
+                        <div className="w-5 h-5 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                      </div>
+                    ) : notifications.length === 0 ? (
                       <p className="p-4 text-sm text-gray-500 text-center">No notifications</p>
                     ) : (
-                      MOCK_NOTIFICATIONS.map(notif => (
-                        <div key={notif.id} className={`p-3 border-b border-gray-100 hover:bg-gray-50 ${!notif.is_read ? 'bg-yellow-50' : ''}`}>
+                      notifications.map(notif => (
+                        <div 
+                          key={notif.id} 
+                          onClick={() => !notif.is_read && handleMarkAsRead(notif.id)}
+                          className={`p-3 border-b border-gray-100 cursor-pointer transition-colors ${
+                            !notif.is_read ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'
+                          }`}
+                        >
                           <p className="text-sm font-medium text-gray-900">{notif.title}</p>
                           <p className="text-xs text-gray-500 mt-1">{notif.message}</p>
                           <p className="text-xs text-gray-400 mt-1">{formatDate(notif.created_at)}</p>
@@ -371,18 +649,48 @@ const Layout = ({ currentRole, children }) => {
 
 // ============ ENGINEER VIEWS ============
 const EngineerDashboard = () => {
-  const myPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.requested_by === 'Engineer 1')
-  const pendingCount = myPRs.filter(pr => pr.status === 'Pending').length
-  const approvedCount = myPRs.filter(pr => pr.status === 'Approved').length
-  const completedCount = myPRs.filter(pr => pr.status === 'Completed').length
+  const [prs, setPRs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+
+  useEffect(() => {
+    fetchPRs()
+  }, [])
+
+  const fetchPRs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseRequestService.getAll()
+      // Filter PRs for current user (engineer)
+      const myPRs = data.filter(pr => pr.requested_by === user?.id)
+      setPRs(myPRs)
+    } catch (err) {
+      console.error('Failed to fetch PRs', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const pendingCount = prs.filter(pr => pr.status === 'Pending').length
+  const inReviewCount = prs.filter(pr => ['For Procurement Review', 'For Super Admin Final Approval'].includes(pr.status)).length
+  const forPurchaseCount = prs.filter(pr => pr.status === 'For Purchase').length
+  const completedCount = prs.filter(pr => pr.status === 'Completed').length
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending Requests</p>
+              <p className="text-sm font-medium text-gray-600">Pending</p>
               <p className="text-3xl font-bold text-yellow-600 mt-2">{pendingCount}</p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -394,11 +702,23 @@ const EngineerDashboard = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Approved</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-2">{approvedCount}</p>
+              <p className="text-sm font-medium text-gray-600">In Review</p>
+              <p className="text-3xl font-bold text-blue-600 mt-2">{inReviewCount}</p>
             </div>
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-yellow-600" />
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Eye className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">For Purchase</p>
+              <p className="text-3xl font-bold text-purple-600 mt-2">{forPurchaseCount}</p>
+            </div>
+            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+              <ShoppingCart className="w-6 h-6 text-purple-600" />
             </div>
           </div>
         </Card>
@@ -429,7 +749,7 @@ const EngineerDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {myPRs.slice(0, 5).map(pr => (
+              {prs.slice(0, 5).map(pr => (
                 <tr key={pr.id} className="border-b border-gray-100 hover:bg-gray-50">
                   <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
                   <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
@@ -437,6 +757,13 @@ const EngineerDashboard = () => {
                   <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
                 </tr>
               ))}
+              {prs.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="py-8 text-center text-gray-500">
+                    No purchase requests found
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
@@ -627,7 +954,7 @@ const BrowseItems = () => {
 
       {/* Create PR Modal */}
       {showCreatePR && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Create Purchase Request</h2>
@@ -698,6 +1025,7 @@ const BrowseItems = () => {
           </Card>
         </div>
       )}
+
     </div>
   )
 }
@@ -705,12 +1033,10 @@ const BrowseItems = () => {
 const AddItem = () => {
   const [categories, setCategories] = useState([])
   const [categoriesLoading, setCategoriesLoading] = useState(true)
-  const [itemCode, setItemCode] = useState('')
 
-  // Fetch categories and generate item code on mount
+  // Fetch categories on mount
   useEffect(() => {
     fetchCategories()
-    generateNextItemCode()
   }, [])
 
   const fetchCategories = async () => {
@@ -725,21 +1051,8 @@ const AddItem = () => {
     }
   }
 
-  const generateNextItemCode = async () => {
-    try {
-      const items = await itemService.getAll()
-      const maxId = items.reduce((max, item) => {
-        const match = (item.item_code || '').match(/ITM(\d+)/)
-        const num = match ? parseInt(match[1]) : 0
-        return Math.max(max, num)
-      }, 0)
-      setItemCode(`ITM${String(maxId + 1).padStart(3, '0')}`)
-    } catch (err) {
-      setItemCode('ITM001')
-    }
-  }
-
   const [formData, setFormData] = useState({
+    item_code: '',
     item_name: '',
     description: '',
     category_id: '',
@@ -816,7 +1129,7 @@ const AddItem = () => {
     try {
       // Call real API
       await itemService.create({
-        item_code: itemCode,
+        item_code: formData.item_code,
         item_name: formData.item_name,
         description: formData.description,
         category_id: parseInt(formData.category_id),
@@ -824,18 +1137,7 @@ const AddItem = () => {
       })
       
       setSuccess(true)
-      setFormData({ item_name: '', description: '', category_id: '', unit: '' })
-      
-      // Refresh items to get updated list (and new item code)
-      const updatedItems = await itemService.getAll()
-      
-      // Generate next item code from updated list
-      const maxId = updatedItems.reduce((max, item) => {
-        const match = (item.item_code || '').match(/ITM(\d+)/)
-        const num = match ? parseInt(match[1]) : 0
-        return Math.max(max, num)
-      }, 0)
-      setItemCode(`ITM${String(maxId + 1).padStart(3, '0')}`)
+      setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })
       
       setTimeout(() => setSuccess(false), 3000)
     } catch (err) {
@@ -866,11 +1168,16 @@ const AddItem = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Item Code</label>
-              <div className="px-3 py-2 bg-gray-100 border border-gray-300 rounded-md text-gray-600 font-mono">
-                {itemCode}
-              </div>
-              <p className="text-xs text-gray-500 mt-1">Auto-generated</p>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
+              <input
+                type="text"
+                name="item_code"
+                value={formData.item_code}
+                onChange={handleChange}
+                placeholder="e.g., ITM008"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 font-mono"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Unit *</label>
@@ -980,7 +1287,7 @@ const AddItem = () => {
             <Button 
               type="button" 
               variant="secondary"
-              onClick={() => setFormData({ item_name: '', description: '', category_id: '', unit: '' })}
+              onClick={() => setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })}
             >
               Clear
             </Button>
@@ -993,15 +1300,57 @@ const AddItem = () => {
 
 const MyPurchaseRequests = () => {
   const [filterStatus, setFilterStatus] = useState('all')
-  
-  const myPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.requested_by === 'Engineer 1')
-  const filteredPRs = filterStatus === 'all' ? myPRs : myPRs.filter(pr => pr.status === filterStatus)
+  const [prs, setPRs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const { user } = useAuth()
+  const [expandedPRId, setExpandedPRId] = useState(null)
+
+  const toggleExpand = (prId) => {
+    setExpandedPRId(expandedPRId === prId ? null : prId)
+  }
+
+  useEffect(() => {
+    fetchPRs()
+  }, [])
+
+  const fetchPRs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseRequestService.getAll()
+      // Filter PRs for current user (engineer)
+      const myPRs = data.filter(pr => pr.requested_by === user?.id)
+      setPRs(myPRs)
+    } catch (err) {
+      setError('Failed to fetch purchase requests')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const allStatuses = ['all', 'Pending', 'For Procurement Review', 'For Super Admin Final Approval', 'For Purchase', 'PO Created', 'Completed', 'Rejected', 'Cancelled']
+  const filteredPRs = filterStatus === 'all' ? prs : prs.filter(pr => pr.status === filterStatus)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex gap-2">
-          {['all', 'Pending', 'Approved', 'For Purchase', 'Completed'].map(status => (
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h2 className="text-lg font-semibold text-gray-900">My Purchase Requests</h2>
+        <div className="flex flex-wrap gap-2">
+          {allStatuses.map(status => (
             <button
               key={status}
               onClick={() => setFilterStatus(status)}
@@ -1031,18 +1380,37 @@ const MyPurchaseRequests = () => {
             </thead>
             <tbody>
               {filteredPRs.map(pr => (
-                <tr key={pr.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
-                  <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
-                  <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
-                  <td className="py-3 px-4">
-                    <Button variant="ghost" size="sm">
-                      <Eye className="w-4 h-4" />
-                    </Button>
+                <React.Fragment key={pr.id}>
+                  <tr 
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => toggleExpand(pr.id)}
+                  >
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
+                    <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); toggleExpand(pr.id); }}>
+                        {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedPRId === pr.id && (
+                    <tr>
+                      <td colSpan="5" className="bg-gray-50 p-4">
+                        <PRExpandedDetails pr={pr} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {filteredPRs.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-gray-500">
+                    No purchase requests found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -1051,12 +1419,380 @@ const MyPurchaseRequests = () => {
   )
 }
 
+const PRExpandedDetails = ({ pr }) => {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      try {
+        const data = await purchaseRequestService.getById(pr.id)
+        setItems(data.items || [])
+      } catch (err) {
+        console.error('Failed to fetch PR details', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDetails()
+  }, [pr.id])
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div><span className="font-medium text-gray-700">Requested By:</span> {pr.requester_first_name} {pr.requester_last_name}</div>
+        <div><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
+        <div><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
+        <div><span className="font-medium text-gray-700">Remarks:</span> {pr.remarks || '-'}</div>
+      </div>
+      
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <div className="w-6 h-6 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <div className="border rounded-md overflow-hidden bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t border-gray-100">
+                  <td className="py-2 px-3">{item.item_name || item.item_code}</td>
+                  <td className="py-2 px-3">{item.quantity}</td>
+                  <td className="py-2 px-3">{item.unit}</td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan="3" className="py-4 text-center text-gray-500">No items found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============ ADMIN VIEWS ============
+const PendingPRs = () => {
+  const [prs, setPRs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showCreatePOModal, setShowCreatePOModal] = useState(false)
+  const [selectedPR, setSelectedPR] = useState(null)
+  const [expandedPRId, setExpandedPRId] = useState(null)
+  const [suppliers, setSuppliers] = useState([])
+  const [poFormData, setPoFormData] = useState({
+    supplier_id: '',
+    expected_delivery_date: '',
+    notes: ''
+  })
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+  const [submitSuccess, setSubmitSuccess] = useState(false)
+
+  useEffect(() => {
+    fetchPRs()
+    fetchSuppliers()
+  }, [])
+
+  const fetchPRs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseRequestService.getAll()
+      // Filter PRs with "For Purchase" status (ready for Admin to create PO)
+      const forPurchasePRs = data.filter(pr => pr.status === 'For Purchase')
+      setPRs(forPurchasePRs)
+    } catch (err) {
+      setError('Failed to fetch purchase requests')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchSuppliers = async () => {
+    try {
+      // For now, use mock suppliers. Replace with real API when available
+      setSuppliers(MOCK_SUPPLIERS)
+    } catch (err) {
+      console.error('Failed to fetch suppliers', err)
+    }
+  }
+
+  const handleCreatePO = (pr) => {
+    setSelectedPR(pr)
+    setShowCreatePOModal(true)
+    setPoFormData({
+      supplier_id: '',
+      expected_delivery_date: '',
+      notes: ''
+    })
+    setSubmitError('')
+    setSubmitSuccess(false)
+  }
+
+  const handleSubmitPO = async () => {
+    if (!poFormData.supplier_id || !poFormData.expected_delivery_date) {
+      setSubmitError('Supplier and expected delivery date are required')
+      return
+    }
+
+    setSubmitting(true)
+    setSubmitError('')
+    setSubmitSuccess(false)
+
+    try {
+      // Get PR items to include in PO
+      const prDetails = await purchaseRequestService.getById(selectedPR.id)
+
+      const poItems = (prDetails.items || []).map((item) => ({
+        purchase_request_item_id: item.id,
+        item_id: item.item_id,
+        quantity: item.quantity,
+        unit_price: item.unit_price
+      }))
+
+      await purchaseOrderService.create({
+        purchase_request_id: selectedPR.id,
+        supplier_id: parseInt(poFormData.supplier_id),
+        expected_delivery_date: poFormData.expected_delivery_date,
+        notes: poFormData.notes,
+        items: poItems
+      })
+
+      setSubmitSuccess(true)
+      setTimeout(() => {
+        setShowCreatePOModal(false)
+        setSelectedPR(null)
+        setSubmitSuccess(false)
+        setPRs(prev => prev.filter(pr => pr.id !== selectedPR.id))
+      }, 2000)
+    } catch (err) {
+      setSubmitError(err.response?.data?.message || 'Failed to create purchase order')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-gray-900">Purchase Requests Ready for PO</h2>
+        <div className="text-sm text-gray-500">
+          {prs.length} PR{prs.length !== 1 ? 's' : ''} ready for Purchase Order creation
+        </div>
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Requested By</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Created</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {prs.map(pr => (
+                <React.Fragment key={pr.id}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {pr.requester_first_name} {pr.requester_last_name}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
+                    <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="success"
+                          onClick={(e) => { e.stopPropagation(); handleCreatePO(pr); }}
+                        >
+                          <ShoppingCart className="w-4 h-4 mr-1" />
+                          Create PO
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }}>
+                          {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedPRId === pr.id && (
+                    <tr>
+                      <td colSpan="6" className="bg-gray-50 p-4">
+                        <PRExpandedDetails pr={pr} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {prs.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    No purchase requests ready for Purchase Order creation
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Create PO Modal */}
+      {showCreatePOModal && selectedPR && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Create Purchase Order</h2>
+              <p className="text-sm text-gray-500 mt-1">For PR: {selectedPR.pr_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {submitError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{submitError}</p>
+                </div>
+              )}
+              {submitSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-700">Purchase order created successfully!</p>
+                </div>
+              )}
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
+                  <select
+                    value={poFormData.supplier_id}
+                    onChange={(e) => setPoFormData({ ...poFormData, supplier_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select supplier</option>
+                    {suppliers.map(supplier => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.supplier_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date *</label>
+                  <input
+                    type="date"
+                    value={poFormData.expected_delivery_date}
+                    onChange={(e) => setPoFormData({ ...poFormData, expected_delivery_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                <textarea
+                  value={poFormData.notes}
+                  onChange={(e) => setPoFormData({ ...poFormData, notes: e.target.value })}
+                  placeholder="Additional notes for this purchase order..."
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">PR Details</h3>
+                <div className="bg-gray-50 p-3 rounded-md">
+                  <p><strong>Purpose:</strong> {selectedPR.purpose}</p>
+                  <p><strong>Requested by:</strong> {selectedPR.requester_first_name} {selectedPR.requester_last_name}</p>
+                  <p><strong>Created:</strong> {formatDate(selectedPR.created_at)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowCreatePOModal(false)}
+                disabled={submitting}
+              >
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSubmitPO}
+                disabled={submitting || !poFormData.supplier_id || !poFormData.expected_delivery_date}
+              >
+                {submitting ? 'Creating...' : 'Create PO'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const AdminDashboard = () => {
-  const pendingPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Approved').length
+  const [prs, setPRs] = useState([])
+  const [pos, setPOs] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      const [prsData, posData] = await Promise.all([
+        purchaseRequestService.getAll(),
+        purchaseOrderService.getAll()
+      ])
+      setPRs(prsData)
+      setPOs(posData)
+    } catch (err) {
+      console.error('Failed to fetch data', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const forPurchasePRs = prs.filter(pr => pr.status === 'For Purchase')
+  const pendingPRsCount = forPurchasePRs.length
   const totalItems = MOCK_ITEMS.length
   const totalSuppliers = MOCK_SUPPLIERS.length
-  const pendingPOs = MOCK_PURCHASE_ORDERS.filter(po => po.status === 'Ordered').length
+  const pendingPOs = pos.filter(po => po.status === 'Ordered').length
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -1064,8 +1800,8 @@ const AdminDashboard = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending PRs</p>
-              <p className="text-3xl font-bold text-yellow-600 mt-2">{pendingPRs}</p>
+              <p className="text-sm font-medium text-gray-600">PRs for PO</p>
+              <p className="text-3xl font-bold text-yellow-600 mt-2">{pendingPRsCount}</p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
               <ClipboardList className="w-6 h-6 text-yellow-600" />
@@ -1112,19 +1848,22 @@ const AdminDashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">Approved PRs Awaiting PO</h2>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">PRs Ready for PO Creation</h2>
           <div className="space-y-3">
-            {MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Approved').map(pr => (
+            {forPurchasePRs.map(pr => (
               <div key={pr.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-sm text-gray-900">{pr.pr_number}</p>
                   <p className="text-xs text-gray-500">{pr.purpose}</p>
                 </div>
-                <Button size="sm">Create PO</Button>
+                <Button size="sm" variant="success">
+                  <ShoppingCart className="w-4 h-4 mr-1" />
+                  Create PO
+                </Button>
               </div>
             ))}
-            {MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Approved').length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-4">No approved PRs pending</p>
+            {forPurchasePRs.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No PRs ready for Purchase Order</p>
             )}
           </div>
         </Card>
@@ -1132,7 +1871,7 @@ const AdminDashboard = () => {
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Purchase Orders</h2>
           <div className="space-y-3">
-            {MOCK_PURCHASE_ORDERS.slice(0, 5).map(po => (
+            {pos.slice(0, 5).map(po => (
               <div key={po.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <div>
                   <p className="font-medium text-sm text-gray-900">{po.po_number}</p>
@@ -1141,6 +1880,9 @@ const AdminDashboard = () => {
                 <StatusBadge status={po.status} />
               </div>
             ))}
+            {pos.length === 0 && (
+              <p className="text-sm text-gray-500 text-center py-4">No purchase orders found</p>
+            )}
           </div>
         </Card>
       </div>
@@ -1189,72 +1931,184 @@ const ItemsManagement = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
-            <tbody>
-              {filteredItems.map(item => (
-                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.item_code}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900">{item.item_name}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{item.category}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{item.unit}</td>
-                  <td className="py-3 px-4"><StatusBadge status={item.status} /></td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm"><Edit className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="sm"><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+          <tbody>
+            {filteredItems.map(item => (
+              <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.item_code}</td>
+                <td className="py-3 px-4 text-sm text-gray-900">{item.item_name}</td>
+                <td className="py-3 px-4 text-sm text-gray-600">{item.category}</td>
+                <td className="py-3 px-4 text-sm text-gray-600">{item.unit}</td>
+                <td className="py-3 px-4"><StatusBadge status={item.status} /></td>
+                <td className="py-3 px-4">
+                  <div className="flex gap-2">
+                    <Button variant="ghost" size="sm"><Edit className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="sm"><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
 
-      {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-lg">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Add New Item</h2>
+    {showAddModal && (
+      <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+        <Card className="w-full max-w-lg">
+          <div className="p-6 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Add New Item</h2>
+          </div>
+          <div className="p-6 space-y-4">
+            <Input label="Item Code" placeholder="e.g., ITM006" />
+            <Input label="Item Name" placeholder="Enter item name" />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                placeholder="Enter description"
+                rows="3"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
             </div>
-            <div className="p-6 space-y-4">
-              <Input label="Item Code" placeholder="e.g., ITM006" />
-              <Input label="Item Name" placeholder="Enter item name" />
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                <textarea
-                  placeholder="Enter description"
-                  rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Select
-                  label="Category"
-                  value=""
-                  onChange={() => {}}
-                  options={[
-                    { value: '', label: 'Select category' },
-                    { value: 'Electronics', label: 'Electronics' },
-                    { value: 'Office Supplies', label: 'Office Supplies' },
-                    { value: 'Furniture', label: 'Furniture' },
-                  ]}
-                />
-                <Input label="Unit" placeholder="e.g., pc, kg, box" />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <Select
+                label="Category"
+                value=""
+                onChange={() => {}}
+                options={[
+                  { value: '', label: 'Select category' },
+                  { value: 'Electronics', label: 'Electronics' },
+                  { value: 'Office Supplies', label: 'Office Supplies' },
+                  { value: 'Furniture', label: 'Furniture' },
+                ]}
+              />
+              <Input label="Unit" placeholder="e.g., pc, kg, box" />
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-              <Button onClick={() => setShowAddModal(false)}>Add Item</Button>
-            </div>
-          </Card>
-        </div>
-      )}
-    </div>
+          </div>
+          <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
+            <Button onClick={() => setShowAddModal(false)}>Add Item</Button>
+          </div>
+        </Card>
+      </div>
+    )}
+  </div>
   )
 }
 
 const SuppliersManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedSupplier, setSelectedSupplier] = useState(null)
+  const [expandedSupplierId, setExpandedSupplierId] = useState(null)
+  const [suppliers, setSuppliers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_person: '',
+    phone: '',
+    email: '',
+    address: '',
+    tin: ''
+  })
+
+  useEffect(() => {
+    fetchSuppliers()
+  }, [])
+
+  const fetchSuppliers = async () => {
+    try {
+      setLoading(true)
+      const data = await supplierService.getAll()
+      setSuppliers(data)
+    } catch (err) {
+      setError('Failed to fetch suppliers')
+      console.error('Failed to fetch suppliers', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleEditClick = (supplier) => {
+    setSelectedSupplier(supplier)
+    setFormData({
+      name: supplier.supplier_name || supplier.name || '',
+      contact_person: supplier.contact_person || '',
+      phone: supplier.phone || '',
+      email: supplier.email || '',
+      address: supplier.address || '',
+      tin: supplier.tin || ''
+    })
+    setShowEditModal(true)
+    setError('')
+  }
+
+  const handleUpdate = async () => {
+    if (!formData.name.trim()) {
+      setError('Supplier name is required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await supplierService.update(selectedSupplier.id, formData)
+      setShowEditModal(false)
+      setSelectedSupplier(null)
+      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', tin: '' })
+      await fetchSuppliers()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update supplier')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const toggleExpand = (supplierId) => {
+    setExpandedSupplierId(expandedSupplierId === supplierId ? null : supplierId)
+  }
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      setError('Supplier name is required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await supplierService.create(formData)
+      setShowAddModal(false)
+      setFormData({ name: '', contact_person: '', phone: '', email: '', address: '', tin: '' })
+      await fetchSuppliers()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create supplier')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const filteredSuppliers = suppliers.filter(s => 
+    (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.supplier_name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -1264,6 +2118,8 @@ const SuppliersManagement = () => {
           <input
             type="text"
             placeholder="Search suppliers..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
           />
         </div>
@@ -1278,52 +2134,220 @@ const SuppliersManagement = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier Code</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Name</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Contact</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Email</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Phone</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {MOCK_SUPPLIERS.map(supplier => (
-                <tr key={supplier.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{supplier.supplier_code}</td>
-                  <td className="py-3 px-4 text-sm text-gray-900">{supplier.supplier_name}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{supplier.contact_person}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{supplier.email}</td>
-                  <td className="py-3 px-4"><StatusBadge status={supplier.status} /></td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm"><Eye className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="sm"><Edit className="w-4 h-4" /></Button>
-                    </div>
+              {filteredSuppliers.map(supplier => (
+                <React.Fragment key={supplier.id}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpand(supplier.id)}>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{supplier.name || supplier.supplier_name}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{supplier.contact_person || '-'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{supplier.email || '-'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{supplier.phone || '-'}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={(e) => { e && e.stopPropagation(); toggleExpand(supplier.id); }}>
+                          {expandedSupplierId === supplier.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e && e.stopPropagation(); handleEditClick(supplier); }}>
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                  {expandedSupplierId === supplier.id && (
+                    <tr>
+                      <td colSpan="5" className="bg-gray-50 p-4">
+                        <div className="space-y-2 text-sm">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div><span className="font-medium text-gray-700">Supplier Code:</span> {supplier.supplier_code || '-'}</div>
+                            <div><span className="font-medium text-gray-700">Status:</span> {supplier.status || 'Active'}</div>
+                            <div><span className="font-medium text-gray-700">Contact Person:</span> {supplier.contact_person || '-'}</div>
+                            <div><span className="font-medium text-gray-700">Email:</span> {supplier.email || '-'}</div>
+                            <div><span className="font-medium text-gray-700">Phone:</span> {supplier.phone || '-'}</div>
+                            <div><span className="font-medium text-gray-700">Created:</span> {formatDate(supplier.created_at)}</div>
+                          </div>
+                          <div><span className="font-medium text-gray-700">Address:</span> {supplier.address || '-'}</div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {filteredSuppliers.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-gray-500">
+                    No suppliers found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
       </Card>
 
       {showAddModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-lg">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Add New Supplier</h2>
             </div>
             <div className="p-6 space-y-4">
-              <Input label="Supplier Code" placeholder="e.g., SUP004" />
-              <Input label="Supplier Name" placeholder="Enter supplier name" />
-              <Input label="Contact Person" placeholder="Enter contact person" />
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="Enter supplier name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  name="contact_person"
+                  value={formData.contact_person}
+                  onChange={handleInputChange}
+                  placeholder="Enter contact person"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Email" type="email" placeholder="email@example.com" />
-                <Input label="Phone" placeholder="+1234567890" />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="email@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="+1234567890"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
                 <textarea
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
+                  placeholder="Enter address"
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">TIN</label>
+                <input
+                  type="text"
+                  name="tin"
+                  value={formData.tin}
+                  onChange={handleInputChange}
+                  placeholder="Tax Identification Number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Adding...' : 'Add Supplier'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Supplier Modal */}
+      {showEditModal && selectedSupplier && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Supplier</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedSupplier.supplier_name || selectedSupplier.name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Name *</label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="Enter supplier name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Contact Person</label>
+                <input
+                  type="text"
+                  name="contact_person"
+                  value={formData.contact_person}
+                  onChange={handleInputChange}
+                  placeholder="Enter contact person"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="email@example.com"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <input
+                    type="text"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="+1234567890"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <textarea
+                  name="address"
+                  value={formData.address}
+                  onChange={handleInputChange}
                   placeholder="Enter address"
                   rows="2"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
@@ -1331,8 +2355,10 @@ const SuppliersManagement = () => {
               </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-              <Button onClick={() => setShowAddModal(false)}>Add Supplier</Button>
+              <Button variant="secondary" onClick={() => setShowEditModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleUpdate} disabled={submitting}>
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </Button>
             </div>
           </Card>
         </div>
@@ -1342,21 +2368,49 @@ const SuppliersManagement = () => {
 }
 
 const PurchaseOrders = () => {
+  const [pos, setPOs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const { user } = useAuth()
+  const [expandedPOId, setExpandedPOId] = useState(null)
+
+  useEffect(() => {
+    fetchPOs()
+  }, [])
+
+  const fetchPOs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseOrderService.getAll()
+      setPOs(data)
+    } catch (err) {
+      setError('Failed to fetch purchase orders')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div className="relative w-96">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search POs..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-          />
+        <h2 className="text-lg font-semibold text-gray-900">Purchase Orders</h2>
+        <div className="text-sm text-gray-500">
+          {pos.length} PO{pos.length !== 1 ? 's' : ''} total
         </div>
-        <Button>
-          <Plus className="w-4 h-4 mr-2" />
-          Create PO
-        </Button>
       </div>
 
       <Card>
@@ -1365,33 +2419,198 @@ const PurchaseOrders = () => {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Number</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Related PR</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Date</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Expected Delivery</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {MOCK_PURCHASE_ORDERS.map(po => (
-                <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{po.po_number}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{MOCK_PURCHASE_REQUESTS.find(pr => pr.id === po.purchase_request_id)?.pr_number}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{MOCK_SUPPLIERS.find(s => s.id === po.supplier_id)?.supplier_name}</td>
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{formatCurrency(po.total_amount)}</td>
-                  <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{formatDate(po.expected_delivery_date)}</td>
-                  <td className="py-3 px-4">
-                    <div className="flex gap-2">
-                      <Button variant="ghost" size="sm"><Eye className="w-4 h-4" /></Button>
-                      <Button variant="ghost" size="sm"><FileText className="w-4 h-4" /></Button>
-                    </div>
+              {pos.map(po => (
+                <React.Fragment key={po.id}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedPOId(expandedPOId === po.id ? null : po.id)}>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{po.po_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(po.po_date || po.created_at)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(po.expected_delivery_date)}</td>
+                    <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPOId(expandedPOId === po.id ? null : po.id); }}>
+                        {expandedPOId === po.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedPOId === po.id && (
+                    <tr>
+                      <td colSpan="8" className="bg-gray-50 p-4">
+                        <POExpandedDetails po={po} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {pos.length === 0 && (
+                <tr>
+                  <td colSpan="8" className="py-8 text-center text-gray-500">
+                    No purchase orders found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+const POExpandedDetails = ({ po }) => {
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      try {
+        const data = await purchaseOrderService.getById(po.id)
+        setItems(data.items || [])
+      } catch (err) {
+        console.error('Failed to fetch PO details', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchDetails()
+  }, [po.id])
+
+  return (
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-4 text-sm">
+        <div><span className="font-medium text-gray-700">Related PR:</span> {po.pr_number || '-'}</div>
+        <div><span className="font-medium text-gray-700">Supplier:</span> {po.supplier_name || '-'}</div>
+        <div><span className="font-medium text-gray-700">PO Date:</span> {formatDate(po.po_date || po.created_at)}</div>
+        <div><span className="font-medium text-gray-700">Expected Delivery:</span> {formatDate(po.expected_delivery_date)}</div>
+        <div><span className="font-medium text-gray-700">Total Amount:</span> {formatCurrency(po.total_amount || 0)}</div>
+        <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={po.status} /></div>
+      </div>
+      
+      {loading ? (
+        <div className="flex items-center justify-center py-4">
+          <div className="w-6 h-6 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+        </div>
+      ) : (
+        <div className="border rounded-md overflow-hidden bg-white">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Unit Price</th>
+                <th className="text-left py-2 px-3 font-medium text-gray-600">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className="border-t border-gray-100">
+                  <td className="py-2 px-3">{item.item_name || '-'}</td>
+                  <td className="py-2 px-3">{item.quantity}</td>
+                  <td className="py-2 px-3">{item.unit || '-'}</td>
+                  <td className="py-2 px-3">{formatCurrency(item.unit_price || 0)}</td>
+                  <td className="py-2 px-3 font-medium">{formatCurrency(item.total_price || 0)}</td>
+                </tr>
+              ))}
+              {items.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-4 text-center text-gray-500">No items found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ============ PROCUREMENT VIEWS ============
+const ProcurementDashboard = () => {
+  const pendingApprovals = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Super Admin Approved').length
+  const totalApproved = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Procurement Approved').length
+  const totalRejected = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Rejected' && pr.rejection_reason).length
+  const totalItems = MOCK_ITEMS.length
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Pending Approval</p>
+              <p className="text-3xl font-bold text-blue-600 mt-2">{pendingApprovals}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Clock className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Approved by You</p>
+              <p className="text-3xl font-bold text-green-600 mt-2">{totalApproved}</p>
+            </div>
+            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Rejected (with reason)</p>
+              <p className="text-3xl font-bold text-red-600 mt-2">{totalRejected}</p>
+            </div>
+            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
+              <XCircle className="w-6 h-6 text-red-600" />
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-gray-600">Total Items</p>
+              <p className="text-3xl font-bold text-blue-600 mt-2">{totalItems}</p>
+            </div>
+            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+              <Package className="w-6 h-6 text-blue-600" />
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <Card className="p-6">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">PRs Awaiting Your Approval</h2>
+        <div className="space-y-3">
+          {MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Super Admin Approved').map(pr => (
+            <div key={pr.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div>
+                <p className="font-medium text-sm text-gray-900">{pr.pr_number}</p>
+                <p className="text-xs text-gray-500">{pr.purpose}</p>
+              </div>
+              <Button size="sm">Review</Button>
+            </div>
+          ))}
+          {MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Super Admin Approved').length === 0 && (
+            <p className="text-sm text-gray-500 text-center py-4">No PRs awaiting approval</p>
+          )}
         </div>
       </Card>
     </div>
@@ -1479,27 +2698,127 @@ const SuperAdminDashboard = () => {
 }
 
 const ApprovePRs = () => {
+  const [prs, setPRs] = useState([])
+  const [loading, setLoading] = useState(true)
   const [selectedPR, setSelectedPR] = useState(null)
-  const [rejectionReason, setRejectionReason] = useState('')
+  const [expandedPRId, setExpandedPRId] = useState(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const { user } = useAuth()
 
-  const pendingPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Pending')
+  const isSuperAdmin = user?.role === 'super_admin'
+  const isProcurement = user?.role === 'procurement'
 
-  const handleApprove = (pr) => {
-    setSelectedPR(null)
+  // Determine which PRs to show based on role
+  const getPendingPRs = () => {
+    if (isSuperAdmin) {
+      // Super Admin sees: Pending (first approval) and For Super Admin Final Approval (final approval)
+      return prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Super Admin Final Approval')
+    } else if (isProcurement) {
+      // Procurement sees: For Procurement Review
+      return prs.filter(pr => pr.status === 'For Procurement Review')
+    }
+    return []
   }
 
-  const handleReject = (pr) => {
-    setSelectedPR(pr)
-    setShowRejectModal(true)
+  const pendingPRs = getPendingPRs()
+
+  useEffect(() => {
+    fetchPRs()
+  }, [])
+
+  const fetchPRs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseRequestService.getAll()
+      setPRs(data)
+    } catch (err) {
+      console.error('Failed to fetch PRs', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApprove = async (pr) => {
+    setActionLoading(true)
+    try {
+      if (isSuperAdmin) {
+        // Super Admin first approval: Pending → For Procurement Review
+        // Super Admin final approval: For Super Admin Final Approval → For Purchase
+        await purchaseRequestService.superAdminFirstApprove(pr.id, 'approved')
+      } else if (isProcurement) {
+        // Procurement approval: For Procurement Review → For Super Admin Final Approval
+        await purchaseRequestService.procurementApprove(pr.id, 'approved')
+      }
+      await fetchPRs() // Refresh the list
+    } catch (err) {
+      console.error('Approval failed', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleReject = async (pr) => {
+    // If rejection reason is empty and it's Procurement (required), show modal first
+    if (!rejectionReason.trim() && isProcurement) {
+      setSelectedPR(pr)
+      setShowRejectModal(true)
+      return
+    }
+
+    // For Super Admin, rejection reason is optional - proceed with or without reason
+    if (!rejectionReason.trim() && !showRejectModal) {
+      // First click - show modal to give SA chance to add reason (optional)
+      setSelectedPR(pr)
+      setShowRejectModal(true)
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      if (isSuperAdmin) {
+        await purchaseRequestService.superAdminFirstApprove(pr.id, 'rejected', rejectionReason)
+      } else if (isProcurement) {
+        await purchaseRequestService.procurementApprove(pr.id, 'rejected', rejectionReason)
+      }
+      setShowRejectModal(false)
+      setRejectionReason('')
+      await fetchPRs()
+    } catch (err) {
+      console.error('Rejection failed', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const getApprovalLabel = (status) => {
+    if (status === 'Pending') return 'SA First Approval'
+    if (status === 'For Procurement Review') return 'Procurement Review'
+    if (status === 'For Super Admin Final Approval') return 'SA Final Approval'
+    return ''
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
       <Card>
         <div className="p-6 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Purchase Requests Pending Approval</h2>
-          <p className="text-sm text-gray-500 mt-1">Review and approve/reject purchase requests from engineers</p>
+          <h2 className="text-lg font-semibold text-gray-900">
+            {isSuperAdmin ? 'Super Admin Approval' : 'Procurement Approval'}
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {isSuperAdmin 
+              ? 'First approval: Pending → For Procurement Review | Final approval: For Super Admin Final Approval → For Purchase'
+              : 'Review PRs and forward to Super Admin for final approval'}
+          </p>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -1508,47 +2827,65 @@ const ApprovePRs = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Requested By</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Items</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Current Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Stage</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Created</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {pendingPRs.map(pr => {
-                const items = MOCK_PURCHASE_REQUEST_ITEMS.filter(item => item.purchase_request_id === pr.id)
-                const totalAmount = items.reduce((sum, item) => sum + item.total_price, 0)
-                
-                return (
-                  <tr key={pr.id} className="border-b border-gray-100 hover:bg-gray-50">
+              {pendingPRs.map(pr => (
+                <React.Fragment key={pr.id}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}>
                     <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{pr.requested_by}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {pr.requester_first_name} {pr.requester_last_name}
+                    </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
-                    <td className="py-3 px-4">
-                      <div className="text-sm">
-                        <p className="font-medium text-gray-900">{items.length} items</p>
-                        <p className="text-gray-500">{formatCurrency(totalAmount)}</p>
-                      </div>
+                    <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                    <td className="py-3 px-4 text-sm text-blue-600 font-medium">
+                      {getApprovalLabel(pr.status)}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        <Button size="sm" variant="success" onClick={() => handleApprove(pr)}>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }} disabled={actionLoading}>
+                          {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="success" 
+                          onClick={(e) => { e.stopPropagation(); handleApprove(pr); }}
+                          disabled={actionLoading}
+                        >
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Approve
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => handleReject(pr)}>
+                        <Button 
+                          size="sm" 
+                          variant="danger" 
+                          onClick={(e) => { e.stopPropagation(); handleReject(pr); }}
+                          disabled={actionLoading}
+                        >
                           <XCircle className="w-4 h-4 mr-1" />
                           Reject
                         </Button>
                       </div>
                     </td>
                   </tr>
-                )
-              })}
+                  {expandedPRId === pr.id && (
+                    <tr>
+                      <td colSpan="7" className="bg-gray-50 p-4">
+                        <PRExpandedDetails pr={pr} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
               {pendingPRs.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
-                    No pending purchase requests
+                  <td colSpan="7" className="py-8 text-center text-gray-500">
+                    No purchase requests awaiting your approval
                   </td>
                 </tr>
               )}
@@ -1558,7 +2895,7 @@ const ApprovePRs = () => {
       </Card>
 
       {showRejectModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-lg">
             <div className="p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Reject Purchase Request</h2>
@@ -1566,7 +2903,9 @@ const ApprovePRs = () => {
             </div>
             <div className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {isProcurement ? 'Rejection Reason (Required)' : 'Rejection Reason (Optional)'}
+                </label>
                 <textarea
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
@@ -1578,8 +2917,182 @@ const ApprovePRs = () => {
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowRejectModal(false)}>Cancel</Button>
-              <Button variant="danger" onClick={() => { setShowRejectModal(false); setRejectionReason('') }}>
-                Reject PR
+              <Button 
+                variant="danger" 
+                onClick={() => handleReject(selectedPR)}
+                disabled={actionLoading || (isProcurement && !rejectionReason.trim())}
+              >
+                {actionLoading ? 'Rejecting...' : 'Reject PR'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
+const ApprovePOs = () => {
+  const [selectedPO, setSelectedPO] = useState(null)
+  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [pos, setPOs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [actionLoading, setActionLoading] = useState(false)
+  const [expandedPOId, setExpandedPOId] = useState(null)
+
+  const fetchPOs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseOrderService.getAll()
+      setPOs(data)
+    } catch (err) {
+      setError('Failed to fetch purchase orders')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchPOs()
+  }, [])
+
+  const pendingPOs = pos.filter(po => po.status === 'Draft')
+
+  const handleApprove = async (po) => {
+    setActionLoading(true)
+    try {
+      await purchaseOrderService.superAdminApprove(po.id, 'approved')
+      await fetchPOs()
+    } catch (err) {
+      console.error('Failed to approve PO', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleReject = (po) => {
+    setSelectedPO(po)
+    setShowRejectModal(true)
+  }
+
+  const handleConfirmReject = async () => {
+    if (!selectedPO) return
+    setActionLoading(true)
+    try {
+      await purchaseOrderService.superAdminApprove(selectedPO.id, 'rejected')
+      setShowRejectModal(false)
+      setSelectedPO(null)
+      await fetchPOs()
+    } catch (err) {
+      console.error('Failed to reject PO', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Purchase Orders Pending Approval</h2>
+          <p className="text-sm text-gray-500 mt-1">Review and approve/reject purchase orders placed by Admin</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Related PR</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Date</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingPOs.map(po => {
+                return (
+                  <React.Fragment key={po.id}>
+                    <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedPOId(expandedPOId === po.id ? null : po.id)}>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{po.po_number}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{formatCurrency(po.total_amount)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{formatDate(po.po_date || po.created_at)}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPOId(expandedPOId === po.id ? null : po.id); }} disabled={actionLoading}>
+                            {expandedPOId === po.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                          </Button>
+                          <Button size="sm" variant="success" onClick={(e) => { e.stopPropagation(); handleApprove(po); }} disabled={actionLoading}>
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            {actionLoading ? 'Approving...' : 'Approve'}
+                          </Button>
+                          <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); handleReject(po); }} disabled={actionLoading}>
+                            <XCircle className="w-4 h-4 mr-1" />
+                            Reject
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expandedPOId === po.id && (
+                      <tr>
+                        <td colSpan="6" className="bg-gray-50 p-4">
+                          <POExpandedDetails po={po} />
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                )
+              })}
+              {pendingPOs.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    No pending purchase orders
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Reject Purchase Order</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedPO?.po_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                <textarea
+                  placeholder="Enter reason for rejection..."
+                  rows="4"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowRejectModal(false)} disabled={actionLoading}>Cancel</Button>
+              <Button variant="danger" onClick={handleConfirmReject} disabled={actionLoading}>
+                {actionLoading ? 'Rejecting...' : 'Reject PO'}
               </Button>
             </div>
           </Card>
@@ -1590,19 +3103,49 @@ const ApprovePRs = () => {
 }
 
 const AllPurchaseRequests = () => {
+  const [prs, setPRs] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [expandedPRId, setExpandedPRId] = useState(null)
+
+  useEffect(() => {
+    fetchPRs()
+  }, [])
+
+  const fetchPRs = async () => {
+    try {
+      setLoading(true)
+      const data = await purchaseRequestService.getAll()
+      setPRs(data)
+    } catch (err) {
+      setError('Failed to fetch purchase requests')
+      console.error('Failed to fetch PRs', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <div className="p-4 border-b border-gray-200 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-900">All Purchase Requests</h2>
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm">
-              <Filter className="w-4 h-4 mr-2" />
-              Filter
-            </Button>
-            <Button variant="secondary" size="sm">
-              Export
-            </Button>
+          <div className="text-sm text-gray-500">
+            {prs.length} PR{prs.length !== 1 ? 's' : ''} total
           </div>
         </div>
         <div className="overflow-x-auto">
@@ -1613,27 +3156,46 @@ const AllPurchaseRequests = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Requested By</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Approved By</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Created</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {MOCK_PURCHASE_REQUESTS.map(pr => (
-                <tr key={pr.id} className="border-b border-gray-100 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{pr.requested_by}</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
-                  <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
-                  <td className="py-3 px-4 text-sm text-gray-600">{pr.approved_by || '-'}</td>
-                  <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
-                  <td className="py-3 px-4">
-                    <Button variant="ghost" size="sm">
-                      <Eye className="w-4 h-4" />
-                    </Button>
+              {prs.map(pr => (
+                <React.Fragment key={pr.id}>
+                  <tr 
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}
+                  >
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {pr.requester_first_name} {pr.requester_last_name}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
+                    <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }}>
+                        {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedPRId === pr.id && (
+                    <tr>
+                      <td colSpan="6" className="bg-gray-50 p-4">
+                        <PRExpandedDetails pr={pr} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {prs.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    No purchase requests found
                   </td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>
@@ -1643,69 +3205,144 @@ const AllPurchaseRequests = () => {
 }
 
 const ReportsAnalytics = () => {
+  const [spendingByCategory, setSpendingByCategory] = useState([])
+  const [topSuppliers, setTopSuppliers] = useState([])
+  const [prStatusData, setPrStatusData] = useState({ statusData: [], total: 0 })
+  const [monthlySpending, setMonthlySpending] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchReportData()
+  }, [])
+
+  const fetchReportData = async () => {
+    try {
+      setLoading(true)
+      const [categoryData, suppliersData, statusData, monthlyData] = await Promise.all([
+        reportService.getSpendingByCategory(),
+        reportService.getTopSuppliers(),
+        reportService.getPRStatusOverview(),
+        reportService.getMonthlySpending()
+      ])
+      
+      setSpendingByCategory(categoryData.categories || [])
+      setTopSuppliers(suppliersData.suppliers || [])
+      setPrStatusData(statusData || { statusData: [], total: 0 })
+      setMonthlySpending(monthlyData.monthlyData || [])
+    } catch (err) {
+      console.error('Failed to fetch report data:', err)
+      setError('Failed to fetch report data')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Calculate max spending for category chart scaling
+  const maxCategorySpending = spendingByCategory.length > 0 
+    ? Math.max(...spendingByCategory.map(c => c.total_amount || 0))
+    : 1
+
+  // Calculate max spending for monthly chart scaling
+  const maxMonthlySpending = monthlySpending.length > 0
+    ? Math.max(...monthlySpending.map(m => m.total_amount || 0))
+    : 1
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center py-12 text-red-600">{error}</div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Spending by Category</h3>
           <div className="space-y-3">
-            {['Electronics', 'Office Supplies', 'Furniture'].map(cat => (
-              <div key={cat} className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">{cat}</span>
-                <div className="flex items-center gap-3">
-                  <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-yellow-500 rounded-full" style={{ width: `${Math.random() * 60 + 20}%` }} />
+            {spendingByCategory.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No spending data available</p>
+            ) : (
+              spendingByCategory.map(cat => (
+                <div key={cat.category_name} className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">{cat.category_name}</span>
+                  <div className="flex items-center gap-3">
+                    <div className="w-32 h-2 bg-gray-200 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-yellow-500 rounded-full" 
+                        style={{ width: `${Math.min(100, (cat.total_amount / maxCategorySpending) * 100)}%` }} 
+                      />
+                    </div>
+                    <span className="text-sm font-medium text-gray-900 w-20 text-right">
+                      {formatCurrency(cat.total_amount)}
+                    </span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900 w-16 text-right">
-                    {formatCurrency(Math.random() * 5000 + 1000)}
-                  </span>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Suppliers</h3>
           <div className="space-y-3">
-            {MOCK_SUPPLIERS.map((supplier, idx) => (
-              <div key={supplier.id} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="w-5 h-5 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center text-xs font-medium">
-                    {idx + 1}
-                  </span>
-                  <span className="text-sm text-gray-600 truncate max-w-[150px]">{supplier.supplier_name}</span>
+            {topSuppliers.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No supplier data available</p>
+            ) : (
+              topSuppliers.map((supplier, idx) => (
+                <div key={supplier.supplier_name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-5 h-5 bg-yellow-100 text-yellow-700 rounded-full flex items-center justify-center text-xs font-medium">
+                      {idx + 1}
+                    </span>
+                    <span className="text-sm text-gray-600 truncate max-w-[150px]">{supplier.supplier_name}</span>
+                  </div>
+                  <span className="text-sm font-medium text-gray-900">{formatCurrency(supplier.total_amount)}</span>
                 </div>
-                <span className="text-sm font-medium text-gray-900">{formatCurrency(Math.random() * 10000)}</span>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Card>
 
         <Card className="p-6">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">PR Status Overview</h3>
           <div className="space-y-2">
-            {['Pending', 'Approved', 'For Purchase', 'Completed', 'Rejected'].map(status => {
-              const count = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === status).length
-              const percentage = (count / MOCK_PURCHASE_REQUESTS.length) * 100
-              return (
-                <div key={status} className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${getStatusColor(status).split(' ')[0]}`} />
-                    <span className="text-sm text-gray-600">{status}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                      <div 
-                        className={`h-full rounded-full ${getStatusColor(status).split(' ')[0].replace('100', '500')}`} 
-                        style={{ width: `${percentage}%` }} 
-                      />
+            {prStatusData.statusData.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No PR data available</p>
+            ) : (
+              prStatusData.statusData.map(status => {
+                const percentage = prStatusData.total > 0 
+                  ? (status.count / prStatusData.total) * 100 
+                  : 0
+                return (
+                  <div key={status.status} className="flex items-center justify-between py-2">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded-full ${getStatusColor(status.status).split(' ')[0]}`} />
+                      <span className="text-sm text-gray-600">{status.status}</span>
                     </div>
-                    <span className="text-sm font-medium text-gray-900 w-6 text-right">{count}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full ${getStatusColor(status.status).split(' ')[0].replace('100', '500')}`} 
+                          style={{ width: `${percentage}%` }} 
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 w-6 text-right">{status.count}</span>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })
+            )}
           </div>
         </Card>
       </div>
@@ -1713,18 +3350,26 @@ const ReportsAnalytics = () => {
       <Card className="p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Monthly Spending Trend</h3>
         <div className="h-64 flex items-end gap-2">
-          {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'].map((month, idx) => {
-            const height = [40, 65, 45, 80, 55, 70][idx]
-            return (
-              <div key={month} className="flex-1 flex flex-col items-center gap-2">
-                <div 
-                  className="w-full bg-yellow-500 rounded-t-md transition-all hover:bg-yellow-600"
-                  style={{ height: `${height}%` }}
-                />
-                <span className="text-xs text-gray-600">{month}</span>
-              </div>
-            )
-          })}
+          {monthlySpending.length === 0 ? (
+            <div className="w-full h-full flex items-center justify-center text-gray-500">
+              No monthly spending data available
+            </div>
+          ) : (
+            monthlySpending.map((monthData) => {
+              const height = maxMonthlySpending > 0 
+                ? (monthData.total_amount / maxMonthlySpending) * 100 
+                : 0
+              return (
+                <div key={monthData.month} className="flex-1 flex flex-col items-center gap-2">
+                  <div 
+                    className="w-full bg-yellow-500 rounded-t-md transition-all hover:bg-yellow-600"
+                    style={{ height: `${Math.max(5, height)}%` }}
+                  />
+                  <span className="text-xs text-gray-600">{monthNames[monthData.month - 1]}</span>
+                </div>
+              )
+            })
+          )}
         </div>
       </Card>
     </div>
@@ -1779,6 +3424,24 @@ function App() {
       }
     }
 
+    // Procurement Views
+    if (currentRole === 'procurement') {
+      switch (activeNav) {
+        case 'dashboard':
+          return <ProcurementDashboard />
+        case 'approve-prs':
+          return <ApprovePRs />
+        case 'items':
+          return <ItemsManagement />
+        case 'add-item':
+          return <AddItem />
+        case 'all-prs':
+          return <AllPurchaseRequests />
+        default:
+          return <ProcurementDashboard />
+      }
+    }
+
     // Admin Views
     if (currentRole === 'admin') {
       switch (activeNav) {
@@ -1791,7 +3454,7 @@ function App() {
         case 'purchase-orders':
           return <PurchaseOrders />
         case 'pending-prs':
-          return <PurchaseOrders />
+          return <PendingPRs />
         default:
           return <AdminDashboard />
       }
@@ -1804,6 +3467,12 @@ function App() {
           return <SuperAdminDashboard />
         case 'approve-prs':
           return <ApprovePRs />
+        case 'approve-pos':
+          return <ApprovePOs />
+        case 'items':
+          return <ItemsManagement />
+        case 'add-item':
+          return <AddItem />
         case 'all-prs':
           return <AllPurchaseRequests />
         case 'all-pos':

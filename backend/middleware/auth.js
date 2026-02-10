@@ -15,7 +15,7 @@ export const authenticate = async (req, res, next) => {
     
     // Get user from database
     const [rows] = await db.query(
-      'SELECT id, employee_code, first_name, last_name, position, status FROM employees WHERE id = ?',
+      'SELECT id, employee_no, first_name, last_name, role, is_active FROM employees WHERE id = ?',
       [decoded.id]
     );
 
@@ -25,19 +25,11 @@ export const authenticate = async (req, res, next) => {
 
     const user = rows[0];
     
-    if (user.status !== 'Active') {
+    if (!user.is_active) {
       return res.status(403).json({ message: 'Account is deactivated' });
     }
 
-    // Map position to role
-    const roleMap = {
-      'Engineer': 'engineer',
-      'Admin': 'admin',
-      'Super Admin': 'super_admin',
-      'Super Adminn': 'super_admin'
-    };
-    user.role = roleMap[user.position] || 'engineer';
-
+    // Use role directly from database
     req.user = user;
     next();
   } catch (error) {
@@ -68,6 +60,7 @@ export const authorize = (...roles) => {
 };
 
 // Role-specific middleware helpers
-export const requireEngineer = authorize('engineer', 'admin', 'super_admin');
+export const requireEngineer = authorize('engineer', 'procurement', 'admin', 'super_admin');
+export const requireProcurement = authorize('procurement', 'admin', 'super_admin');
 export const requireAdmin = authorize('admin', 'super_admin');
 export const requireSuperAdmin = authorize('super_admin');

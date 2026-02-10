@@ -63,7 +63,7 @@ const Login = () => {
                   value={employeeNo}
                   onChange={(e) => setEmployeeNo(e.target.value)}
                   className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
-                  placeholder="e.g., ENG001, ADM001, or SAD001"
+                  placeholder="e.g., ENG001, PRO001, ADM001, or SAD001"
                 />
               </div>
             </div>
@@ -104,6 +104,7 @@ const Login = () => {
         <div className="mt-6 text-center text-xs text-gray-500">
           <p>Test Accounts:</p>
           <p>Engineer: ENG001 / password123</p>
+          <p>Procurement: PRO001 / password123</p>
           <p>Admin: ADM001 / password123</p>
           <p>Super Admin: SAD001 / password123</p>
         </div>

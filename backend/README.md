@@ -57,6 +57,7 @@ Visit `http://localhost:5000/api/health` - should return:
 | Role | Employee No | Password |
 |------|-------------|----------|
 | Engineer | ENG001 | password123 |
+| Procurement | PRO001 | password123 |
 | Admin | ADM001 | password123 |
 | Super Admin | SAD001 | password123 |
 

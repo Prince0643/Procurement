@@ -8,19 +8,16 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   try {
     const [notifications] = await db.query(`
-      SELECT n.*, 
-             e.first_name as actor_first_name,
-             e.last_name as actor_last_name
+      SELECT n.*
       FROM notifications n
-      LEFT JOIN employees e ON n.actor_id = e.id
-      WHERE n.user_id = ?
+      WHERE n.recipient_id = ?
       ORDER BY n.created_at DESC
       LIMIT 50
     `, [req.user.id]);
 
     // Count unread
     const [unreadCount] = await db.query(
-      'SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = false',
+      'SELECT COUNT(*) as count FROM notifications WHERE recipient_id = ? AND is_read = false',
       [req.user.id]
     );
 
@@ -29,6 +26,7 @@ router.get('/', authenticate, async (req, res) => {
       unreadCount: unreadCount[0].count
     });
   } catch (error) {
+    console.error('Failed to fetch notifications:', error);
     res.status(500).json({ message: 'Failed to fetch notifications' });
   }
 });
@@ -37,11 +35,12 @@ router.get('/', authenticate, async (req, res) => {
 router.put('/:id/read', authenticate, async (req, res) => {
   try {
     await db.query(
-      'UPDATE notifications SET is_read = true WHERE id = ? AND user_id = ?',
+      'UPDATE notifications SET is_read = true WHERE id = ? AND recipient_id = ?',
       [req.params.id, req.user.id]
     );
     res.json({ message: 'Notification marked as read' });
   } catch (error) {
+    console.error('Failed to update notification:', error);
     res.status(500).json({ message: 'Failed to update notification' });
   }
 });
@@ -50,11 +49,12 @@ router.put('/:id/read', authenticate, async (req, res) => {
 router.put('/read-all', authenticate, async (req, res) => {
   try {
     await db.query(
-      'UPDATE notifications SET is_read = true WHERE user_id = ? AND is_read = false',
+      'UPDATE notifications SET is_read = true WHERE recipient_id = ? AND is_read = false',
       [req.user.id]
     );
     res.json({ message: 'All notifications marked as read' });
   } catch (error) {
+    console.error('Failed to update notifications:', error);
     res.status(500).json({ message: 'Failed to update notifications' });
   }
 });

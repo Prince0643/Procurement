@@ -1,6 +1,7 @@
 import express from 'express';
-import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
+import { createNotification, getProcurementOfficers, getSuperAdmins } from '../utils/notifications.js';
 
 const router = express.Router();
 
@@ -89,8 +90,8 @@ router.post('/', authenticate, async (req, res) => {
     const prNumber = `PR-${new Date().getFullYear()}-${Date.now()}`;
 
     const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, purpose, remarks, status) VALUES (?, ?, ?, 'Pending')",
-      [prNumber, purpose, remarks ?? '']
+      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status) VALUES (?, ?, ?, ?, 'Pending')",
+      [prNumber, req.user.id, purpose, remarks ?? '']
     );
 
     const prId = result.insertId;
@@ -114,6 +115,32 @@ router.post('/', authenticate, async (req, res) => {
 
     await conn.commit();
 
+    // Notify procurement officers and Super Admins about new PR
+    const procurementOfficers = await getProcurementOfficers();
+    for (const officerId of procurementOfficers) {
+      await createNotification(
+        officerId,
+        'New PR Created',
+        `Purchase Request ${prNumber} has been created and is pending Super Admin approval`,
+        'PR Created',
+        prId,
+        'purchase_request'
+      );
+    }
+
+    // Also notify Super Admins for first approval
+    const superAdmins = await getSuperAdmins();
+    for (const adminId of superAdmins) {
+      await createNotification(
+        adminId,
+        'New PR Pending Approval',
+        `Purchase Request ${prNumber} has been created and requires your approval`,
+        'PR Created',
+        prId,
+        'purchase_request'
+      );
+    }
+
     res.status(201).json({
       message: 'Purchase request created successfully',
       prId,
@@ -134,10 +161,164 @@ router.post('/', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject PR (super admin only)
-router.put('/:id/approve', authenticate, requireSuperAdmin, async (req, res) => {
+// Approve/Reject PR by Super Admin (First Approval - to Procurement)
+router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const { status, remarks } = req.body; // status: 'approved' or 'rejected'
+    const { status, remarks } = req.body;
+    
+    const [prs] = await db.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    
+    const currentStatus = prs[0].status;
+    
+    if (currentStatus !== 'Pending' && currentStatus !== 'For Super Admin Final Approval') {
+      return res.status(400).json({ message: 'Invalid status for this approval step' });
+    }
+    
+    let newStatus;
+    if (status === 'approved') {
+      newStatus = currentStatus === 'Pending' ? 'For Procurement Review' : 'For Purchase';
+    } else {
+      newStatus = 'Rejected';
+    }
+    
+    await db.query(
+      'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
+      [newStatus, req.user.id, remarks, req.params.id]
+    );
+
+    // Get PR details for notification
+    const [prDetails] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const pr = prDetails[0];
+
+    if (status === 'approved') {
+      if (currentStatus === 'Pending') {
+        // First approval - notify procurement
+        const procurementOfficers = await getProcurementOfficers();
+        for (const officerId of procurementOfficers) {
+          await createNotification(
+            officerId,
+            'PR Approved - Review Required',
+            `Purchase Request ${pr.pr_number} has been approved by Super Admin and requires your review`,
+            'PR Approved',
+            req.params.id,
+            'purchase_request'
+          );
+        }
+      } else {
+        // Final approval - notify engineer
+        await createNotification(
+          pr.requested_by,
+          'PR Fully Approved',
+          `Your Purchase Request ${pr.pr_number} has been fully approved and is ready for purchase`,
+          'PR Approved',
+          req.params.id,
+          'purchase_request'
+        );
+        
+        // Also notify admins who can create POs
+        const { getAdmins } = await import('../utils/notifications.js');
+        const admins = await getAdmins();
+        for (const adminId of admins) {
+          await createNotification(
+            adminId,
+            'PR Ready for PO Creation',
+            `Purchase Request ${pr.pr_number} has been approved and is ready for PO creation`,
+            'PR Approved',
+            req.params.id,
+            'purchase_request'
+          );
+        }
+      }
+    } else {
+      // Rejected - notify engineer
+      await createNotification(
+        pr.requested_by,
+        'PR Rejected',
+        `Your Purchase Request ${pr.pr_number} has been rejected${remarks ? ': ' + remarks : ''}`,
+        'PR Rejected',
+        req.params.id,
+        'purchase_request'
+      );
+    }
+
+    res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
+  } catch (error) {
+    console.error('Super Admin first approval error:', error);
+    res.status(500).json({ message: 'Failed to update purchase request' });
+  }
+});
+
+// Approve/Reject PR by Procurement (to Super Admin Final Approval)
+router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
+  try {
+    const { status, rejection_reason } = req.body;
+    
+    const [prs] = await db.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    
+    const currentStatus = prs[0].status;
+    
+    if (currentStatus !== 'For Procurement Review') {
+      return res.status(400).json({ message: 'Purchase request not ready for Procurement approval' });
+    }
+    
+    let newStatus;
+    if (status === 'approved') {
+      newStatus = 'For Super Admin Final Approval';
+    } else {
+      newStatus = 'Rejected';
+    }
+    
+    await db.query(
+      'UPDATE purchase_requests SET status = ?, rejection_reason = ? WHERE id = ?',
+      [newStatus, status === 'rejected' ? rejection_reason : null, req.params.id]
+    );
+
+    // Get PR details for notification
+    const [prDetails] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const pr = prDetails[0];
+
+    if (status === 'approved') {
+      // Procurement approved - notify Super Admin for final approval
+      const superAdmins = await getSuperAdmins();
+      for (const adminId of superAdmins) {
+        await createNotification(
+          adminId,
+          'PR Pending Final Approval',
+          `Purchase Request ${pr.pr_number} has been reviewed by Procurement and requires your final approval`,
+          'PR Approved',
+          req.params.id,
+          'purchase_request'
+        );
+      }
+    } else {
+      // Rejected - notify engineer and Super Admin
+      await createNotification(
+        pr.requested_by,
+        'PR Rejected by Procurement',
+        `Your Purchase Request ${pr.pr_number} has been rejected by Procurement${rejection_reason ? ': ' + rejection_reason : ''}`,
+        'PR Rejected',
+        req.params.id,
+        'purchase_request'
+      );
+    }
+
+    res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
+  } catch (error) {
+    console.error('Procurement approval error:', error);
+    res.status(500).json({ message: 'Failed to update purchase request' });
+  }
+});
+
+// Legacy endpoint - remove requireSuperAdmin restriction for backward compatibility
+router.put('/:id/approve', authenticate, async (req, res) => {
+  try {
+    const { status, remarks } = req.body;
     
     await db.query(
       'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',

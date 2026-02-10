@@ -112,15 +112,74 @@ router.get('/supplier-performance', authenticate, requireSuperAdmin, async (req,
   }
 });
 
-// Pending approvals count (super admin only)
-router.get('/pending-approvals', authenticate, requireSuperAdmin, async (req, res) => {
+// Spending by Category (super admin only)
+router.get('/spending-by-category', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const [result] = await db.query(
-      "SELECT COUNT(*) as count FROM purchase_requests WHERE status = 'pending'"
-    );
-    res.json({ pendingCount: result[0].count });
+    const [categoryData] = await db.query(`
+      SELECT 
+        c.category_name,
+        COUNT(DISTINCT pr.id) as pr_count,
+        SUM(pri.total_price) as total_amount
+      FROM categories c
+      JOIN items i ON i.category_id = c.id
+      JOIN purchase_request_items pri ON pri.item_id = i.id
+      JOIN purchase_requests pr ON pri.purchase_request_id = pr.id
+      WHERE pr.status IN ('For Purchase', 'PO Created', 'Completed')
+      GROUP BY c.id, c.category_name
+      ORDER BY total_amount DESC
+    `);
+
+    res.json({ categories: categoryData });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch pending approvals' });
+    console.error('Failed to fetch spending by category:', error);
+    res.status(500).json({ message: 'Failed to fetch spending by category' });
+  }
+});
+
+// Top Suppliers by spending (super admin only)
+router.get('/top-suppliers', authenticate, requireSuperAdmin, async (req, res) => {
+  try {
+    const [supplierData] = await db.query(`
+      SELECT 
+        s.supplier_name,
+        COUNT(po.id) as order_count,
+        SUM(po.total_amount) as total_amount
+      FROM suppliers s
+      JOIN purchase_orders po ON s.id = po.supplier_id
+      WHERE po.status IN ('Ordered', 'Delivered')
+      GROUP BY s.id, s.supplier_name
+      ORDER BY total_amount DESC
+      LIMIT 10
+    `);
+
+    res.json({ suppliers: supplierData });
+  } catch (error) {
+    console.error('Failed to fetch top suppliers:', error);
+    res.status(500).json({ message: 'Failed to fetch top suppliers' });
+  }
+});
+
+// PR Status Overview (super admin only)
+router.get('/pr-status-overview', authenticate, requireSuperAdmin, async (req, res) => {
+  try {
+    const [statusData] = await db.query(`
+      SELECT 
+        status,
+        COUNT(*) as count
+      FROM purchase_requests
+      GROUP BY status
+    `);
+
+    const [totalResult] = await db.query('SELECT COUNT(*) as total FROM purchase_requests');
+    const total = totalResult[0].total;
+
+    res.json({ 
+      statusData,
+      total
+    });
+  } catch (error) {
+    console.error('Failed to fetch PR status overview:', error);
+    res.status(500).json({ message: 'Failed to fetch PR status overview' });
   }
 });
 

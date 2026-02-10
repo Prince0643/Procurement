@@ -11,12 +11,13 @@ router.get('/', authenticate, async (req, res) => {
       SELECT s.*, COUNT(si.item_id) as items_count
       FROM suppliers s
       LEFT JOIN supplier_items si ON s.id = si.supplier_id
-      WHERE s.is_active = true
+      WHERE s.status = 'Active'
       GROUP BY s.id
-      ORDER BY s.name
+      ORDER BY s.supplier_name
     `);
     res.json({ suppliers });
   } catch (error) {
+    console.error('Failed to fetch suppliers', error);
     res.status(500).json({ message: 'Failed to fetch suppliers' });
   }
 });
@@ -25,7 +26,7 @@ router.get('/', authenticate, async (req, res) => {
 router.get('/:id', authenticate, async (req, res) => {
   try {
     const [suppliers] = await db.query(
-      'SELECT * FROM suppliers WHERE id = ? AND is_active = true',
+      'SELECT * FROM suppliers WHERE id = ? AND status = \'Active\'',
       [req.params.id]
     );
 
@@ -34,14 +35,15 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 
     const [items] = await db.query(`
-      SELECT i.id, i.name, i.unit, si.price, si.lead_time_days
+      SELECT i.id, i.item_name as name, i.unit, si.price, si.lead_time_days
       FROM items i
       JOIN supplier_items si ON i.id = si.item_id
-      WHERE si.supplier_id = ? AND i.is_active = true
+      WHERE si.supplier_id = ?
     `, [req.params.id]);
 
     res.json({ supplier: { ...suppliers[0], items } });
   } catch (error) {
+    console.error('Failed to fetch supplier', error);
     res.status(500).json({ message: 'Failed to fetch supplier' });
   }
 });
@@ -51,9 +53,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const { name, contact_person, phone, email, address, tin } = req.body;
     
+    // Generate supplier code
+    const supplierCode = 'SUP' + Date.now().toString().slice(-6);
+    
     const [result] = await db.query(
-      'INSERT INTO suppliers (name, contact_person, phone, email, address, tin) VALUES (?, ?, ?, ?, ?, ?)',
-      [name, contact_person, phone, email, address, tin]
+      'INSERT INTO suppliers (supplier_code, supplier_name, contact_person, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)',
+      [supplierCode, name, contact_person, phone, email, address]
     );
 
     res.status(201).json({ 
@@ -61,6 +66,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       supplierId: result.insertId 
     });
   } catch (error) {
+    console.error('Failed to create supplier', error);
     res.status(500).json({ message: 'Failed to create supplier' });
   }
 });
@@ -68,15 +74,16 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // Update supplier (admin only)
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, contact_person, phone, email, address, tin } = req.body;
+    const { name, contact_person, phone, email, address } = req.body;
     
     await db.query(
-      'UPDATE suppliers SET name = ?, contact_person = ?, phone = ?, email = ?, address = ?, tin = ? WHERE id = ?',
-      [name, contact_person, phone, email, address, tin, req.params.id]
+      'UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone = ?, email = ?, address = ? WHERE id = ?',
+      [name, contact_person, phone, email, address, req.params.id]
     );
 
     res.json({ message: 'Supplier updated successfully' });
   } catch (error) {
+    console.error('Failed to update supplier', error);
     res.status(500).json({ message: 'Failed to update supplier' });
   }
 });
@@ -84,9 +91,10 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
 // Delete supplier (admin only - soft delete)
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    await db.query('UPDATE suppliers SET is_active = false WHERE id = ?', [req.params.id]);
+    await db.query("UPDATE suppliers SET status = 'Inactive' WHERE id = ?", [req.params.id]);
     res.json({ message: 'Supplier deleted successfully' });
   } catch (error) {
+    console.error('Failed to delete supplier', error);
     res.status(500).json({ message: 'Failed to delete supplier' });
   }
 });

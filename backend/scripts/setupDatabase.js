@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -99,18 +100,21 @@ async function insertSampleData(connection) {
   if (employees[0].count === 0) {
     console.log('Inserting sample data...');
     
-    // Sample employees (3 roles)
+    // Sample employees (4 roles)
+    const hashedPassword = await bcrypt.hash('jajrconstruction', 10);
+    
     await connection.query(`
       INSERT INTO employees (employee_no, first_name, last_name, role, department, password, is_active) VALUES
-      ('ENG001', 'John', 'Smith', 'engineer', 'Engineering', 'password123', true),
-      ('ADM001', 'Sarah', 'Johnson', 'admin', 'Procurement', 'password123', true),
-      ('SAD001', 'Michael', 'Chen', 'super_admin', 'Management', 'password123', true)
-    `);
+      ('ENG-2026-0001', 'Michelle', 'Norial', 'engineer', 'Engineering', ?, 1),
+      ('PRO-2026-0001', 'Junnel', 'Tadina', 'procurement', 'Procurement', ?, 1),
+      ('ADMIN-2026-0001', 'Elain', 'Torres', 'admin', 'Procurement', ?, 1),
+      ('SA-2026-004', 'Marc', 'Arzadon', 'super_admin', 'Management', ?, 1)
+    `, [hashedPassword, hashedPassword, hashedPassword, hashedPassword]);
     console.log('Sample employees inserted');
 
     // Sample categories
     await connection.query(`
-      INSERT INTO categories (name, description) VALUES
+      INSERT INTO categories (category_name, description) VALUES
       ('Electronics', 'Electronic components and devices'),
       ('Office Supplies', 'General office supplies and stationery'),
       ('Safety Equipment', 'Personal protective equipment and safety gear'),
@@ -121,21 +125,21 @@ async function insertSampleData(connection) {
 
     // Sample items
     await connection.query(`
-      INSERT INTO items (name, description, category_id, unit, specifications) VALUES
-      ('Laptop Dell Latitude', 'Business laptop 15.6 inch', 1, 'pcs', 'i5, 16GB RAM, 512GB SSD'),
-      ('A4 Paper (Ream)', 'Premium quality A4 paper', 2, 'reams', '80gsm, 500 sheets'),
-      ('Safety Helmet', 'Hard hat for construction', 3, 'pcs', 'Adjustable, yellow color'),
-      ('Cordless Drill', '18V cordless drill driver', 4, 'pcs', 'Includes 2 batteries'),
-      ('Steel Rod 10mm', 'Mild steel reinforcement rod', 5, 'meters', 'Diameter 10mm')
+      INSERT INTO items (item_code, item_name, description, category_id, unit) VALUES
+      ('ITM001', 'Laptop Dell Latitude', 'Business laptop 15.6 inch', 1, 'pcs'),
+      ('ITM002', 'A4 Paper (Ream)', 'Premium quality A4 paper', 2, 'reams'),
+      ('ITM003', 'Safety Helmet', 'Hard hat for construction', 3, 'pcs'),
+      ('ITM004', 'Cordless Drill', '18V cordless drill driver', 4, 'pcs'),
+      ('ITM005', 'Steel Rod 10mm', 'Mild steel reinforcement rod', 5, 'meters')
     `);
     console.log('Sample items inserted');
 
     // Sample suppliers
     await connection.query(`
-      INSERT INTO suppliers (name, contact_person, phone, email, address) VALUES
-      ('Tech Supplies Inc', 'Robert Wilson', '09123456789', 'robert@techsupplies.com', '123 Main St, Manila'),
-      ('Office Depot PH', 'Maria Garcia', '09234567890', 'maria@officedepot.ph', '456 Business Ave, Quezon City'),
-      ('Safety First Co', 'David Lee', '09345678901', 'david@safetyfirst.com', '789 Industrial Rd, Makati')
+      INSERT INTO suppliers (supplier_code, supplier_name, contact_person, phone, email, address) VALUES
+      ('SUP001', 'Tech Supplies Inc', 'Robert Wilson', '09123456789', 'robert@techsupplies.com', '123 Main St, Manila'),
+      ('SUP002', 'Office Depot PH', 'Maria Garcia', '09234567890', 'maria@officedepot.ph', '456 Business Ave, Quezon City'),
+      ('SUP003', 'Safety First Co', 'David Lee', '09345678901', 'david@safetyfirst.com', '789 Industrial Rd, Makati')
     `);
     console.log('Sample suppliers inserted');
 

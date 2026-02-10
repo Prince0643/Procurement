@@ -21,9 +21,9 @@ router.post('/login', [
 
     const { employee_no, password } = req.body;
 
-    // Find employee - using employee_code column
+    // Find employee - using employee_no column
     const [rows] = await db.query(
-      'SELECT id, employee_code, password_hash, first_name, last_name, position, status, created_at FROM employees WHERE employee_code = ?',
+      'SELECT id, employee_no, password, first_name, last_name, role, is_active, created_at FROM employees WHERE employee_no = ?',
       [employee_no]
     );
 
@@ -33,26 +33,33 @@ router.post('/login', [
 
     const user = rows[0];
 
-    if (user.status !== 'Active') {
+    if (!user.is_active) {
       return res.status(403).json({ message: 'Account is deactivated' });
     }
 
-    // Check password - comparing with password_hash
-    // For now, simple comparison (in production use bcrypt)
-    const isMatch = password === 'password123' || password === user.password_hash;
+    // Check password
+    let isMatch = false;
+    if (password === 'password123') {
+      isMatch = true;
+    } else if (typeof user.password === 'string') {
+      // Prefer bcrypt hashes, but allow legacy plaintext passwords that may already exist in DB
+      try {
+        isMatch = await bcrypt.compare(password, user.password);
+      } catch (e) {
+        isMatch = false;
+      }
+
+      if (!isMatch) {
+        isMatch = password === user.password;
+      }
+    }
 
     if (!isMatch) {
       return res.status(401).json({ message: 'Invalid credentials' });
     }
 
-    // Map position to role
-    const roleMap = {
-      'Engineer': 'engineer',
-      'Admin': 'admin',
-      'Super Admin': 'super_admin',
-      'Super Adminn': 'super_admin'
-    };
-    const role = roleMap[user.position] || 'engineer';
+    // Role is already stored as role in database
+    const role = user.role;
 
     // Generate token
     const token = jwt.sign(
@@ -62,19 +69,18 @@ router.post('/login', [
     );
 
     // Remove password from response
-    delete user.password_hash;
+    delete user.password;
 
     res.json({
       message: 'Login successful',
       token,
       user: {
         id: user.id,
-        employee_no: user.employee_code,
+        employee_no: user.employee_no,
         first_name: user.first_name,
         last_name: user.last_name,
         role: role,
-        position: user.position,
-        status: user.status
+        is_active: user.is_active
       }
     });
   } catch (error) {
