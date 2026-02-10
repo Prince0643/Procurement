@@ -27,7 +27,7 @@ SET time_zone = "+00:00";
 -- Table structure for table `categories`
 --
 
-CREATE TABLE `categories` (
+CREATE TABLE IF NOT EXISTS `categories` (
   `id` int(11) NOT NULL,
   `category_name` varchar(100) NOT NULL,
   `description` text DEFAULT NULL,
@@ -54,7 +54,7 @@ INSERT INTO `categories` (`id`, `category_name`, `description`, `status`, `creat
 -- Table structure for table `employees`
 --
 
-CREATE TABLE `employees` (
+CREATE TABLE IF NOT EXISTS `employees` (
   `id` int(11) NOT NULL,
   `employee_no` varchar(20) NOT NULL,
   `first_name` varchar(50) NOT NULL,
@@ -84,7 +84,7 @@ INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `last_name`, `role`,
 -- Table structure for table `items`
 --
 
-CREATE TABLE `items` (
+CREATE TABLE IF NOT EXISTS `items` (
   `id` int(11) NOT NULL,
   `item_code` varchar(50) NOT NULL,
   `item_name` varchar(255) NOT NULL,
@@ -116,7 +116,7 @@ INSERT INTO `items` (`id`, `item_code`, `item_name`, `description`, `category_id
 -- Table structure for table `notifications`
 --
 
-CREATE TABLE `notifications` (
+CREATE TABLE IF NOT EXISTS `notifications` (
   `id` int(11) NOT NULL,
   `recipient_id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
@@ -134,7 +134,7 @@ CREATE TABLE `notifications` (
 -- Table structure for table `purchase_orders`
 --
 
-CREATE TABLE `purchase_orders` (
+CREATE TABLE IF NOT EXISTS `purchase_orders` (
   `id` int(11) NOT NULL,
   `po_number` varchar(50) NOT NULL,
   `purchase_request_id` int(11) NOT NULL,
@@ -155,7 +155,7 @@ CREATE TABLE `purchase_orders` (
 -- Table structure for table `purchase_order_items`
 --
 
-CREATE TABLE `purchase_order_items` (
+CREATE TABLE IF NOT EXISTS `purchase_order_items` (
   `id` int(11) NOT NULL,
   `purchase_order_id` int(11) NOT NULL,
   `purchase_request_item_id` int(11) NOT NULL,
@@ -172,7 +172,7 @@ CREATE TABLE `purchase_order_items` (
 -- Table structure for table `purchase_requests`
 --
 
-CREATE TABLE `purchase_requests` (
+CREATE TABLE IF NOT EXISTS `purchase_requests` (
   `id` int(11) NOT NULL,
   `pr_number` varchar(50) NOT NULL,
   `requested_by` int(11) DEFAULT NULL,
@@ -192,7 +192,7 @@ CREATE TABLE `purchase_requests` (
 -- Table structure for table `purchase_request_items`
 --
 
-CREATE TABLE `purchase_request_items` (
+CREATE TABLE IF NOT EXISTS `purchase_request_items` (
   `id` int(11) NOT NULL,
   `purchase_request_id` int(11) NOT NULL,
   `item_id` int(11) NOT NULL,
@@ -212,7 +212,7 @@ CREATE TABLE `purchase_request_items` (
 -- Table structure for table `suppliers`
 --
 
-CREATE TABLE `suppliers` (
+CREATE TABLE IF NOT EXISTS `suppliers` (
   `id` int(11) NOT NULL,
   `supplier_code` varchar(50) NOT NULL,
   `supplier_name` varchar(255) NOT NULL,
@@ -241,7 +241,7 @@ INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person
 -- Table structure for table `supplier_items`
 --
 
-CREATE TABLE `supplier_items` (
+CREATE TABLE IF NOT EXISTS `supplier_items` (
   `id` int(11) NOT NULL,
   `supplier_id` int(11) NOT NULL,
   `item_id` int(11) NOT NULL,
