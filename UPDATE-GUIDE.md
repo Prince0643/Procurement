@@ -237,7 +237,7 @@ echo "Started at: $(date)"
 
 # Backup database
 echo "[1/8] Backing up database..."
-mysqldump -u procurement_app -p'YOUR_DB_PASSWORD' procurement_db > /root/procurement_db_backup_$(date +%F).sql
+mysqldump -u procurement_app -p'STRONG_PASSWORD_HERE' procurement_db > /root/procurement_db_backup_$(date +%F).sql
 
 # Update code
 echo "[2/8] Pulling latest code..."

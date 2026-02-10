@@ -5,7 +5,7 @@ import { purchaseOrderService } from './services/purchaseOrders'
 import { categoryService } from './services/categories'
 import { supplierService } from './services/suppliers'
 import { notificationService } from './services/notifications'
-import { reportService } from './services/reports'
+import { employeeService } from './services/employees'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
 import {
@@ -31,7 +31,8 @@ import {
   Trash2,
   MoreHorizontal,
   AlertCircle,
-  LogOut
+  LogOut,
+  Users
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -459,6 +460,7 @@ const Layout = ({ currentRole, children }) => {
     ],
     superadmin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { id: 'employees', label: 'Employees', icon: Users },
       { id: 'approve-prs', label: 'Approve PRs', icon: CheckCircle },
       { id: 'approve-pos', label: 'Approve POs', icon: FileText },
       { id: 'items', label: 'Items', icon: Package },
@@ -3376,6 +3378,404 @@ const ReportsAnalytics = () => {
   )
 }
 
+// ============ EMPLOYEES MANAGEMENT ============
+const EmployeesManagement = () => {
+  const [employees, setEmployees] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedEmployee, setSelectedEmployee] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  
+  const [formData, setFormData] = useState({
+    employee_no: '',
+    first_name: '',
+    last_name: '',
+    role: 'engineer',
+    department: ''
+  })
+
+  const roleOptions = [
+    { value: 'engineer', label: 'Engineer' },
+    { value: 'procurement', label: 'Procurement' },
+    { value: 'admin', label: 'Admin' },
+    { value: 'super_admin', label: 'Super Admin' }
+  ]
+
+  useEffect(() => {
+    fetchEmployees()
+  }, [])
+
+  const fetchEmployees = async () => {
+    try {
+      setLoading(true)
+      const data = await employeeService.getAll()
+      setEmployees(data)
+    } catch (err) {
+      setError('Failed to fetch employees')
+      console.error('Failed to fetch employees', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  const handleSubmit = async () => {
+    if (!formData.employee_no.trim() || !formData.first_name.trim() || !formData.last_name.trim()) {
+      setError('Employee number, first name, and last name are required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await employeeService.create(formData)
+      setShowAddModal(false)
+      setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+      await fetchEmployees()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create employee')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditClick = (employee) => {
+    setSelectedEmployee(employee)
+    setFormData({
+      first_name: employee.first_name || '',
+      last_name: employee.last_name || '',
+      role: employee.role || 'engineer',
+      department: employee.department || ''
+    })
+    setShowEditModal(true)
+    setError('')
+  }
+
+  const handleUpdate = async () => {
+    if (!formData.first_name.trim() || !formData.last_name.trim()) {
+      setError('First name and last name are required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await employeeService.update(selectedEmployee.id, formData)
+      setShowEditModal(false)
+      setSelectedEmployee(null)
+      setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+      await fetchEmployees()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update employee')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleResetPassword = async (employee) => {
+    if (!confirm(`Reset password for ${employee.first_name} ${employee.last_name}? The default password will be set to 'jajrconstruction'.`)) {
+      return
+    }
+
+    try {
+      await employeeService.resetPassword(employee.id)
+      alert('Password reset successfully')
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to reset password')
+    }
+  }
+
+  const getRoleColor = (role) => {
+    const colors = {
+      'engineer': 'bg-yellow-100 text-yellow-800',
+      'procurement': 'bg-blue-100 text-blue-800',
+      'admin': 'bg-green-100 text-green-800',
+      'super_admin': 'bg-purple-100 text-purple-800'
+    }
+    return colors[role] || 'bg-gray-100 text-gray-800'
+  }
+
+  const getRoleLabel = (role) => {
+    const labels = {
+      'engineer': 'Engineer',
+      'procurement': 'Procurement',
+      'admin': 'Admin',
+      'super_admin': 'Super Admin'
+    }
+    return labels[role] || role
+  }
+
+  const filteredEmployees = employees.filter(e => 
+    (e.first_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.last_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.employee_no || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (e.department || '').toLowerCase().includes(searchTerm.toLowerCase())
+  )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="relative w-96">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search employees..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+        </div>
+        <Button onClick={() => {
+          setShowAddModal(true)
+          setError('')
+          setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+        }}>
+          <Plus className="w-4 h-4 mr-2" />
+          Add Employee
+        </Button>
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Employee No</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Name</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Role</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Department</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredEmployees.map(employee => (
+                <tr key={employee.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{employee.employee_no}</td>
+                  <td className="py-3 px-4 text-sm text-gray-900">{employee.first_name} {employee.last_name}</td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(employee.role)}`}>
+                      {getRoleLabel(employee.role)}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4 text-sm text-gray-600">{employee.department || '-'}</td>
+                  <td className="py-3 px-4">
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                      {employee.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="py-3 px-4">
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEditClick(employee)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleResetPassword(employee)}>
+                        <User className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredEmployees.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    No employees found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Add Employee Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Add New Employee</h2>
+              <p className="text-sm text-gray-500 mt-1">Default password will be set to 'jajrconstruction'</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Employee Number *</label>
+                <input
+                  type="text"
+                  name="employee_no"
+                  value={formData.employee_no}
+                  onChange={handleInputChange}
+                  placeholder="Enter employee number"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={formData.first_name}
+                    onChange={handleInputChange}
+                    placeholder="Enter first name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={formData.last_name}
+                    onChange={handleInputChange}
+                    placeholder="Enter last name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  {roleOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <input
+                  type="text"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  placeholder="Enter department"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Creating...' : 'Create Employee'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {showEditModal && selectedEmployee && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Employee</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedEmployee.employee_no} - {selectedEmployee.first_name} {selectedEmployee.last_name}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
+                  <input
+                    type="text"
+                    name="first_name"
+                    value={formData.first_name}
+                    onChange={handleInputChange}
+                    placeholder="Enter first name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
+                  <input
+                    type="text"
+                    name="last_name"
+                    value={formData.last_name}
+                    onChange={handleInputChange}
+                    placeholder="Enter last name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Role *</label>
+                <select
+                  name="role"
+                  value={formData.role}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  {roleOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                <input
+                  type="text"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleInputChange}
+                  placeholder="Enter department"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                <select
+                  name="is_active"
+                  value={formData.is_active !== undefined ? formData.is_active : selectedEmployee.is_active}
+                  onChange={(e) => setFormData({ ...formData, is_active: e.target.value === 'true' })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  <option value={true}>Active</option>
+                  <option value={false}>Inactive</option>
+                </select>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowEditModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleUpdate} disabled={submitting}>
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============ MAIN APP ============
 function App() {
   const { user, isAuthenticated, loading } = useAuth()
@@ -3465,6 +3865,8 @@ function App() {
       switch (activeNav) {
         case 'dashboard':
           return <SuperAdminDashboard />
+        case 'employees':
+          return <EmployeesManagement />
         case 'approve-prs':
           return <ApprovePRs />
         case 'approve-pos':
