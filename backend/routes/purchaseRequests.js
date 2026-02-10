@@ -87,7 +87,29 @@ router.post('/', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
-    const prNumber = `PR-${new Date().getFullYear()}-${Date.now()}`;
+    const year = new Date().getFullYear();
+    const firstInitial = String(req.user.first_name || '').charAt(0).toUpperCase();
+    const lastName = String(req.user.last_name || '');
+    const lastInitial = lastName.charAt(0).toUpperCase();
+    const lastLetter = lastName.slice(-1).toUpperCase();
+    const initials = `${firstInitial}${lastInitial}${lastLetter}`;
+
+    // Get the last PR number for this engineer in this year
+    const [lastPrs] = await conn.query(
+      "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
+      [`${year}-${initials}-%`]
+    );
+
+    let counter = 1;
+    if (lastPrs.length > 0) {
+      const lastNumber = lastPrs[0].pr_number;
+      const match = lastNumber.match(/-(\d{3})$/);
+      if (match) {
+        counter = parseInt(match[1], 10) + 1;
+      }
+    }
+
+    const prNumber = `${year}-${initials}-${String(counter).padStart(3, '0')}`;
 
     const [result] = await conn.query(
       "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status) VALUES (?, ?, ?, ?, 'Pending')",
