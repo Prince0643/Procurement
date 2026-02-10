@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 10, 2026 at 03:44 AM
+-- Generation Time: Feb 10, 2026 at 09:32 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -75,7 +75,8 @@ INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `last_name`, `role`,
 (5, 'ENG-2026-0001', 'Michelle', 'Norial', 'engineer', 'Engineering', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-10 02:36:33'),
 (6, 'PRO-2026-0001', 'Junnel', 'Tadina', 'procurement', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-10 02:36:33'),
 (7, 'ADMIN-2026-0001', 'Elain', 'Torres', 'admin', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-10 02:36:33'),
-(8, 'SA-2026-004', 'Marc', 'Arzadon', 'super_admin', 'Management', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-10 02:36:33');
+(8, 'SA-2026-004', 'Marc', 'Arzadon', 'super_admin', 'Management', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-10 02:36:33'),
+(9, 'ENG-2026-0002', 'John Kennedy', 'Lucas', 'engineer', 'Engineering', '$2a$10$5WmbWmSvEq3gBe8cdW3RPefxhH6mQebKZ5/FYQ9FZd0WgLJdp6hDe', 1, '2026-02-10 04:42:55', '2026-02-10 04:42:55');
 
 -- --------------------------------------------------------
 
@@ -127,19 +128,6 @@ CREATE TABLE `notifications` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `notifications`
---
-
-INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `related_id`, `related_type`, `is_read`, `created_at`) VALUES
-(1, 2, 'New PR Created', 'Purchase Request PR-2026-1770689442437 has been created and is pending Super Admin approval', 'PR Created', 6, 'purchase_request', 0, '2026-02-10 02:10:42'),
-(2, 2, 'New PR Created', 'Purchase Request PR-2026-1770689594720 has been created and is pending Super Admin approval', 'PR Created', 7, 'purchase_request', 0, '2026-02-10 02:13:14'),
-(3, 4, 'New PR Pending Approval', 'Purchase Request PR-2026-1770689594720 has been created and requires your approval', 'PR Created', 7, 'purchase_request', 1, '2026-02-10 02:13:14'),
-(4, 1, 'PR Rejected', 'Your Purchase Request PR-2026-1770689442437 has been rejected', 'PR Rejected', 6, 'purchase_request', 1, '2026-02-10 02:15:59'),
-(5, 1, 'PR Rejected', 'Your Purchase Request PR-2026-1770689594720 has been rejected', 'PR Rejected', 7, 'purchase_request', 1, '2026-02-10 02:16:00'),
-(6, 6, 'New PR Created', 'Purchase Request PR-2026-1770691283284 has been created and is pending Super Admin approval', 'PR Created', 8, 'purchase_request', 0, '2026-02-10 02:41:23'),
-(7, 8, 'New PR Pending Approval', 'Purchase Request PR-2026-1770691283284 has been created and requires your approval', 'PR Created', 8, 'purchase_request', 1, '2026-02-10 02:41:23');
-
 -- --------------------------------------------------------
 
 --
@@ -161,13 +149,6 @@ CREATE TABLE `purchase_orders` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `purchase_orders`
---
-
-INSERT INTO `purchase_orders` (`id`, `po_number`, `purchase_request_id`, `supplier_id`, `prepared_by`, `total_amount`, `po_date`, `expected_delivery_date`, `actual_delivery_date`, `status`, `created_at`, `updated_at`) VALUES
-(3, 'PO-2026-0001', 4, 1, 3, 0.00, '2026-02-10', '2026-02-11', NULL, 'Ordered', '2026-02-10 01:43:43', '2026-02-10 01:44:15');
-
 -- --------------------------------------------------------
 
 --
@@ -184,14 +165,6 @@ CREATE TABLE `purchase_order_items` (
   `total_price` decimal(10,2) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchase_order_items`
---
-
-INSERT INTO `purchase_order_items` (`id`, `purchase_order_id`, `purchase_request_item_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
-(7, 3, 9, 5, 1, 0.00, 0.00, '2026-02-10 01:43:43'),
-(8, 3, 10, 3, 1, 0.00, 0.00, '2026-02-10 01:43:43');
 
 -- --------------------------------------------------------
 
@@ -213,17 +186,6 @@ CREATE TABLE `purchase_requests` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `purchase_requests`
---
-
-INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `created_at`, `updated_at`) VALUES
-(4, 'PR-2026-1770687695370', 1, 'para kay porman para di magnakaw ng hollow blocks', NULL, 'Completed', 4, '2026-02-10 01:43:10', NULL, '2026-02-10 01:41:35', '2026-02-10 01:44:15'),
-(5, 'PR-2026-1770688031061', 1, 'cdfds', NULL, 'For Procurement Review', 4, '2026-02-10 01:54:23', NULL, '2026-02-10 01:47:11', '2026-02-10 01:56:00'),
-(6, 'PR-2026-1770689442437', 1, '.m,./', '', 'Rejected', 4, '2026-02-10 02:15:59', NULL, '2026-02-10 02:10:42', '2026-02-10 02:15:59'),
-(7, 'PR-2026-1770689594720', 1, 'tretre', '', 'Rejected', 4, '2026-02-10 02:16:00', NULL, '2026-02-10 02:13:14', '2026-02-10 02:16:00'),
-(8, 'PR-2026-1770691283284', 5, 'fdsf', 'gfdgf', 'Pending', NULL, NULL, NULL, '2026-02-10 02:41:23', '2026-02-10 02:41:23');
-
 -- --------------------------------------------------------
 
 --
@@ -243,26 +205,6 @@ CREATE TABLE `purchase_request_items` (
   `received_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchase_request_items`
---
-
-INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `remarks`, `status`, `received_by`, `received_at`, `created_at`) VALUES
-(9, 4, 5, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 01:41:35'),
-(10, 4, 3, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 01:41:35'),
-(11, 5, 7, 7, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 01:47:11'),
-(12, 5, 1, 6, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 01:47:11'),
-(13, 6, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:10:42'),
-(14, 6, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:10:42'),
-(15, 6, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:10:42'),
-(16, 7, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:13:14'),
-(17, 7, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:13:14'),
-(18, 7, 1, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:13:14'),
-(19, 8, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:41:23'),
-(20, 8, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:41:23'),
-(21, 8, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:41:23'),
-(22, 8, 1, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-10 02:41:23');
 
 -- --------------------------------------------------------
 
@@ -423,7 +365,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
 
 --
 -- AUTO_INCREMENT for table `items`
@@ -435,7 +377,7 @@ ALTER TABLE `items`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
@@ -453,13 +395,13 @@ ALTER TABLE `purchase_order_items`
 -- AUTO_INCREMENT for table `purchase_requests`
 --
 ALTER TABLE `purchase_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 
 --
 -- AUTO_INCREMENT for table `purchase_request_items`
 --
 ALTER TABLE `purchase_request_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=32;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
