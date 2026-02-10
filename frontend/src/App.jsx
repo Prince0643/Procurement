@@ -1894,12 +1894,123 @@ const AdminDashboard = () => {
 
 const ItemsManagement = () => {
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [items, setItems] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  
+  const [formData, setFormData] = useState({
+    item_code: '',
+    item_name: '',
+    description: '',
+    category_id: '',
+    unit: ''
+  })
 
-  const filteredItems = MOCK_ITEMS.filter(item => 
-    item.item_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.item_code.toLowerCase().includes(searchTerm.toLowerCase())
+  useEffect(() => {
+    fetchItems()
+  }, [])
+
+  const fetchItems = async () => {
+    try {
+      setLoading(true)
+      const data = await itemService.getAll()
+      setItems(data)
+    } catch (err) {
+      setError('Failed to fetch items')
+      console.error('Failed to fetch items', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleInputChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value })
+  }
+
+  const handleSubmit = async () => {
+    if (!formData.item_code.trim() || !formData.item_name.trim()) {
+      setError('Item code and name are required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await itemService.create(formData)
+      setShowAddModal(false)
+      setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })
+      await fetchItems()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create item')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditClick = (item) => {
+    setSelectedItem(item)
+    setFormData({
+      item_code: item.item_code || '',
+      item_name: item.item_name || item.name || '',
+      description: item.description || '',
+      category_id: item.category_id || '',
+      unit: item.unit || ''
+    })
+    setShowEditModal(true)
+    setError('')
+  }
+
+  const handleUpdate = async () => {
+    if (!formData.item_name.trim()) {
+      setError('Item name is required')
+      return
+    }
+
+    setSubmitting(true)
+    setError('')
+    
+    try {
+      await itemService.update(selectedItem.id, formData)
+      setShowEditModal(false)
+      setSelectedItem(null)
+      setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })
+      await fetchItems()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to update item')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (item) => {
+    if (!confirm(`Delete ${item.item_name || item.name}?`)) return
+
+    try {
+      await itemService.delete(item.id)
+      await fetchItems()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete item')
+    }
+  }
+
+  const filteredItems = items.filter(item => 
+    (item.item_name || item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.item_code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (item.category_name || '').toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -1914,11 +2025,21 @@ const ItemsManagement = () => {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
           />
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => {
+          setShowAddModal(true)
+          setError('')
+          setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })
+        }}>
           <Plus className="w-4 h-4 mr-2" />
           Add Item
         </Button>
       </div>
+
+      {error && !showAddModal && !showEditModal && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-700">{error}</p>
+        </div>
+      )}
 
       <Card>
         <div className="overflow-x-auto">
@@ -1933,67 +2054,190 @@ const ItemsManagement = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
             </thead>
-          <tbody>
-            {filteredItems.map(item => (
-              <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.item_code}</td>
-                <td className="py-3 px-4 text-sm text-gray-900">{item.item_name}</td>
-                <td className="py-3 px-4 text-sm text-gray-600">{item.category}</td>
-                <td className="py-3 px-4 text-sm text-gray-600">{item.unit}</td>
-                <td className="py-3 px-4"><StatusBadge status={item.status} /></td>
-                <td className="py-3 px-4">
-                  <div className="flex gap-2">
-                    <Button variant="ghost" size="sm"><Edit className="w-4 h-4" /></Button>
-                    <Button variant="ghost" size="sm"><Trash2 className="w-4 h-4 text-red-500" /></Button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </Card>
+            <tbody>
+              {filteredItems.map(item => (
+                <tr key={item.id} className="border-b border-gray-100 hover:bg-gray-50">
+                  <td className="py-3 px-4 text-sm font-medium text-gray-900">{item.item_code}</td>
+                  <td className="py-3 px-4 text-sm text-gray-900">{item.item_name || item.name}</td>
+                  <td className="py-3 px-4 text-sm text-gray-600">{item.category_name || item.category || '-'}</td>
+                  <td className="py-3 px-4 text-sm text-gray-600">{item.unit}</td>
+                  <td className="py-3 px-4"><StatusBadge status={item.status || 'Active'} /></td>
+                  <td className="py-3 px-4">
+                    <div className="flex gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleEditClick(item)}>
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredItems.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                    No items found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
-    {showAddModal && (
-      <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
-        <Card className="w-full max-w-lg">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900">Add New Item</h2>
-          </div>
-          <div className="p-6 space-y-4">
-            <Input label="Item Code" placeholder="e.g., ITM006" />
-            <Input label="Item Name" placeholder="Enter item name" />
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-              <textarea
-                placeholder="Enter description"
-                rows="3"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-              />
+      {/* Add Item Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Add New Item</h2>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <Select
-                label="Category"
-                value=""
-                onChange={() => {}}
-                options={[
-                  { value: '', label: 'Select category' },
-                  { value: 'Electronics', label: 'Electronics' },
-                  { value: 'Office Supplies', label: 'Office Supplies' },
-                  { value: 'Furniture', label: 'Furniture' },
-                ]}
-              />
-              <Input label="Unit" placeholder="e.g., pc, kg, box" />
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Code *</label>
+                <input
+                  type="text"
+                  name="item_code"
+                  value={formData.item_code}
+                  onChange={handleInputChange}
+                  placeholder="e.g., ITM008"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                <input
+                  type="text"
+                  name="item_name"
+                  value={formData.item_name}
+                  onChange={handleInputChange}
+                  placeholder="Enter item name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  placeholder="Enter description"
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                  <input
+                    type="text"
+                    name="unit"
+                    value={formData.unit}
+                    onChange={handleInputChange}
+                    placeholder="e.g., pc, kg, box"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
+                  <input
+                    type="number"
+                    name="category_id"
+                    value={formData.category_id}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
             </div>
-          </div>
-          <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-            <Button variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Button>
-            <Button onClick={() => setShowAddModal(false)}>Add Item</Button>
-          </div>
-        </Card>
-      </div>
-    )}
-  </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowAddModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleSubmit} disabled={submitting}>
+                {submitting ? 'Adding...' : 'Add Item'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditModal && selectedItem && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Item</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedItem.item_code}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{error}</p>
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Item Name *</label>
+                <input
+                  type="text"
+                  name="item_name"
+                  value={formData.item_name}
+                  onChange={handleInputChange}
+                  placeholder="Enter item name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  placeholder="Enter description"
+                  rows="3"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Unit</label>
+                  <input
+                    type="text"
+                    name="unit"
+                    value={formData.unit}
+                    onChange={handleInputChange}
+                    placeholder="e.g., pc, kg, box"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
+                  <input
+                    type="number"
+                    name="category_id"
+                    value={formData.category_id}
+                    onChange={handleInputChange}
+                    placeholder="e.g., 1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowEditModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleUpdate} disabled={submitting}>
+                {submitting ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
   )
 }
 
