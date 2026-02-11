@@ -130,7 +130,7 @@ router.post('/procurement', [
     const { employee_no, password } = req.body;
 
     // Forward to coworker's API
-    const PROXY_API_URL = process.env.PROXY_API_URL || 'https://procurement.xandree.com/api/auth/login';
+    const PROXY_API_URL = process.env.PROXY_API_URL || 'https://procurement-api.xandree.com/api/auth/login';
 
     const response = await axios.post(PROXY_API_URL, {
       employee_no,
