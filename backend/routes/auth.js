@@ -24,7 +24,7 @@ router.post('/login', [
 
     // Find employee - using employee_no column
     const [rows] = await db.query(
-      'SELECT id, employee_no, password, first_name, last_name, role, is_active, created_at FROM employees WHERE employee_no = ?',
+      'SELECT id, employee_no, password, first_name, middle_initial, last_name, role, is_active, created_at FROM employees WHERE employee_no = ?',
       [employee_no]
     );
 
@@ -79,6 +79,7 @@ router.post('/login', [
         id: user.id,
         employee_no: user.employee_no,
         first_name: user.first_name,
+        middle_initial: user.middle_initial,
         last_name: user.last_name,
         role: role,
         is_active: user.is_active
@@ -100,7 +101,7 @@ router.get('/me', async (req, res) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
     const [rows] = await db.query(
-      'SELECT id, employee_no, first_name, last_name, role, department, is_active FROM employees WHERE id = ?',
+      'SELECT id, employee_no, first_name, middle_initial, last_name, role, department, is_active FROM employees WHERE id = ?',
       [decoded.id]
     );
 

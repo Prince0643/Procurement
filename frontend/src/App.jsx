@@ -783,14 +783,54 @@ const BrowseItems = () => {
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showCreatePR, setShowCreatePR] = useState(false)
   const [selectedItems, setSelectedItems] = useState([])
-  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '' })
+  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitSuccess, setSubmitSuccess] = useState(false)
+  const [branches, setBranches] = useState([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
 
   useEffect(() => {
     fetchItems()
+    fetchBranches()
   }, [])
+
+  const fetchBranches = async () => {
+    try {
+      setLoadingBranches(true)
+      const response = await fetch('https://jajr.xandree.com/get_branches_api.php', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      console.log('Branches API response:', data)
+      
+      // Handle the API response format
+      let branchNames = []
+      if (Array.isArray(data)) {
+        // API returns array directly: [{id, branch_name}, ...]
+        branchNames = data.map(branch => branch.branch_name)
+      } else if (data && Array.isArray(data.data)) {
+        // API returns { data: [...] }
+        branchNames = data.data.map(branch => branch.branch_name)
+      } else if (data && Array.isArray(data.branches)) {
+        // API returns { branches: [...] }
+        branchNames = data.branches.map(branch => branch.branch_name)
+      }
+      
+      console.log('Extracted branch names:', branchNames)
+      setBranches(branchNames)
+    } catch (err) {
+      console.error('Failed to fetch branches:', err)
+      setBranches([])
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
 
   const fetchItems = async () => {
     try {
@@ -833,6 +873,16 @@ const BrowseItems = () => {
       return
     }
 
+    if (!prFormData.date_needed) {
+      setSubmitError('Date needed is required')
+      return
+    }
+
+    if (!prFormData.project) {
+      setSubmitError('Project is required')
+      return
+    }
+
     setSubmitting(true)
     setSubmitError('')
     setSubmitSuccess(false)
@@ -841,6 +891,9 @@ const BrowseItems = () => {
       await purchaseRequestService.create({
         purpose: prFormData.purpose,
         remarks: prFormData.remarks,
+        date_needed: prFormData.date_needed,
+        project: prFormData.project,
+        project_address: prFormData.project_address,
         items: selectedItems.map(item => ({
           item_id: item.id,
           quantity: item.quantity
@@ -848,7 +901,7 @@ const BrowseItems = () => {
       })
 
       setSubmitSuccess(true)
-      setPrFormData({ purpose: '', remarks: '' })
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
       setSelectedItems([])
       
       setTimeout(() => {
@@ -980,6 +1033,46 @@ const BrowseItems = () => {
                   value={prFormData.purpose}
                   onChange={(e) => setPrFormData({ ...prFormData, purpose: e.target.value })}
                   placeholder="Enter the purpose of this purchase request"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed *</label>
+                  <input
+                    type="date"
+                    value={prFormData.date_needed}
+                    onChange={(e) => setPrFormData({ ...prFormData, date_needed: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
+                  <select
+                    value={prFormData.project}
+                    onChange={(e) => setPrFormData({ ...prFormData, project: e.target.value })}
+                    disabled={loadingBranches || branches.length === 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">
+                      {loadingBranches ? 'Loading...' : branches.length === 0 ? 'No projects available' : 'Select project'}
+                    </option>
+                    {branches.map((branch, index) => (
+                      <option key={index} value={branch}>{branch}</option>
+                    ))}
+                  </select>
+                  {branches.length === 0 && !loadingBranches && (
+                    <p className="text-xs text-red-500 mt-1">Failed to load projects. Please refresh the page.</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Address</label>
+                <input
+                  type="text"
+                  value={prFormData.project_address}
+                  onChange={(e) => setPrFormData({ ...prFormData, project_address: e.target.value })}
+                  placeholder="Enter project address"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
@@ -1447,6 +1540,11 @@ const PRExpandedDetails = ({ pr }) => {
         <div><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
         <div><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
         <div><span className="font-medium text-gray-700">Remarks:</span> {pr.remarks || '-'}</div>
+        <div><span className="font-medium text-gray-700">Date Needed:</span> {pr.date_needed ? formatDate(pr.date_needed) : '-'}</div>
+        <div><span className="font-medium text-gray-700">Project:</span> {pr.project || '-'}</div>
+        <div><span className="font-medium text-gray-700">Project Address:</span> {pr.project_address || '-'}</div>
+        <div><span className="font-medium text-gray-700">Total Amount:</span> {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
+        <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
       </div>
       
       {loading ? (
@@ -1461,6 +1559,12 @@ const PRExpandedDetails = ({ pr }) => {
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+                {pr.status !== 'Pending' && (
+                  <>
+                    <th className="text-right py-2 px-3 font-medium text-gray-600">Unit Cost</th>
+                    <th className="text-right py-2 px-3 font-medium text-gray-600">Total</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -1469,11 +1573,17 @@ const PRExpandedDetails = ({ pr }) => {
                   <td className="py-2 px-3">{item.item_name || item.item_code}</td>
                   <td className="py-2 px-3">{item.quantity}</td>
                   <td className="py-2 px-3">{item.unit}</td>
+                  {pr.status !== 'Pending' && (
+                    <>
+                      <td className="py-2 px-3 text-right">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
+                      <td className="py-2 px-3 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
+                    </>
+                  )}
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan="3" className="py-4 text-center text-gray-500">No items found</td>
+                  <td colSpan={pr.status === 'Pending' ? 3 : 5} className="py-4 text-center text-gray-500">No items found</td>
                 </tr>
               )}
             </tbody>
@@ -1617,6 +1727,7 @@ const PendingPRs = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Requested By</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Created</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -1631,6 +1742,7 @@ const PendingPRs = () => {
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.purpose}</td>
                     <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</td>
                     <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
@@ -1650,7 +1762,7 @@ const PendingPRs = () => {
                   </tr>
                   {expandedPRId === pr.id && (
                     <tr>
-                      <td colSpan="6" className="bg-gray-50 p-4">
+                      <td colSpan="7" className="bg-gray-50 p-4">
                         <PRExpandedDetails pr={pr} />
                       </td>
                     </tr>
@@ -1659,7 +1771,7 @@ const PendingPRs = () => {
               ))}
               {prs.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="7" className="py-8 text-center text-gray-500">
                     No purchase requests ready for Purchase Order creation
                   </td>
                 </tr>
@@ -1902,6 +2014,7 @@ const ItemsManagement = () => {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [categories, setCategories] = useState([])
   
   const [formData, setFormData] = useState({
     item_code: '',
@@ -1913,7 +2026,17 @@ const ItemsManagement = () => {
 
   useEffect(() => {
     fetchItems()
+    fetchCategories()
   }, [])
+
+  const fetchCategories = async () => {
+    try {
+      const data = await categoryService.getAll()
+      setCategories(data)
+    } catch (err) {
+      console.error('Failed to fetch categories', err)
+    }
+  }
 
   const fetchItems = async () => {
     try {
@@ -2146,15 +2269,18 @@ const ItemsManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
-                  <input
-                    type="number"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select
                     name="category_id"
                     value={formData.category_id}
                     onChange={handleInputChange}
-                    placeholder="e.g., 1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.category_name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -2217,15 +2343,18 @@ const ItemsManagement = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category ID</label>
-                  <input
-                    type="number"
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <select
                     name="category_id"
                     value={formData.category_id}
                     onChange={handleInputChange}
-                    placeholder="e.g., 1"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  />
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.category_name}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -2985,7 +3114,12 @@ const ApprovePRs = () => {
   const [selectedPR, setSelectedPR] = useState(null)
   const [expandedPRId, setExpandedPRId] = useState(null)
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showApproveModal, setShowApproveModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [approvalItems, setApprovalItems] = useState([])
+  const [suppliers, setSuppliers] = useState([])
+  const [selectedSupplier, setSelectedSupplier] = useState('')
+  const [supplierAddress, setSupplierAddress] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
   const { user } = useAuth()
 
@@ -3023,17 +3157,87 @@ const ApprovePRs = () => {
   }
 
   const handleApprove = async (pr) => {
+    // For procurement, show modal to enter unit prices for items before approving
+    if (isProcurement) {
+      setSelectedPR(pr)
+      // Fetch PR details to get items
+      try {
+        const [prDetails, suppliersData] = await Promise.all([
+          purchaseRequestService.getById(pr.id),
+          supplierService.getAll()
+        ])
+        setApprovalItems(prDetails.items || [])
+        setSuppliers(suppliersData || [])
+        setSelectedSupplier('')
+        setSupplierAddress('')
+        setShowApproveModal(true)
+      } catch (err) {
+        console.error('Failed to fetch PR items or suppliers', err)
+      }
+      return
+    }
+    
+    // For Super Admin, approve directly
     setActionLoading(true)
     try {
-      if (isSuperAdmin) {
-        // Super Admin first approval: Pending → For Procurement Review
-        // Super Admin final approval: For Super Admin Final Approval → For Purchase
-        await purchaseRequestService.superAdminFirstApprove(pr.id, 'approved')
-      } else if (isProcurement) {
-        // Procurement approval: For Procurement Review → For Super Admin Final Approval
-        await purchaseRequestService.procurementApprove(pr.id, 'approved')
-      }
-      await fetchPRs() // Refresh the list
+      await purchaseRequestService.superAdminFirstApprove(pr.id, 'approved')
+      await fetchPRs()
+    } catch (err) {
+      console.error('Approval failed', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleItemPriceChange = (itemId, unitPrice) => {
+    setApprovalItems(prev => prev.map(item => 
+      item.id === itemId 
+        ? { ...item, unit_price: parseFloat(unitPrice) || 0, total_price: (parseFloat(unitPrice) || 0) * item.quantity }
+        : item
+    ))
+  }
+
+  const handleSupplierChange = (supplierId) => {
+    setSelectedSupplier(supplierId)
+    const selectedSupplierData = suppliers.find(s => s.id === parseInt(supplierId))
+    setSupplierAddress(selectedSupplierData?.address || '')
+  }
+
+  const calculateTotalAmount = () => {
+    return approvalItems.reduce((sum, item) => sum + (item.total_price || 0), 0)
+  }
+
+  const handleConfirmApprove = async () => {
+    if (!selectedPR) return
+    
+    if (!selectedSupplier) {
+      alert('Please select a supplier')
+      return
+    }
+    
+    setActionLoading(true)
+    try {
+      // Prepare items array with id, unit_price, and quantity
+      const itemsForApi = approvalItems.map(item => ({
+        id: item.id,
+        unit_price: item.unit_price || 0,
+        quantity: item.quantity
+      }))
+      
+      await purchaseRequestService.procurementApprove(
+        selectedPR.id, 
+        'approved', 
+        null, 
+        itemsForApi,
+        selectedSupplier,
+        supplierAddress
+      )
+      setShowApproveModal(false)
+      setSelectedPR(null)
+      setApprovalItems([])
+      setSelectedSupplier('')
+      setSupplierAddress('')
+      await fetchPRs()
     } catch (err) {
       console.error('Approval failed', err)
     } finally {
@@ -3111,6 +3315,7 @@ const ApprovePRs = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Current Status</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Stage</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Created</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -3128,6 +3333,7 @@ const ApprovePRs = () => {
                     <td className="py-3 px-4 text-sm text-blue-600 font-medium">
                       {getApprovalLabel(pr.status)}
                     </td>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</td>
                     <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
@@ -3157,7 +3363,7 @@ const ApprovePRs = () => {
                   </tr>
                   {expandedPRId === pr.id && (
                     <tr>
-                      <td colSpan="7" className="bg-gray-50 p-4">
+                      <td colSpan="8" className="bg-gray-50 p-4">
                         <PRExpandedDetails pr={pr} />
                       </td>
                     </tr>
@@ -3166,7 +3372,7 @@ const ApprovePRs = () => {
               ))}
               {pendingPRs.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-gray-500">
+                  <td colSpan="8" className="py-8 text-center text-gray-500">
                     No purchase requests awaiting your approval
                   </td>
                 </tr>
@@ -3205,6 +3411,98 @@ const ApprovePRs = () => {
                 disabled={actionLoading || (isProcurement && !rejectionReason.trim())}
               >
                 {actionLoading ? 'Rejecting...' : 'Reject PR'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showApproveModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Approve Purchase Request</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedPR?.pr_number} - Enter unit cost for each item and select supplier</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="border rounded-md overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+                      <th className="text-left py-2 px-3 font-medium text-gray-600">Unit Cost (PHP)</th>
+                      <th className="text-right py-2 px-3 font-medium text-gray-600">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {approvalItems.map((item) => (
+                      <tr key={item.id} className="border-t border-gray-100">
+                        <td className="py-2 px-3">{item.item_name || item.item_code}</td>
+                        <td className="py-2 px-3">{item.quantity}</td>
+                        <td className="py-2 px-3">{item.unit}</td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            value={item.unit_price || ''}
+                            onChange={(e) => handleItemPriceChange(item.id, e.target.value)}
+                            placeholder="0.00"
+                            className="w-24 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                          />
+                        </td>
+                        <td className="py-2 px-3 text-right font-medium">
+                          {formatCurrency(item.total_price || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                    {approvalItems.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="py-4 text-center text-gray-500">No items found</td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot className="bg-gray-50">
+                    <tr>
+                      <td colSpan="4" className="py-2 px-3 text-right font-medium text-gray-700">Total Amount:</td>
+                      <td className="py-2 px-3 text-right font-bold text-gray-900">{formatCurrency(calculateTotalAmount())}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
+                  <select
+                    value={selectedSupplier}
+                    onChange={(e) => handleSupplierChange(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select supplier</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.supplier_name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier Address</label>
+                  <div className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-sm text-gray-700 min-h-[38px]">
+                    {supplierAddress || <span className="text-gray-400">Select a supplier to see address</span>}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowApproveModal(false)} disabled={actionLoading}>Cancel</Button>
+              <Button 
+                variant="success" 
+                onClick={handleConfirmApprove}
+                disabled={actionLoading || approvalItems.length === 0 || !selectedSupplier}
+              >
+                {actionLoading ? 'Approving...' : 'Approve & Forward'}
               </Button>
             </div>
           </Card>
@@ -3334,7 +3632,7 @@ const ApprovePOs = () => {
                     </tr>
                     {expandedPOId === po.id && (
                       <tr>
-                        <td colSpan="6" className="bg-gray-50 p-4">
+                        <td colSpan="7" className="bg-gray-50 p-4">
                           <POExpandedDetails po={po} />
                         </td>
                       </tr>
@@ -3464,7 +3762,7 @@ const AllPurchaseRequests = () => {
                   </tr>
                   {expandedPRId === pr.id && (
                     <tr>
-                      <td colSpan="6" className="bg-gray-50 p-4">
+                      <td colSpan="7" className="bg-gray-50 p-4">
                         <PRExpandedDetails pr={pr} />
                       </td>
                     </tr>

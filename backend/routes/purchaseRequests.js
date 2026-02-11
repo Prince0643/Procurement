@@ -74,7 +74,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
 
     if (!purpose || !String(purpose).trim()) {
       return res.status(400).json({ message: 'Purpose is required' });
@@ -87,17 +87,18 @@ router.post('/', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
-    const year = new Date().getFullYear();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
     const firstInitial = String(req.user.first_name || '').charAt(0).toUpperCase();
-    const lastName = String(req.user.last_name || '');
-    const lastInitial = lastName.charAt(0).toUpperCase();
-    const lastLetter = lastName.slice(-1).toUpperCase();
-    const initials = `${firstInitial}${lastInitial}${lastLetter}`;
+    const middleInitial = String(req.user.middle_initial || '').charAt(0).toUpperCase();
+    const lastInitial = String(req.user.last_name || '').charAt(0).toUpperCase();
+    const initials = `${firstInitial}${middleInitial}${lastInitial}`;
 
-    // Get the last PR number for this engineer in this year
+    // Get the last PR number for this engineer in this year/month
     const [lastPrs] = await conn.query(
       "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
-      [`${year}-${initials}-%`]
+      [`${initials}-${year}-${month}-%`]
     );
 
     let counter = 1;
@@ -109,11 +110,11 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
 
-    const prNumber = `${year}-${initials}-${String(counter).padStart(3, '0')}`;
+    const prNumber = `${initials}-${year}-${month}-${String(counter).padStart(3, '0')}`;
 
     const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status) VALUES (?, ?, ?, ?, 'Pending')",
-      [prNumber, req.user.id, purpose, remarks ?? '']
+      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address) VALUES (?, ?, ?, ?, 'Pending', ?, ?, ?)",
+      [prNumber, req.user.id, purpose, remarks ?? '', date_needed || null, project || null, project_address || null]
     );
 
     const prId = result.insertId;
@@ -276,7 +277,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
 // Approve/Reject PR by Procurement (to Super Admin Final Approval)
 router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
   try {
-    const { status, rejection_reason } = req.body;
+    const { status, rejection_reason, items, supplier_id, supplier_address } = req.body;
     
     const [prs] = await db.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
@@ -290,16 +291,46 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     }
     
     let newStatus;
+    let totalAmount = null;
+    
     if (status === 'approved') {
       newStatus = 'For Super Admin Final Approval';
+      
+      // Validate supplier_id is provided
+      if (!supplier_id) {
+        return res.status(400).json({ message: 'Supplier is required for approval' });
+      }
+      
+      // Update unit prices for items and calculate totals
+      if (items && items.length > 0) {
+        let calculatedTotal = 0;
+        
+        for (const item of items) {
+          const unitPrice = parseFloat(item.unit_price) || 0;
+          const totalPrice = unitPrice * item.quantity;
+          calculatedTotal += totalPrice;
+          
+          await db.query(
+            'UPDATE purchase_request_items SET unit_price = ?, total_price = ? WHERE id = ?',
+            [unitPrice, totalPrice, item.id]
+          );
+        }
+        
+        totalAmount = calculatedTotal;
+      }
+      
+      // Update PR status, total_amount, supplier_id and supplier_address
+      await db.query(
+        'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_address = ? WHERE id = ?',
+        [newStatus, totalAmount, supplier_id, supplier_address || null, req.params.id]
+      );
     } else {
       newStatus = 'Rejected';
+      await db.query(
+        'UPDATE purchase_requests SET status = ?, rejection_reason = ? WHERE id = ?',
+        [newStatus, rejection_reason || null, req.params.id]
+      );
     }
-    
-    await db.query(
-      'UPDATE purchase_requests SET status = ?, rejection_reason = ? WHERE id = ?',
-      [newStatus, status === 'rejected' ? rejection_reason : null, req.params.id]
-    );
 
     // Get PR details for notification
     const [prDetails] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -330,7 +361,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       );
     }
 
-    res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
+    res.json({ message: `Purchase request ${status} successfully`, status: newStatus, total_amount: totalAmount });
   } catch (error) {
     console.error('Procurement approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });

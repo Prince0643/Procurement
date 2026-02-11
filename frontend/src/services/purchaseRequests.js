@@ -21,8 +21,8 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  procurementApprove: async (id, status, rejection_reason) => {
-    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, { status, rejection_reason });
+  procurementApprove: async (id, status, rejection_reason, items, supplier_id, supplier_address) => {
+    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, { status, rejection_reason, items, supplier_id, supplier_address });
     return response.data;
   },
 
