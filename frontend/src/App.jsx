@@ -4,6 +4,7 @@ import { purchaseRequestService } from './services/purchaseRequests'
 import { purchaseOrderService } from './services/purchaseOrders'
 import { categoryService } from './services/categories'
 import { supplierService } from './services/suppliers'
+import { reportService } from './services/reports'
 import { notificationService } from './services/notifications'
 import { employeeService } from './services/employees'
 import { useAuth } from './contexts/AuthContext'
@@ -2870,6 +2871,35 @@ const SuperAdminDashboard = () => {
   const approvedPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Approved').length
   const rejectedPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Rejected').length
 
+  const [procurementOverview, setProcurementOverview] = useState({
+    totalSpendYtd: 0,
+    avgProcessingDays: 0,
+    activeSuppliers: 0
+  })
+  const [overviewLoading, setOverviewLoading] = useState(true)
+
+  useEffect(() => {
+    const fetchDashboardStats = async () => {
+      try {
+        setOverviewLoading(true)
+        const data = await reportService.getDashboardStats()
+        if (data?.procurementOverview) {
+          setProcurementOverview({
+            totalSpendYtd: Number(data.procurementOverview.totalSpendYtd) || 0,
+            avgProcessingDays: Number(data.procurementOverview.avgProcessingDays) || 0,
+            activeSuppliers: Number(data.procurementOverview.activeSuppliers) || 0
+          })
+        }
+      } catch (err) {
+        console.error('Failed to fetch dashboard stats:', err)
+      } finally {
+        setOverviewLoading(false)
+      }
+    }
+
+    fetchDashboardStats()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -2927,15 +2957,21 @@ const SuperAdminDashboard = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">Total Spend (YTD)</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(6025)}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {overviewLoading ? '—' : formatCurrency(procurementOverview.totalSpendYtd)}
+            </p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">Avg. Processing Time</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">4.2 days</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {overviewLoading ? '—' : `${procurementOverview.avgProcessingDays.toFixed(1)} days`}
+            </p>
           </div>
           <div className="p-4 bg-gray-50 rounded-lg">
             <p className="text-sm text-gray-600">Active Suppliers</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{MOCK_SUPPLIERS.length}</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">
+              {overviewLoading ? '—' : procurementOverview.activeSuppliers}
+            </p>
           </div>
         </div>
       </Card>

@@ -1,6 +1,7 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import axios from 'axios';
 import { body, validationResult } from 'express-validator';
 import db from '../config/database.js';
 
@@ -110,6 +111,53 @@ router.get('/me', async (req, res) => {
     res.json({ user: rows[0] });
   } catch (error) {
     res.status(401).json({ message: 'Invalid token' });
+  }
+});
+
+// Procurement Login - forwards to coworker's API
+// POST /api/auth/procurement
+// Body: { employee_no, password }
+router.post('/procurement', [
+  body('employee_no').notEmpty().withMessage('Employee number is required'),
+  body('password').notEmpty().withMessage('Password is required')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const { employee_no, password } = req.body;
+
+    // Forward to coworker's API
+    const PROXY_API_URL = process.env.PROXY_API_URL || 'https://procurement.xandree.com/api/auth/login';
+
+    const response = await axios.post(PROXY_API_URL, {
+      employee_no,
+      password
+    }, {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      timeout: 10000 // 10 second timeout
+    });
+
+    // Return the same response from the external API
+    res.json(response.data);
+
+  } catch (error) {
+    console.error('Proxy login error:', error.message);
+    
+    // If external API returned an error, forward that error
+    if (error.response) {
+      return res.status(error.response.status).json(error.response.data);
+    }
+    
+    // Otherwise return generic error
+    res.status(500).json({ 
+      message: 'Failed to connect to external login service',
+      error: error.message 
+    });
   }
 });
 

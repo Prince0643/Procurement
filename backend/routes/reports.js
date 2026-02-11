@@ -11,12 +11,12 @@ router.get('/dashboard', authenticate, requireSuperAdmin, async (req, res) => {
     const [prStats] = await db.query(`
       SELECT 
         COUNT(*) as total,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) as approved,
-        SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) as rejected,
-        SUM(CASE WHEN status = 'ordered' THEN 1 ELSE 0 END) as ordered,
-        SUM(CASE WHEN status = 'partially_received' THEN 1 ELSE 0 END) as partially_received,
-        SUM(CASE WHEN status = 'fully_received' THEN 1 ELSE 0 END) as fully_received
+        SUM(CASE WHEN status = 'Pending' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'Completed' THEN 1 ELSE 0 END) as approved,
+        SUM(CASE WHEN status = 'Rejected' THEN 1 ELSE 0 END) as rejected,
+        SUM(CASE WHEN status = 'PO Created' THEN 1 ELSE 0 END) as ordered,
+        0 as partially_received,
+        0 as fully_received
       FROM purchase_requests
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     `);
@@ -26,20 +26,20 @@ router.get('/dashboard', authenticate, requireSuperAdmin, async (req, res) => {
       SELECT 
         COUNT(*) as total,
         SUM(total_amount) as total_value,
-        SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
-        SUM(CASE WHEN status = 'delivered' THEN 1 ELSE 0 END) as delivered
+        SUM(CASE WHEN status = 'Draft' THEN 1 ELSE 0 END) as pending,
+        SUM(CASE WHEN status = 'Delivered' THEN 1 ELSE 0 END) as delivered
       FROM purchase_orders
       WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
     `);
 
     // Top items requested
     const [topItems] = await db.query(`
-      SELECT i.name, SUM(pri.quantity) as total_quantity
+      SELECT i.item_name as name, SUM(pri.quantity) as total_quantity
       FROM purchase_request_items pri
       JOIN items i ON pri.item_id = i.id
       JOIN purchase_requests pr ON pri.purchase_request_id = pr.id
       WHERE pr.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-      GROUP BY i.id
+      GROUP BY i.id, i.item_name
       ORDER BY total_quantity DESC
       LIMIT 5
     `);
@@ -48,22 +48,48 @@ router.get('/dashboard', authenticate, requireSuperAdmin, async (req, res) => {
     const [deptSpending] = await db.query(`
       SELECT 
         e.department,
-        COUNT(pr.id) as request_count,
-        SUM(pr.total_amount) as total_amount
+        COUNT(DISTINCT pr.id) as request_count,
+        COALESCE(SUM(pri.total_price), 0) as total_amount
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
+      LEFT JOIN purchase_request_items pri ON pri.purchase_request_id = pr.id
       WHERE pr.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
       GROUP BY e.department
       ORDER BY total_amount DESC
+    `);
+
+    const [ytdSpendResult] = await db.query(`
+      SELECT COALESCE(SUM(total_amount), 0) as total_spend_ytd
+      FROM purchase_orders
+      WHERE YEAR(created_at) = YEAR(CURDATE())
+    `);
+
+    const [avgProcessingResult] = await db.query(`
+      SELECT COALESCE(AVG(TIMESTAMPDIFF(HOUR, created_at, approved_at)) / 24, 0) as avg_processing_days
+      FROM purchase_requests
+      WHERE approved_at IS NOT NULL
+        AND YEAR(created_at) = YEAR(CURDATE())
+    `);
+
+    const [activeSuppliersResult] = await db.query(`
+      SELECT COUNT(*) as active_suppliers
+      FROM suppliers
+      WHERE status = 'Active'
     `);
 
     res.json({
       purchaseRequests: prStats[0],
       purchaseOrders: poStats[0],
       topItems,
-      departmentSpending: deptSpending
+      departmentSpending: deptSpending,
+      procurementOverview: {
+        totalSpendYtd: ytdSpendResult[0]?.total_spend_ytd ?? 0,
+        avgProcessingDays: avgProcessingResult[0]?.avg_processing_days ?? 0,
+        activeSuppliers: activeSuppliersResult[0]?.active_suppliers ?? 0
+      }
     });
   } catch (error) {
+    console.error('Failed to fetch dashboard data:', error);
     res.status(500).json({ message: 'Failed to fetch dashboard data' });
   }
 });
