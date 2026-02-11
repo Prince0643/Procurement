@@ -30,5 +30,12 @@ export const purchaseRequestService = {
   approve: async (id, status, remarks) => {
     const response = await api.put(`/purchase-requests/${id}/approve`, { status, remarks });
     return response.data;
+  },
+
+  exportToExcel: async (id) => {
+    const response = await api.get(`/purchase-requests/${id}/export`, {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 };

@@ -33,7 +33,9 @@ import {
   MoreHorizontal,
   AlertCircle,
   LogOut,
-  Users
+  Users,
+  FileDown,
+  ExternalLink
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -535,6 +537,17 @@ const Layout = ({ currentRole, children }) => {
               </button>
             )
           })}
+
+          {/* Attendance Link for All Users */}
+          <a
+            href="https://jajr.xandree.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+          >
+            <ExternalLink className="w-5 h-5 flex-shrink-0" />
+            {sidebarOpen && <span className="font-medium text-sm">Attendance</span>}
+          </a>
         </nav>
 
         {/* Logout Button */}
@@ -1518,6 +1531,10 @@ const MyPurchaseRequests = () => {
 const PRExpandedDetails = ({ pr }) => {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+
+  // Check if user can export (Super Admin, Procurement, Admin, Engineer)
+  const canExport = ['super_admin', 'procurement', 'admin', 'engineer'].includes(user?.role)
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -1533,18 +1550,43 @@ const PRExpandedDetails = ({ pr }) => {
     fetchDetails()
   }, [pr.id])
 
+  const handleExportExcel = async () => {
+    try {
+      const blob = await purchaseRequestService.exportToExcel(pr.id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `PR-${pr.pr_number}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export PR to Excel', err)
+      alert('Failed to export to Excel')
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div><span className="font-medium text-gray-700">Requested By:</span> {pr.requester_first_name} {pr.requester_last_name}</div>
-        <div><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
-        <div><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
-        <div><span className="font-medium text-gray-700">Remarks:</span> {pr.remarks || '-'}</div>
-        <div><span className="font-medium text-gray-700">Date Needed:</span> {pr.date_needed ? formatDate(pr.date_needed) : '-'}</div>
-        <div><span className="font-medium text-gray-700">Project:</span> {pr.project || '-'}</div>
-        <div><span className="font-medium text-gray-700">Project Address:</span> {pr.project_address || '-'}</div>
-        <div><span className="font-medium text-gray-700">Total Amount:</span> {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
-        <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
+      <div className="flex items-center justify-between">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div><span className="font-medium text-gray-700">Requested By:</span> {pr.requester_first_name} {pr.requester_last_name}</div>
+          <div><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
+          <div><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
+          <div><span className="font-medium text-gray-700">Remarks:</span> {pr.remarks || '-'}</div>
+          <div><span className="font-medium text-gray-700">Date Needed:</span> {pr.date_needed ? formatDate(pr.date_needed) : '-'}</div>
+          <div><span className="font-medium text-gray-700">Project:</span> {pr.project || '-'}</div>
+          <div><span className="font-medium text-gray-700">Project Address:</span> {pr.project_address || '-'}</div>
+          <div><span className="font-medium text-gray-700">Total Amount:</span> {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
+          <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
+        </div>
+        {canExport && (
+          <Button size="sm" variant="secondary" onClick={handleExportExcel}>
+            <FileDown className="w-4 h-4 mr-1" />
+            Export Excel
+          </Button>
+        )}
       </div>
       
       {loading ? (
@@ -1606,6 +1648,7 @@ const PendingPRs = () => {
   const [poFormData, setPoFormData] = useState({
     supplier_id: '',
     expected_delivery_date: '',
+    place_of_delivery: '',
     notes: ''
   })
   const [submitting, setSubmitting] = useState(false)
@@ -1644,8 +1687,9 @@ const PendingPRs = () => {
     setSelectedPR(pr)
     setShowCreatePOModal(true)
     setPoFormData({
-      supplier_id: '',
+      supplier_id: pr.supplier_id || '',
       expected_delivery_date: '',
+      place_of_delivery: pr.project_address || '',
       notes: ''
     })
     setSubmitError('')
@@ -1653,8 +1697,8 @@ const PendingPRs = () => {
   }
 
   const handleSubmitPO = async () => {
-    if (!poFormData.supplier_id || !poFormData.expected_delivery_date) {
-      setSubmitError('Supplier and expected delivery date are required')
+    if (!poFormData.expected_delivery_date) {
+      setSubmitError('Expected delivery date is required')
       return
     }
 
@@ -1675,8 +1719,10 @@ const PendingPRs = () => {
 
       await purchaseOrderService.create({
         purchase_request_id: selectedPR.id,
-        supplier_id: parseInt(poFormData.supplier_id),
+        supplier_id: parseInt(poFormData.supplier_id) || selectedPR.supplier_id,
         expected_delivery_date: poFormData.expected_delivery_date,
+        place_of_delivery: poFormData.place_of_delivery,
+        project: selectedPR.project,
         notes: poFormData.notes,
         items: poItems
       })
@@ -1803,7 +1849,7 @@ const PendingPRs = () => {
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Supplier (from PR)</label>
                   <select
                     value={poFormData.supplier_id}
                     onChange={(e) => setPoFormData({ ...poFormData, supplier_id: e.target.value })}
@@ -1816,6 +1862,7 @@ const PendingPRs = () => {
                       </option>
                     ))}
                   </select>
+                  <p className="text-xs text-gray-500 mt-1">Pre-filled from PR. Change if needed.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date *</label>
@@ -1827,6 +1874,18 @@ const PendingPRs = () => {
                   />
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Place of Delivery</label>
+                <input
+                  type="text"
+                  value={poFormData.place_of_delivery}
+                  onChange={(e) => setPoFormData({ ...poFormData, place_of_delivery: e.target.value })}
+                  placeholder="Where items will be delivered..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Pre-filled with Project Address from PR. Change if needed.</p>
+              </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notes (Optional)</label>
@@ -1834,14 +1893,17 @@ const PendingPRs = () => {
                   value={poFormData.notes}
                   onChange={(e) => setPoFormData({ ...poFormData, notes: e.target.value })}
                   placeholder="Additional notes for this purchase order..."
-                  rows="3"
+                  rows="2"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
 
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-2">PR Details</h3>
-                <div className="bg-gray-50 p-3 rounded-md">
+                <div className="bg-gray-50 p-3 rounded-md space-y-1">
+                  <p><strong>PR Number:</strong> {selectedPR.pr_number}</p>
+                  <p><strong>Project:</strong> {selectedPR.project || '-'}</p>
+                  <p><strong>Project Address:</strong> {selectedPR.project_address || '-'}</p>
                   <p><strong>Purpose:</strong> {selectedPR.purpose}</p>
                   <p><strong>Requested by:</strong> {selectedPR.requester_first_name} {selectedPR.requester_last_name}</p>
                   <p><strong>Created:</strong> {formatDate(selectedPR.created_at)}</p>
@@ -1858,7 +1920,7 @@ const PendingPRs = () => {
               </Button>
               <Button 
                 onClick={handleSubmitPO}
-                disabled={submitting || !poFormData.supplier_id || !poFormData.expected_delivery_date}
+                disabled={submitting || !poFormData.expected_delivery_date}
               >
                 {submitting ? 'Creating...' : 'Create PO'}
               </Button>
@@ -1900,6 +1962,23 @@ const AdminDashboard = () => {
   const totalItems = MOCK_ITEMS.length
   const totalSuppliers = MOCK_SUPPLIERS.length
   const pendingPOs = pos.filter(po => po.status === 'Ordered').length
+
+  const handleExportPO = async (po) => {
+    try {
+      const blob = await purchaseOrderService.exportToExcel(po.id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `PO-${po.po_number}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export PO to Excel', err)
+      alert('Failed to export to Excel')
+    }
+  }
 
   if (loading) {
     return (
@@ -1992,7 +2071,12 @@ const AdminDashboard = () => {
                   <p className="font-medium text-sm text-gray-900">{po.po_number}</p>
                   <p className="text-xs text-gray-500">{formatCurrency(po.total_amount)}</p>
                 </div>
-                <StatusBadge status={po.status} />
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={po.status} />
+                  <Button size="sm" variant="secondary" onClick={() => handleExportPO(po)}>
+                    <FileDown className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             ))}
             {pos.length === 0 && (
@@ -2848,6 +2932,10 @@ const PurchaseOrders = () => {
 const POExpandedDetails = ({ po }) => {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
+
+  // Check if user can export (Super Admin, Procurement, Admin, Engineer)
+  const canExport = ['super_admin', 'procurement', 'admin', 'engineer'].includes(user?.role)
 
   useEffect(() => {
     const fetchDetails = async () => {
@@ -2863,15 +2951,40 @@ const POExpandedDetails = ({ po }) => {
     fetchDetails()
   }, [po.id])
 
+  const handleExportExcel = async () => {
+    try {
+      const blob = await purchaseOrderService.exportToExcel(po.id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `PO-${po.po_number}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export PO to Excel', err)
+      alert('Failed to export to Excel')
+    }
+  }
+
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-4 text-sm">
-        <div><span className="font-medium text-gray-700">Related PR:</span> {po.pr_number || '-'}</div>
-        <div><span className="font-medium text-gray-700">Supplier:</span> {po.supplier_name || '-'}</div>
-        <div><span className="font-medium text-gray-700">PO Date:</span> {formatDate(po.po_date || po.created_at)}</div>
-        <div><span className="font-medium text-gray-700">Expected Delivery:</span> {formatDate(po.expected_delivery_date)}</div>
-        <div><span className="font-medium text-gray-700">Total Amount:</span> {formatCurrency(po.total_amount || 0)}</div>
-        <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={po.status} /></div>
+      <div className="flex items-center justify-between">
+        <div className="grid grid-cols-2 gap-4 text-sm">
+          <div><span className="font-medium text-gray-700">Related PR:</span> {po.pr_number || '-'}</div>
+          <div><span className="font-medium text-gray-700">Supplier:</span> {po.supplier_name || '-'}</div>
+          <div><span className="font-medium text-gray-700">PO Date:</span> {formatDate(po.po_date || po.created_at)}</div>
+          <div><span className="font-medium text-gray-700">Expected Delivery:</span> {formatDate(po.expected_delivery_date)}</div>
+          <div><span className="font-medium text-gray-700">Total Amount:</span> {formatCurrency(po.total_amount || 0)}</div>
+          <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={po.status} /></div>
+        </div>
+        {canExport && (
+          <Button size="sm" variant="secondary" onClick={handleExportExcel}>
+            <FileDown className="w-4 h-4 mr-1" />
+            Export Excel
+          </Button>
+        )}
       </div>
       
       {loading ? (

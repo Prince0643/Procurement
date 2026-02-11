@@ -24,5 +24,12 @@ export const purchaseOrderService = {
   superAdminApprove: async (id, status) => {
     const response = await api.put(`/purchase-orders/${id}/super-admin-approve`, { status });
     return response.data;
+  },
+
+  exportToExcel: async (id) => {
+    const response = await api.get(`/purchase-orders/${id}/export`, {
+      responseType: 'blob'
+    });
+    return response.data;
   }
 };

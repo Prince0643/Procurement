@@ -2,6 +2,12 @@ import express from 'express';
 import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins } from '../utils/notifications.js';
+import ExcelJS from 'exceljs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -365,6 +371,107 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
   } catch (error) {
     console.error('Procurement approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
+  }
+});
+
+// Export PR to Excel
+router.get('/:id/export', authenticate, async (req, res) => {
+  try {
+    // Get PR details with items and supplier info
+    const [prs] = await db.query(`
+      SELECT pr.*, 
+             e.first_name as requester_first_name, 
+             e.last_name as requester_last_name,
+             s.supplier_name,
+             s.contact_person as supplier_contact
+      FROM purchase_requests pr
+      JOIN employees e ON pr.requested_by = e.id
+      LEFT JOIN suppliers s ON pr.supplier_id = s.id
+      WHERE pr.id = ?
+    `, [req.params.id]);
+    
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    
+    const pr = prs[0];
+    
+    // Get PR items
+    const [items] = await db.query(`
+      SELECT pri.*, i.item_name, i.item_code, i.unit
+      FROM purchase_request_items pri
+      JOIN items i ON pri.item_id = i.id
+      WHERE pri.purchase_request_id = ?
+    `, [req.params.id]);
+    
+    // Load template workbook
+    const templatePath = path.join(__dirname, '..', '..', 'PURCHASE REQUEST- FINAL-2026.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+    
+    const worksheet = workbook.getWorksheet(1);
+    
+    // Format date helper
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    };
+    
+    // Fill PR number (F6)
+    worksheet.getCell('F6').value = pr.pr_number || '';
+    
+    // Fill supplier name (C8)
+    worksheet.getCell('C8').value = pr.supplier_name || '';
+    
+    // Fill supplier address (C9)
+    worksheet.getCell('C9').value = pr.supplier_address || '';
+    
+    // Fill project (C10)
+    worksheet.getCell('C10').value = pr.project || '';
+    
+    // Fill project address (C11)
+    worksheet.getCell('C11').value = pr.project_address || '';
+    
+    // Fill date prepared (F8) - created_at
+    worksheet.getCell('F8').value = formatDate(pr.created_at);
+    
+    // Fill date needed (F9)
+    worksheet.getCell('F9').value = formatDate(pr.date_needed);
+    
+    // Fill items starting from row 14
+    let rowNum = 14;
+    items.forEach((item, index) => {
+      const row = worksheet.getRow(rowNum);
+      row.getCell(1).value = item.quantity; // A - QTY
+      row.getCell(2).value = item.unit; // B - UNIT
+      row.getCell(3).value = item.item_name || item.item_code; // C/D - DESCRIPTION (merged)
+      row.getCell(5).value = parseFloat(item.unit_price) || 0; // E - UNIT COST
+      row.getCell(6).value = parseFloat(item.total_price) || 0; // F - AMOUNT
+      rowNum++;
+    });
+    
+    // Add "*** NOTHING FOLLOWS ***" after items
+    const nothingFollowsRow = worksheet.getRow(rowNum);
+    nothingFollowsRow.getCell(3).value = '*** NOTHING FOLLOWS ***';
+    
+    // Fill total (F31)
+    worksheet.getCell('F31').value = pr.total_amount || 0;
+    
+    // Generate filename
+    const filename = `PR-${pr.pr_number}-${Date.now()}.xlsx`;
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
+    
+  } catch (error) {
+    console.error('Export PR error:', error);
+    res.status(500).json({ message: 'Failed to export purchase request: ' + error.message });
   }
 });
 
