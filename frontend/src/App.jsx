@@ -1722,7 +1722,8 @@ const MyPurchaseRequests = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -1768,6 +1769,50 @@ const MyPurchaseRequests = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {filteredPRs.map(pr => (
+              <div
+                key={pr.id}
+                onClick={() => toggleExpand(pr.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPRId === pr.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{pr.pr_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{pr.purpose}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); toggleExpand(pr.id); }}>
+                    {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Status & Date */}
+                <div className="flex items-center justify-between">
+                  <StatusBadge status={pr.status} />
+                  <span className="text-xs text-gray-500">{formatDate(pr.created_at)}</span>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedPRId === pr.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <PRExpandedDetails pr={pr} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {filteredPRs.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No purchase requests found</p>
+            )}
+          </div>
         </div>
       </Card>
     </div>
@@ -2011,7 +2056,8 @@ const PendingPRs = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -2070,6 +2116,70 @@ const PendingPRs = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {prs.map(pr => (
+              <div
+                key={pr.id}
+                onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPRId === pr.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{pr.pr_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{pr.purpose}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }}>
+                    {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Requester */}
+                <p className="text-xs text-gray-600 mb-2">
+                  By: {pr.requester_first_name} {pr.requester_last_name}
+                </p>
+
+                {/* Amount & Status */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}
+                  </span>
+                  <StatusBadge status={pr.status} />
+                </div>
+
+                {/* Date & Action */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{formatDate(pr.created_at)}</span>
+                  <Button 
+                    size="sm" 
+                    variant="success"
+                    onClick={(e) => { e.stopPropagation(); handleCreatePO(pr); }}
+                  >
+                    <ShoppingCart className="w-4 h-4 mr-1" />
+                    Create PO
+                  </Button>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedPRId === pr.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <PRExpandedDetails pr={pr} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {prs.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No purchase requests ready for Purchase Order creation</p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -2496,7 +2606,8 @@ const ItemsManagement = () => {
       )}
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -2537,6 +2648,47 @@ const ItemsManagement = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="grid grid-cols-2 gap-3">
+            {filteredItems.map(item => (
+              <div key={item.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <p className="text-xs text-gray-500 font-mono">{item.item_code}</p>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleEditClick(item)}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(item)}>
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Item Name */}
+                <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1">
+                  {item.item_name || item.name}
+                </h3>
+
+                {/* Category */}
+                <p className="text-xs text-gray-600 mb-2">
+                  {item.category_name || item.category || '-'}
+                </p>
+
+                {/* Unit & Status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs bg-gray-100 px-2 py-0.5 rounded">{item.unit}</span>
+                  <StatusBadge status={item.status || 'Active'} />
+                </div>
+              </div>
+            ))}
+            {filteredItems.length === 0 && (
+              <p className="text-center text-gray-500 py-8 col-span-full">No items found</p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -2836,7 +2988,8 @@ const SuppliersManagement = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -2894,6 +3047,58 @@ const SuppliersManagement = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {filteredSuppliers.map(supplier => (
+              <div
+                key={supplier.id}
+                onClick={() => toggleExpand(supplier.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedSupplierId === supplier.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-900">{supplier.name || supplier.supplier_name}</h3>
+                    <p className="text-xs text-gray-600">{supplier.contact_person || '-'}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); toggleExpand(supplier.id); }}>
+                      {expandedSupplierId === supplier.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleEditClick(supplier); }}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Contact Info */}
+                <div className="space-y-1 text-xs text-gray-600 mb-2">
+                  <p>{supplier.email || '-'}</p>
+                  <p>{supplier.phone || '-'}</p>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedSupplierId === supplier.id && (
+                  <div className="mt-2 pt-2 border-t border-gray-200 space-y-1 text-xs">
+                    <p><span className="font-medium text-gray-700">Code:</span> {supplier.supplier_code || '-'}</p>
+                    <p><span className="font-medium text-gray-700">Status:</span> {supplier.status || 'Active'}</p>
+                    <p><span className="font-medium text-gray-700">Created:</span> {formatDate(supplier.created_at)}</p>
+                    <p><span className="font-medium text-gray-700">Address:</span> {supplier.address || '-'}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+            {filteredSuppliers.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No suppliers found</p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -3120,7 +3325,8 @@ const PurchaseOrders = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -3169,6 +3375,57 @@ const PurchaseOrders = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {pos.map(po => (
+              <div
+                key={po.id}
+                onClick={() => setExpandedPOId(expandedPOId === po.id ? null : po.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPOId === po.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{po.po_number}</p>
+                    <p className="text-sm text-gray-600">PR: {po.pr_number}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPOId(expandedPOId === po.id ? null : po.id); }}>
+                    {expandedPOId === po.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Supplier & Amount */}
+                <div className="mb-2">
+                  <p className="text-sm font-semibold text-gray-900">{po.supplier_name}</p>
+                  <p className="text-sm font-medium text-gray-700">{formatCurrency(po.total_amount)}</p>
+                </div>
+
+                {/* Dates & Status */}
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                  <span>PO: {formatDate(po.po_date || po.created_at)}</span>
+                  <span>Del: {formatDate(po.expected_delivery_date)}</span>
+                </div>
+                <StatusBadge status={po.status} />
+
+                {/* Expanded Details */}
+                {expandedPOId === po.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <POExpandedDetails po={po} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {pos.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No purchase orders found</p>
+            )}
+          </div>
         </div>
       </Card>
     </div>
@@ -3665,7 +3922,7 @@ const ApprovePRs = () => {
               : 'Review PRs and forward to Super Admin for final approval'}
           </p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -3738,6 +3995,85 @@ const ApprovePRs = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {pendingPRs.map(pr => (
+              <div
+                key={pr.id}
+                onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPRId === pr.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{pr.pr_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{pr.purpose}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }} disabled={actionLoading}>
+                    {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Requester & Stage */}
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-gray-600">
+                    By: {pr.requester_first_name} {pr.requester_last_name}
+                  </p>
+                  <span className="text-xs text-blue-600 font-medium">
+                    {getApprovalLabel(pr.status)}
+                  </span>
+                </div>
+
+                {/* Amount & Status */}
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-gray-900">
+                    {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}
+                  </span>
+                  <StatusBadge status={pr.status} />
+                </div>
+
+                {/* Date & Actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{formatDate(pr.created_at)}</span>
+                  <div className="flex gap-1">
+                    <Button 
+                      size="sm" 
+                      variant="success" 
+                      onClick={(e) => { e.stopPropagation(); handleApprove(pr); }}
+                      disabled={actionLoading}
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      size="sm" 
+                      variant="danger" 
+                      onClick={(e) => { e.stopPropagation(); handleReject(pr); }}
+                      disabled={actionLoading}
+                    >
+                      <XCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedPRId === pr.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <PRExpandedDetails pr={pr} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {pendingPRs.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No purchase requests awaiting your approval</p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -3951,7 +4287,7 @@ const ApprovePOs = () => {
           <h2 className="text-lg font-semibold text-gray-900">Purchase Orders Pending Approval</h2>
           <p className="text-sm text-gray-500 mt-1">Review and approve/reject purchase orders placed by Admin</p>
         </div>
-        <div className="overflow-x-auto">
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -4008,6 +4344,63 @@ const ApprovePOs = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {pendingPOs.map(po => (
+              <div
+                key={po.id}
+                onClick={() => setExpandedPOId(expandedPOId === po.id ? null : po.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPOId === po.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{po.po_number}</p>
+                    <p className="text-sm text-gray-600">PR: {po.pr_number || '-'}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPOId(expandedPOId === po.id ? null : po.id); }} disabled={actionLoading}>
+                    {expandedPOId === po.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Supplier & Amount */}
+                <div className="mb-2">
+                  <p className="text-sm font-semibold text-gray-900">{po.supplier_name || '-'}</p>
+                  <p className="text-sm font-medium text-gray-700">{formatCurrency(po.total_amount)}</p>
+                </div>
+
+                {/* Date & Actions */}
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-500">{formatDate(po.po_date || po.created_at)}</span>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="success" onClick={(e) => { e.stopPropagation(); handleApprove(po); }} disabled={actionLoading}>
+                      <CheckCircle className="w-4 h-4" />
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); handleReject(po); }} disabled={actionLoading}>
+                      <XCircle className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedPOId === po.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <POExpandedDetails po={po} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {pendingPOs.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No pending purchase orders</p>
+            )}
+          </div>
         </div>
       </Card>
 
@@ -4087,7 +4480,9 @@ const AllPurchaseRequests = () => {
             {prs.length} PR{prs.length !== 1 ? 's' : ''} total
           </div>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -4137,6 +4532,55 @@ const AllPurchaseRequests = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {prs.map(pr => (
+              <div
+                key={pr.id}
+                onClick={() => setExpandedPRId(expandedPRId === pr.id ? null : pr.id)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedPRId === pr.id 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{pr.pr_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{pr.purpose}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedPRId(expandedPRId === pr.id ? null : pr.id); }}>
+                    {expandedPRId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Requester */}
+                <p className="text-xs text-gray-600 mb-2">
+                  By: {pr.requester_first_name} {pr.requester_last_name}
+                </p>
+
+                {/* Status & Date */}
+                <div className="flex items-center justify-between">
+                  <StatusBadge status={pr.status} />
+                  <span className="text-xs text-gray-500">{formatDate(pr.created_at)}</span>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedPRId === pr.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <PRExpandedDetails pr={pr} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {prs.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No purchase requests found</p>
+            )}
+          </div>
         </div>
       </Card>
     </div>
@@ -4489,7 +4933,8 @@ const EmployeesManagement = () => {
       </div>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -4538,6 +4983,51 @@ const EmployeesManagement = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {filteredEmployees.map(employee => (
+              <div key={employee.id} className="border border-gray-200 rounded-lg p-3 bg-white">
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{employee.employee_no}</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {employee.first_name} {employee.last_name}
+                    </p>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleEditClick(employee)}>
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleResetPassword(employee)}>
+                      <User className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Role & Department */}
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(employee.role)}`}>
+                    {getRoleLabel(employee.role)}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${employee.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                    {employee.is_active ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                {/* Department */}
+                <p className="text-xs text-gray-600">
+                  Dept: {employee.department || '-'}
+                </p>
+              </div>
+            ))}
+            {filteredEmployees.length === 0 && (
+              <p className="text-center text-gray-500 py-8 col-span-full">No employees found</p>
+            )}
+          </div>
         </div>
       </Card>
 
