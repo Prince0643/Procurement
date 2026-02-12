@@ -2049,10 +2049,10 @@ const PendingPRs = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <h2 className="text-lg font-semibold text-gray-900">Purchase Requests Ready for PO</h2>
         <div className="text-sm text-gray-500">
-          {prs.length} PR{prs.length !== 1 ? 's' : ''} ready for Purchase Order creation
+          {prs.length} PR{prs.length !== 1 ? 's' : ''} ready
         </div>
       </div>
 
