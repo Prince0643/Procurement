@@ -1137,7 +1137,7 @@ const BrowseItems = () => {
         </Button>
       </div>
 
-      {/* Items List */}
+      {/* Items List - Desktop Table / Mobile Grid */}
       {loading ? (
         <div className="text-center py-12">
           <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1147,7 +1147,8 @@ const BrowseItems = () => {
         <div className="text-center py-12 text-red-600">{error}</div>
       ) : (
         <Card>
-          <div className="overflow-x-auto">
+          {/* Desktop Table View */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
@@ -1196,6 +1197,72 @@ const BrowseItems = () => {
                 })}
               </tbody>
             </table>
+          </div>
+
+          {/* Mobile Grid View */}
+          <div className="md:hidden p-4">
+            <div className="grid grid-cols-2 gap-3">
+              {filteredItems.map(item => {
+                const isSelected = selectedItems.find(i => i.id === item.id)
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => toggleItemSelection(item)}
+                    className={`relative border rounded-lg p-3 cursor-pointer transition-all ${
+                      isSelected 
+                        ? 'border-yellow-500 bg-yellow-50 shadow-sm' 
+                        : 'border-gray-200 bg-white hover:border-gray-300'
+                    }`}
+                  >
+                    {/* Checkbox */}
+                    <div className={`absolute top-2 right-2 w-5 h-5 rounded border-2 flex items-center justify-center ${
+                      isSelected ? 'bg-yellow-500 border-yellow-500' : 'border-gray-300 bg-white'
+                    }`}>
+                      {isSelected && <CheckCircle className="w-3 h-3 text-white" />}
+                    </div>
+
+                    {/* Item Code */}
+                    <p className="text-xs text-gray-500 font-mono mb-1">{item.item_code}</p>
+
+                    {/* Item Name */}
+                    <h3 className="text-sm font-semibold text-gray-900 leading-tight mb-1 pr-6">
+                      {item.name || item.item_name}
+                    </h3>
+
+                    {/* Description */}
+                    <p className="text-xs text-gray-600 line-clamp-2 mb-2">
+                      {item.description}
+                    </p>
+
+                    {/* Category & Unit */}
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                      <span className="bg-gray-100 px-2 py-0.5 rounded">
+                        {item.category_name || item.category}
+                      </span>
+                      <span>{item.unit}</span>
+                    </div>
+
+                    {/* Quantity Input (when selected) */}
+                    {isSelected && (
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                        <span className="text-xs text-gray-600">Qty:</span>
+                        <input
+                          type="number"
+                          min="1"
+                          value={isSelected.quantity}
+                          onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-14 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {filteredItems.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No items found</p>
+            )}
           </div>
         </Card>
       )}
