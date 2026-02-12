@@ -215,6 +215,22 @@ ALTER TABLE purchase_requests ADD COLUMN priority ENUM('low', 'medium', 'high') 
 # Exit
 EXIT;
 ```
+-- Connect to MySQL as root/admin user
+mysql -u root -p
+ 
+-- Drop existing database
+DROP DATABASE IF EXISTS procurement_db;
+ 
+-- Create fresh database
+CREATE DATABASE procurement_db
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+ 
+-- Use the new database
+USE procurement_db;
+
+cd C:\Users\jajrc\Downloads\procurement_system
+scp dbschema/procurement_db.sql root@72.62.254.60:/var/www/procurement_system/
 
 ### Verify Database After Changes
 ```bash
