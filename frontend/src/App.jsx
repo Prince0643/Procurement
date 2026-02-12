@@ -37,7 +37,9 @@ import {
   Users,
   FileDown,
   ExternalLink,
-  Settings
+  Settings,
+  Menu,
+  X
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -502,11 +504,31 @@ const PODetailsModal = ({ poId, onClose }) => {
 // ============ LAYOUT ============
 const Layout = ({ currentRole, children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const { user, logout } = useAuth()
+
+  // Handle responsive detection
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (mobile) {
+        setSidebarOpen(false)
+        setMobileMenuOpen(false)
+      } else {
+        setSidebarOpen(true)
+      }
+    }
+    
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   useEffect(() => {
     fetchNotifications()
@@ -609,13 +631,41 @@ const Layout = ({ currentRole, children }) => {
   const displayRole = roleLabels[currentRole] || currentRole
   const displayRoleColor = roleColors[currentRole] || 'bg-gray-100 text-gray-800'
 
+  const handleNavClick = (itemId) => {
+    setActiveNav(itemId)
+    if (isMobile) {
+      setMobileMenuOpen(false)
+    }
+  }
+
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen)
+  }
+
+  const closeMobileMenu = () => {
+    setMobileMenuOpen(false)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <aside className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-white border-r border-gray-200 transition-all duration-300 flex flex-col`}>
+      {/* Mobile Overlay */}
+      {isMobile && mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 z-40 transition-opacity"
+          onClick={closeMobileMenu}
+        />
+      )}
+
+      {/* Sidebar - Desktop: static, Mobile: fixed slide-out */}
+      <aside 
+        className={`${
+          isMobile 
+            ? `fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ${mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'}`
+            : `${sidebarOpen ? 'w-64' : 'w-16'} transition-all duration-300`
+        } bg-white border-r border-gray-200 flex flex-col`}>
         {/* Logo */}
         <div className="h-16 flex items-center justify-center border-b border-gray-200">
-          {sidebarOpen ? (
+          {(sidebarOpen || isMobile) ? (
             <div className="flex items-center gap-2">
               <Package className="w-6 h-6 text-yellow-600" />
               <span className="font-bold text-lg text-gray-900">ProcureSys</span>
@@ -633,7 +683,7 @@ const Layout = ({ currentRole, children }) => {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveNav(item.id)}
+                onClick={() => handleNavClick(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors ${
                   isActive 
                     ? 'bg-yellow-50 text-yellow-700' 
@@ -641,7 +691,7 @@ const Layout = ({ currentRole, children }) => {
                 }`}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                {sidebarOpen && <span className="font-medium text-sm">{item.label}</span>}
+                {(sidebarOpen || isMobile) && <span className="font-medium text-sm">{item.label}</span>}
               </button>
             )
           })}
@@ -654,7 +704,7 @@ const Layout = ({ currentRole, children }) => {
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           >
             <ExternalLink className="w-5 h-5 flex-shrink-0" />
-            {sidebarOpen && <span className="font-medium text-sm">Attendance</span>}
+            {(sidebarOpen || isMobile) && <span className="font-medium text-sm">Attendance</span>}
           </a>
         </nav>
 
@@ -665,33 +715,54 @@ const Layout = ({ currentRole, children }) => {
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-red-600 hover:bg-red-50 transition-colors"
           >
             <LogOut className="w-5 h-5 flex-shrink-0" />
-            {sidebarOpen && <span className="font-medium text-sm">Logout</span>}
+            {(sidebarOpen || isMobile) && <span className="font-medium text-sm">Logout</span>}
           </button>
         </div>
 
-        {/* Toggle Sidebar */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="p-4 border-t border-gray-200 hover:bg-gray-50 transition-colors"
-        >
-          <ChevronDown className={`w-5 h-5 text-gray-500 transform transition-transform ${sidebarOpen ? 'rotate-180' : ''}`} />
-        </button>
+        {/* Toggle Sidebar - Desktop only */}
+        {!isMobile && (
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            className="p-4 border-t border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            <ChevronDown className={`w-5 h-5 text-gray-500 transform transition-transform ${sidebarOpen ? 'rotate-180' : ''}`} />
+          </button>
+        )}
+
+        {/* Close button - Mobile only */}
+        {isMobile && (
+          <button
+            onClick={closeMobileMenu}
+            className="p-4 border-t border-gray-200 hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 text-gray-600"
+          >
+            <X className="w-5 h-5" />
+            <span className="text-sm font-medium">Close Menu</span>
+          </button>
+        )}
       </aside>
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-semibold text-gray-900 capitalize">
+        <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-3 md:gap-4">
+            {/* Mobile Menu Button */}
+            <button
+              onClick={toggleMobileMenu}
+              className="mobile-menu-btn md:hidden p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              aria-label="Toggle menu"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <h1 className="text-lg md:text-xl font-semibold text-gray-900 capitalize truncate">
               {activeNav.replace(/-/g, ' ')}
             </h1>
-            <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${displayRoleColor}`}>
+            <span className={`hidden sm:inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium ${displayRoleColor}`}>
               {displayRole}
             </span>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4">
             {/* Notifications */}
             <div className="relative">
               <button
@@ -707,7 +778,7 @@ const Layout = ({ currentRole, children }) => {
               </button>
 
               {notificationsOpen && (
-                <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+                <div className="absolute right-0 mt-2 w-72 md:w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
                   <div className="p-3 border-b border-gray-200 flex items-center justify-between">
                     <h3 className="font-medium text-gray-900">Notifications</h3>
                     {unreadCount > 0 && (
@@ -748,11 +819,11 @@ const Layout = ({ currentRole, children }) => {
             </div>
 
             {/* User Profile */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 md:gap-3">
               <div className="w-8 h-8 bg-yellow-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
                 {user?.first_name?.[0]}{user?.last_name?.[0]}
               </div>
-              {sidebarOpen && (
+              {sidebarOpen && !isMobile && (
                 <div className="hidden md:block">
                   <p className="text-sm font-medium text-gray-900">{user?.first_name} {user?.last_name}</p>
                   <p className="text-xs text-gray-500">{displayRole}</p>
@@ -763,7 +834,7 @@ const Layout = ({ currentRole, children }) => {
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto p-6">
+        <main className="flex-1 overflow-auto p-4 md:p-6">
           {children({ activeNav, currentRole })}
         </main>
       </div>

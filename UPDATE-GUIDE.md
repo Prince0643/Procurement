@@ -379,7 +379,144 @@ chmod -R 755 /var/www/procurement_system
 
 ---
 
-## Quick Reference Commands
+## Critical Deployment Configuration (DO NOT SKIP)
+
+Based on common deployment issues, follow these configurations exactly to avoid errors:
+
+### 1. CORS Configuration (CRITICAL - Only One Place!)
+
+**Rule:** Handle CORS in Express OR Nginx, **NEVER both**.
+
+**Recommended: Express only**
+
+In `backend/server.js`:
+```javascript
+app.use(cors({
+  origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+```
+
+In `/etc/nginx/sites-available/procurement-api`:
+```nginx
+location / {
+    # NO add_header CORS lines here!
+    proxy_pass http://127.0.0.1:5001;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+**Wrong configuration (causes duplicate CORS errors):**
+```nginx
+# DO NOT DO THIS if Express also has cors()
+add_header 'Access-Control-Allow-Origin' '*' always;
+```
+
+### 2. Port Configuration
+
+**Backend `.env`:**
+```bash
+PORT=5001  # Use 5001 consistently (avoid 5000 conflicts)
+```
+
+**Nginx proxy:**
+```nginx
+proxy_pass http://127.0.0.1:5001;  # Must match backend PORT
+```
+
+**If you get "EADDRINUSE: address already in use":**
+```bash
+# Find and kill process on port
+sudo lsof -i :5001
+sudo kill -9 <PID>
+
+# Or use a different port
+# Change PORT in .env, restart backend, update nginx proxy_pass
+```
+
+### 3. Database User Setup (NOT root!)
+
+**Create dedicated user:**
+```sql
+CREATE USER 'procurement_app'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
+GRANT ALL PRIVILEGES ON procurement_db.* TO 'procurement_app'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+**Backend `.env`:**
+```bash
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=procurement_db
+DB_USER=procurement_app      # NOT root
+DB_PASSWORD=STRONG_PASSWORD  # Must match above
+```
+
+**Wrong configuration:**
+```bash
+DB_USER=root       # Security risk + auth issues
+DB_PASSWORD=       # Empty password often rejected
+```
+
+### 4. Environment Variables Checklist
+
+Before starting backend, verify `.env` has:
+```bash
+NODE_ENV=production
+PORT=5001                           # Match nginx proxy_pass
+DB_USER=procurement_app             # Not root
+DB_PASSWORD=your_secure_password    # Not empty
+DB_NAME=procurement_db
+JWT_SECRET=long-random-secret-key     # Change in production!
+JWT_EXPIRES_IN=24h
+```
+
+**Verify env vars are loaded:**
+```bash
+cd /var/www/procurement_system/backend
+pm2 delete all
+pm2 start server.js --name procurement-api --update-env
+pm2 env 0 | grep -E "DB_|PORT|NODE_ENV"
+```
+
+### 5. Frontend API Configuration
+
+**Frontend `.env.production`:**
+```bash
+VITE_API_URL=https://procurement-api.xandree.com/api
+```
+
+**Critical:** Frontend 401 interceptor should NOT redirect on login failures:
+
+In `frontend/src/services/api.js`:
+```javascript
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      const requestUrl = error.config?.url || '';
+      const isAuthRequest = requestUrl.includes('/auth/login');
+
+      if (!isAuthRequest) {
+        // Only redirect for token expiration, not login failures
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+This ensures wrong password messages display properly instead of page refreshing.
+
+---
 
 | Task | Command |
 |------|---------|
