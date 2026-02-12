@@ -4236,7 +4236,7 @@ const EmployeesManagement = () => {
     try {
       await employeeService.create(formData)
       setShowAddModal(false)
-      setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+      setFormData({ employee_no: '', first_name: '', middle_initial: '', last_name: '', role: 'engineer', department: '' })
       await fetchEmployees()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create employee')
@@ -4270,7 +4270,7 @@ const EmployeesManagement = () => {
       await employeeService.update(selectedEmployee.id, formData)
       setShowEditModal(false)
       setSelectedEmployee(null)
-      setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+      setFormData({ employee_no: '', first_name: '', middle_initial: '', last_name: '', role: 'engineer', department: '' })
       await fetchEmployees()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to update employee')
@@ -4343,7 +4343,7 @@ const EmployeesManagement = () => {
         <Button onClick={() => {
           setShowAddModal(true)
           setError('')
-          setFormData({ employee_no: '', first_name: '', last_name: '', role: 'engineer', department: '' })
+          setFormData({ employee_no: '', first_name: '', middle_initial: '', last_name: '', role: 'engineer', department: '' })
         }}>
           <Plus className="w-4 h-4 mr-2" />
           Add Employee
@@ -4428,7 +4428,7 @@ const EmployeesManagement = () => {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
                   <input
@@ -4437,6 +4437,18 @@ const EmployeesManagement = () => {
                     value={formData.first_name}
                     onChange={handleInputChange}
                     placeholder="Enter first name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Middle Initial</label>
+                  <input
+                    type="text"
+                    name="middle_initial"
+                    value={formData.middle_initial}
+                    onChange={handleInputChange}
+                    placeholder="M.I."
+                    maxLength={5}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   />
                 </div>
@@ -4501,7 +4513,7 @@ const EmployeesManagement = () => {
                   <p className="text-sm text-red-700">{error}</p>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
                   <input
@@ -4510,6 +4522,18 @@ const EmployeesManagement = () => {
                     value={formData.first_name}
                     onChange={handleInputChange}
                     placeholder="Enter first name"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Middle Initial</label>
+                  <input
+                    type="text"
+                    name="middle_initial"
+                    value={formData.middle_initial}
+                    onChange={handleInputChange}
+                    placeholder="M.I."
+                    maxLength={5}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                   />
                 </div>

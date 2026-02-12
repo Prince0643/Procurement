@@ -10,6 +10,8 @@ const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '24h';
 const ATTENDANCE_SYNC_API_KEY = process.env.ATTENDANCE_SYNC_API_KEY;
+const ATTENDANCE_API_URL = process.env.ATTENDANCE_API_URL || 'https://jajr.xandree.com/change-password-api.php';
+const ATTENDANCE_API_KEY = process.env.ATTENDANCE_API_KEY || 'qwertyuiopasdfghjklzxcvbnm';
 
 // Login
 router.post('/login', [
@@ -186,7 +188,7 @@ router.post('/change-password',
       const { current_password, new_password } = req.body;
 
       const [rows] = await db.query(
-        'SELECT id, password FROM employees WHERE id = ?',
+        'SELECT id, employee_no, password FROM employees WHERE id = ?',
         [req.user.id]
       );
 
@@ -221,6 +223,34 @@ router.post('/change-password',
         'UPDATE employees SET password = ? WHERE id = ?',
         [hashedPassword, req.user.id]
       );
+
+      // Sync password to attendance system (non-blocking - don't fail if attendance API is down)
+      try {
+        console.log('Syncing password to attendance system...');
+        console.log('ATTENDANCE_API_URL:', ATTENDANCE_API_URL);
+        console.log('employee_no:', user.employee_no);
+        
+        const response = await axios.post(ATTENDANCE_API_URL, {
+          employee_code: user.employee_no,
+          current_password: current_password,
+          new_password: new_password,
+          confirm_password: new_password
+        }, {
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': ATTENDANCE_API_KEY
+          },
+          timeout: 10000
+        });
+        console.log(`Password synced successfully for employee: ${user.employee_no}`);
+        console.log('Attendance API response:', response.data);
+      } catch (syncError) {
+        console.error('Attendance system sync failed:', syncError.message);
+        if (syncError.response) {
+          console.error('Attendance API error response:', syncError.response.status, syncError.response.data);
+        }
+        // Don't fail the password change if sync fails - local password is already updated
+      }
 
       res.json({ message: 'Password updated successfully' });
     } catch (error) {

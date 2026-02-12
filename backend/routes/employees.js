@@ -13,6 +13,7 @@ router.post('/',
   [
     body('employee_no').notEmpty().withMessage('Employee number is required'),
     body('first_name').notEmpty().withMessage('First name is required'),
+    body('middle_initial').optional(),
     body('last_name').notEmpty().withMessage('Last name is required'),
     body('role').isIn(['engineer', 'procurement', 'admin', 'super_admin']).withMessage('Invalid role'),
     body('department').optional()
@@ -24,7 +25,7 @@ router.post('/',
         return res.status(400).json({ errors: errors.array() });
       }
 
-      const { employee_no, first_name, last_name, role, department } = req.body;
+      const { employee_no, first_name, middle_initial, last_name, role, department } = req.body;
 
       // Check if employee_no already exists
       const [existingRows] = await db.query(
@@ -45,8 +46,8 @@ router.post('/',
 
       // Insert new employee
       const [result] = await db.query(
-        'INSERT INTO employees (employee_no, first_name, last_name, role, department, password, is_active) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [employee_no, first_name, last_name, role, department || null, hashedPassword, true]
+        'INSERT INTO employees (employee_no, first_name, middle_initial, last_name, role, department, password, is_active) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [employee_no, first_name, middle_initial || null, last_name, role, department || null, hashedPassword, true]
       );
 
       res.status(201).json({
@@ -55,6 +56,7 @@ router.post('/',
           id: result.insertId,
           employee_no,
           first_name,
+          middle_initial: middle_initial || null,
           last_name,
           role,
           department: department || null,
@@ -75,7 +77,7 @@ router.get('/',
   async (req, res) => {
     try {
       const [rows] = await db.query(
-        'SELECT id, employee_no, first_name, last_name, role, department, is_active, created_at FROM employees ORDER BY created_at DESC'
+        'SELECT id, employee_no, first_name, middle_initial, last_name, role, department, is_active, created_at FROM employees ORDER BY created_at DESC'
       );
 
       res.json({ employees: rows });
@@ -104,7 +106,7 @@ router.put('/:id',
       }
 
       const { id } = req.params;
-      const { first_name, last_name, role, department, is_active } = req.body;
+      const { first_name, middle_initial, last_name, role, department, is_active } = req.body;
 
       // Check if employee exists
       const [existingRows] = await db.query(
@@ -123,6 +125,10 @@ router.put('/:id',
       if (first_name !== undefined) {
         updates.push('first_name = ?');
         values.push(first_name);
+      }
+      if (middle_initial !== undefined) {
+        updates.push('middle_initial = ?');
+        values.push(middle_initial);
       }
       if (last_name !== undefined) {
         updates.push('last_name = ?');

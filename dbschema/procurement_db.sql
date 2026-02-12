@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 11, 2026 at 08:41 AM
+-- Generation Time: Feb 12, 2026 at 03:57 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -73,11 +73,18 @@ CREATE TABLE `employees` (
 --
 
 INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `middle_initial`, `last_name`, `role`, `department`, `password`, `is_active`, `created_at`, `updated_at`) VALUES
-(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'engineer', 'Engineering', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-11 04:13:14'),
+(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'engineer', 'Engineering', '$2a$10$te379KJk9Z8nAgG9hr1Ct.HuvvOC2sSt.i7YTr7IQEBfp1e2FylBK', 1, '2026-02-10 02:36:33', '2026-02-12 02:21:26'),
 (6, 'PRO-2026-0001', 'Junnel', 'B', 'Tadina', 'procurement', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-11 04:13:17'),
-(7, 'ADMIN-2026-0001', 'Elain', 'M', 'Torres', 'admin', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-11 04:13:20'),
-(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-11 04:13:23'),
-(9, 'ENG-2026-0002', 'John Kennedy', 'K', 'Lucas', 'engineer', 'Engineering', '$2a$10$5WmbWmSvEq3gBe8cdW3RPefxhH6mQebKZ5/FYQ9FZd0WgLJdp6hDe', 1, '2026-02-10 04:42:55', '2026-02-11 04:13:26');
+(7, 'ADMIN-2026-0001', 'Elain', 'M', 'Torres', 'admin', 'Administration', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-02-12 02:48:40'),
+(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$Uy/JQQbCOdM1GlMIBBtW1unfNIesn.J5kulNtx1XaR2NcKDAtmyWS', 1, '2026-02-10 02:36:33', '2026-02-12 00:51:44'),
+(9, 'ENG-2026-0002', 'John Kennedy', 'K', 'Lucas', 'engineer', 'Engineering', '$2a$10$5WmbWmSvEq3gBe8cdW3RPefxhH6mQebKZ5/FYQ9FZd0WgLJdp6hDe', 1, '2026-02-10 04:42:55', '2026-02-11 04:13:26'),
+(10, 'SA001', 'Super', 'D', 'Adminesu', 'super_admin', 'Management', '$2a$10$2VAa8J7EZDnfspG1/t4G1ez6MXGEnf3DLiPNqcJEm4ypE0p9RATNq', 1, '2026-02-12 00:55:00', '2026-02-12 02:48:05'),
+(11, 'ENG-2026-0003', 'Julius John', 'F', 'Echague', 'engineer', 'Engineering', '$2a$10$SgSe2J/dqlMH.uPUVkXYQePzJfBd744bL2THGSA3x1B6Wm53oJlMC', 1, '2026-02-12 02:44:49', '2026-02-12 02:50:14'),
+(12, 'ENG-2026-0005', 'Joylene', 'F', 'Balanon', 'engineer', 'Engineering', '$2a$10$fFUgVn7r1fE8YPLnwcTDZOhWhEhjxY1gg3rULIps0uoMBVsBE95W.', 1, '2026-02-12 02:45:21', '2026-02-12 02:50:16'),
+(13, 'ENG-2026-0006', 'Winnielyn Kaye', 'W', 'Olarte', 'engineer', 'Procurement', '$2a$10$.GDmwlv/XvEmPJzt3oIb0.39RVYiJMsxBwcTaMbmFInk3th76KpIu', 1, '2026-02-12 02:45:41', '2026-02-12 02:54:11'),
+(14, 'ADMIN-2026-0002', 'Ronalyn', 'W', 'Mallare', 'admin', 'Administration', '$2a$10$zZXZI/tYRPS37ZQVDeThpeaBi5uCv1P1e1EsBkScqRmt/1.iZPFWK', 1, '2026-02-12 02:46:45', '2026-02-12 02:50:21'),
+(15, 'ADMIN-2026-0003', 'Admin', 'G', 'Charisse', 'admin', 'Administration', '$2a$10$a1JGadOlyuKzlNVK.ydC0ucBTKkg8c8u1CyNBmlLRDI.SzKKYXtOK', 1, '2026-02-12 02:47:14', '2026-02-12 02:50:24'),
+(16, 'ADMIN-2026-0004', 'Marjorie', 'O', 'Garcia', 'admin', 'Administration', '$2a$10$pj5HrIzaIYIkWlCbcOy9sOBNxrQitgV2.Umuh.wldfJWEYy5t0Ta6', 1, '2026-02-12 02:47:46', '2026-02-12 02:50:28');
 
 -- --------------------------------------------------------
 
@@ -108,8 +115,8 @@ INSERT INTO `items` (`id`, `item_code`, `item_name`, `description`, `category_id
 (3, 'ITM003', 'Safety Helmet', 'Hard hat for construction', 3, 'pcs', NULL, 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
 (4, 'ITM004', 'Cordless Drill', '18V cordless drill driver', 4, 'pcs', NULL, 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
 (5, 'ITM005', 'Steel Rod 10mm', 'Mild steel reinforcement rod', 5, 'meters', NULL, 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
-(6, 'ITM006', 'Mobile Legends', 'fdf', 1, 'PC', NULL, 'Active', '2026-02-09 08:37:53', '2026-02-09 08:37:53'),
-(7, 'ITM007', 'Call', 'dgggg', 6, 'PC', NULL, 'Active', '2026-02-09 08:38:37', '2026-02-09 08:38:37');
+(6, 'ITM006', 'Brother Printer', 'Printer for office', 1, 'pcs', NULL, 'Active', '2026-02-09 08:37:53', '2026-02-12 02:38:15'),
+(7, 'ITM007', 'Office Chair', 'Chair for office', 6, 'pcs', NULL, 'Active', '2026-02-09 08:38:37', '2026-02-12 02:38:42');
 
 -- --------------------------------------------------------
 
@@ -128,36 +135,6 @@ CREATE TABLE `notifications` (
   `is_read` tinyint(1) DEFAULT 0,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `notifications`
---
-
-INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `related_id`, `related_type`, `is_read`, `created_at`) VALUES
-(28, 6, 'New PR Created', 'Purchase Request JL-2026-02-001 has been created and is pending Super Admin approval', 'PR Created', 14, 'purchase_request', 1, '2026-02-11 04:17:25'),
-(29, 8, 'New PR Pending Approval', 'Purchase Request JL-2026-02-001 has been created and requires your approval', 'PR Created', 14, 'purchase_request', 0, '2026-02-11 04:17:25'),
-(30, 6, 'New PR Created', 'Purchase Request JL-2026-02-002 has been created and is pending Super Admin approval', 'PR Created', 15, 'purchase_request', 1, '2026-02-11 04:18:49'),
-(31, 8, 'New PR Pending Approval', 'Purchase Request JL-2026-02-002 has been created and requires your approval', 'PR Created', 15, 'purchase_request', 0, '2026-02-11 04:18:49'),
-(32, 6, 'New PR Created', 'Purchase Request JKL-2026-02-001 has been created and is pending Super Admin approval', 'PR Created', 16, 'purchase_request', 1, '2026-02-11 04:21:07'),
-(33, 8, 'New PR Pending Approval', 'Purchase Request JKL-2026-02-001 has been created and requires your approval', 'PR Created', 16, 'purchase_request', 0, '2026-02-11 04:21:07'),
-(34, 6, 'New PR Created', 'Purchase Request JKL-2026-02-001 has been created and is pending Super Admin approval', 'PR Created', 17, 'purchase_request', 1, '2026-02-11 04:29:39'),
-(35, 8, 'New PR Pending Approval', 'Purchase Request JKL-2026-02-001 has been created and requires your approval', 'PR Created', 17, 'purchase_request', 0, '2026-02-11 04:29:39'),
-(36, 6, 'New PR Created', 'Purchase Request JKL-2026-02-001 has been created and is pending Super Admin approval', 'PR Created', 1, 'purchase_request', 1, '2026-02-11 04:42:47'),
-(37, 8, 'New PR Pending Approval', 'Purchase Request JKL-2026-02-001 has been created and requires your approval', 'PR Created', 1, 'purchase_request', 0, '2026-02-11 04:42:47'),
-(38, 6, 'PR Approved - Review Required', 'Purchase Request JKL-2026-02-001 has been approved by Super Admin and requires your review', 'PR Approved', 1, 'purchase_request', 1, '2026-02-11 04:46:08'),
-(39, 8, 'PR Pending Final Approval', 'Purchase Request JKL-2026-02-001 has been reviewed by Procurement and requires your final approval', 'PR Approved', 1, 'purchase_request', 0, '2026-02-11 04:53:36'),
-(40, 9, 'PR Fully Approved', 'Your Purchase Request JKL-2026-02-001 has been fully approved and is ready for purchase', 'PR Approved', 1, 'purchase_request', 1, '2026-02-11 04:54:44'),
-(41, 7, 'PR Ready for PO Creation', 'Purchase Request JKL-2026-02-001 has been approved and is ready for PO creation', 'PR Approved', 1, 'purchase_request', 1, '2026-02-11 04:54:44'),
-(42, 9, 'PR Rejected by Procurement', 'Your Purchase Request JKL-2026-02-001 has been rejected by Procurement: ds', 'PR Rejected', 1, 'purchase_request', 0, '2026-02-11 05:32:57'),
-(43, 6, 'New PR Created', 'Purchase Request MTN-2026-02-001 has been created and is pending Super Admin approval', 'PR Created', 2, 'purchase_request', 0, '2026-02-11 05:33:17'),
-(44, 8, 'New PR Pending Approval', 'Purchase Request MTN-2026-02-001 has been created and requires your approval', 'PR Created', 2, 'purchase_request', 0, '2026-02-11 05:33:17'),
-(45, 8, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-001 has been reviewed by Procurement and requires your final approval', 'PR Approved', 2, 'purchase_request', 0, '2026-02-11 05:33:52'),
-(46, 6, 'New PR Created', 'Purchase Request MTN-2026-02-002 has been created and is pending Super Admin approval', 'PR Created', 3, 'purchase_request', 0, '2026-02-11 06:01:05'),
-(47, 8, 'New PR Pending Approval', 'Purchase Request MTN-2026-02-002 has been created and requires your approval', 'PR Created', 3, 'purchase_request', 0, '2026-02-11 06:01:05'),
-(48, 8, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-002 has been reviewed by Procurement and requires your final approval', 'PR Approved', 3, 'purchase_request', 0, '2026-02-11 06:01:48'),
-(49, 8, 'New PO Pending Approval', 'Purchase Order ETN-2026-02-001 has been created and requires your approval', 'PO Created', 4, 'purchase_order', 0, '2026-02-11 07:00:46'),
-(50, 6, 'New PR Created', 'Purchase Request MTN-2026-02-003 has been created and is pending Super Admin approval', 'PR Created', 4, 'purchase_request', 0, '2026-02-11 07:19:12'),
-(51, 8, 'New PR Pending Approval', 'Purchase Request MTN-2026-02-003 has been created and requires your approval', 'PR Created', 4, 'purchase_request', 0, '2026-02-11 07:19:12');
 
 -- --------------------------------------------------------
 
@@ -185,13 +162,6 @@ CREATE TABLE `purchase_orders` (
   `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `purchase_orders`
---
-
-INSERT INTO `purchase_orders` (`id`, `po_number`, `purchase_request_id`, `supplier_id`, `prepared_by`, `total_amount`, `po_date`, `expected_delivery_date`, `actual_delivery_date`, `status`, `created_at`, `updated_at`, `place_of_delivery`, `delivery_term`, `payment_term`, `project`, `notes`) VALUES
-(4, 'ETN-2026-02-001', 3, 1, 7, 180.00, '2026-02-11', '2026-02-27', NULL, 'Draft', '2026-02-11 07:00:46', '2026-02-11 07:00:46', 'Sevilla, Sfc, La Union', 'COD', 'CASH', 'BCDA - Control Tower', 'dsaf');
-
 -- --------------------------------------------------------
 
 --
@@ -208,15 +178,6 @@ CREATE TABLE `purchase_order_items` (
   `total_price` decimal(10,2) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchase_order_items`
---
-
-INSERT INTO `purchase_order_items` (`id`, `purchase_order_id`, `purchase_request_item_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
-(9, 4, 57, 2, 1, 20.00, 20.00, '2026-02-11 07:00:46'),
-(10, 4, 58, 1, 3, 25.00, 75.00, '2026-02-11 07:00:46'),
-(11, 4, 59, 6, 1, 85.00, 85.00, '2026-02-11 07:00:46');
 
 -- --------------------------------------------------------
 
@@ -244,16 +205,6 @@ CREATE TABLE `purchase_requests` (
   `supplier_address` varchar(255) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
---
--- Dumping data for table `purchase_requests`
---
-
-INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`) VALUES
-(1, 'JKL-2026-02-001', 9, 'fdsfs', NULL, '2026-02-14', 'BCDA - Control Tower', 'Sevilla', 'Rejected', 8, '2026-02-11 04:54:44', 'ds', 28.00, '2026-02-11 04:42:47', '2026-02-11 05:32:57', 2, '456 Business Ave, Quezon City'),
-(2, 'MTN-2026-02-001', 5, 'dsa', 'hg', '2026-02-13', 'BCDA - CCTV', 'gfdhgf', 'For Purchase', NULL, NULL, NULL, 146.00, '2026-02-11 05:33:17', '2026-02-11 07:18:53', 3, '789 Industrial Rd, Makati'),
-(3, 'MTN-2026-02-002', 5, 'Purpose', 'fdsfd', '2026-02-14', 'BCDA - Control Tower', 'Sevilla, Sfc, La Union', 'PO Created', NULL, NULL, NULL, 180.00, '2026-02-11 06:01:05', '2026-02-11 07:00:46', 1, '123 Main St, Manila'),
-(4, 'MTN-2026-02-003', 5, 'fdsfds', 'jhgj', '2026-02-26', 'BCDA - Control Tower', 'jhgjg', 'Pending', NULL, NULL, NULL, NULL, '2026-02-11 07:19:12', '2026-02-11 07:19:12', NULL, NULL);
-
 -- --------------------------------------------------------
 
 --
@@ -273,39 +224,6 @@ CREATE TABLE `purchase_request_items` (
   `received_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
---
--- Dumping data for table `purchase_request_items`
---
-
-INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `remarks`, `status`, `received_by`, `received_at`, `created_at`) VALUES
-(38, 14, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:17:25'),
-(39, 14, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:17:25'),
-(40, 14, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:17:25'),
-(41, 15, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:18:49'),
-(42, 15, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:18:49'),
-(43, 15, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:18:49'),
-(44, 15, 1, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:18:49'),
-(45, 16, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:21:07'),
-(46, 16, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:21:07'),
-(47, 16, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:21:07'),
-(48, 17, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:29:39'),
-(49, 17, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:29:39'),
-(50, 17, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:29:39'),
-(51, 17, 1, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:29:39'),
-(52, 1, 2, 1, 20.00, 20.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:42:47'),
-(53, 1, 7, 1, 8.00, 8.00, NULL, 'Pending', NULL, NULL, '2026-02-11 04:42:47'),
-(54, 2, 2, 1, 43.00, 43.00, NULL, 'Pending', NULL, NULL, '2026-02-11 05:33:17'),
-(55, 2, 7, 4, 20.00, 80.00, NULL, 'Pending', NULL, NULL, '2026-02-11 05:33:17'),
-(56, 2, 4, 1, 23.00, 23.00, NULL, 'Pending', NULL, NULL, '2026-02-11 05:33:17'),
-(57, 3, 2, 1, 20.00, 20.00, NULL, 'Pending', NULL, NULL, '2026-02-11 06:01:05'),
-(58, 3, 1, 3, 25.00, 75.00, NULL, 'Pending', NULL, NULL, '2026-02-11 06:01:05'),
-(59, 3, 6, 1, 85.00, 85.00, NULL, 'Pending', NULL, NULL, '2026-02-11 06:01:05'),
-(60, 4, 2, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 07:19:12'),
-(61, 4, 7, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 07:19:12'),
-(62, 4, 4, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 07:19:12'),
-(63, 4, 6, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 07:19:12'),
-(64, 4, 3, 1, 0.00, 0.00, NULL, 'Pending', NULL, NULL, '2026-02-11 07:19:12');
 
 -- --------------------------------------------------------
 
@@ -334,7 +252,7 @@ INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person
 (1, 'SUP001', 'Tech Supplies Inc', 'Robert Wilson', 'robert@techsupplies.com', '09123456789', '123 Main St, Manila', 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
 (2, 'SUP002', 'Office Depot PH', 'Maria Garcia', 'maria@officedepot.ph', '09234567890', '456 Business Ave, Quezon City', 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
 (3, 'SUP003', 'Safety First Co', 'David Lee', 'david@safetyfirst.com', '09345678901', '789 Industrial Rd, Makati', 'Active', '2026-02-09 08:25:53', '2026-02-09 08:25:53'),
-(4, 'SUP985580', 'Bianca Mairah', 'Bianca Mairah', 'ladyshorty05@gmail.com', '+639460926306', 'Sevilla, San Fernando City, La Union, Philippines\nSevilla, La Union', 'Active', '2026-02-10 02:03:05', '2026-02-10 02:03:21');
+(4, 'SUP985580', 'Mairah and Co', 'Bianca Mairah', 'ladyshorty05@gmail.com', '+639460926306', 'Sevilla, San Fernando City, La Union, Philippines\nSevilla, La Union', 'Active', '2026-02-10 02:03:05', '2026-02-12 02:40:00');
 
 -- --------------------------------------------------------
 
@@ -467,7 +385,7 @@ ALTER TABLE `categories`
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=10;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=18;
 
 --
 -- AUTO_INCREMENT for table `items`
@@ -563,14 +481,6 @@ ALTER TABLE `purchase_requests`
   ADD CONSTRAINT `purchase_requests_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `purchase_requests_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `purchase_requests_ibfk_3` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`);
-
---
--- Constraints for table `purchase_request_items`
---
-ALTER TABLE `purchase_request_items`
-  ADD CONSTRAINT `purchase_request_items_ibfk_1` FOREIGN KEY (`purchase_request_id`) REFERENCES `purchase_requests` (`id`),
-  ADD CONSTRAINT `purchase_request_items_ibfk_2` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`),
-  ADD CONSTRAINT `purchase_request_items_ibfk_3` FOREIGN KEY (`received_by`) REFERENCES `employees` (`id`);
 
 --
 -- Constraints for table `supplier_items`
