@@ -1131,9 +1131,10 @@ const BrowseItems = () => {
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>
-        <Button onClick={() => setShowCreatePR(true)} disabled={selectedItems.length === 0}>
+        <Button onClick={() => setShowCreatePR(true)} disabled={selectedItems.length === 0} className="whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" />
-          Create PR ({selectedItems.length})
+          <span className="hidden sm:inline">Create PR ({selectedItems.length})</span>
+          <span className="sm:hidden">PR ({selectedItems.length})</span>
         </Button>
       </div>
 
@@ -2578,8 +2579,8 @@ const ItemsManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative w-96">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -2593,9 +2594,10 @@ const ItemsManagement = () => {
           setShowAddModal(true)
           setError('')
           setFormData({ item_code: '', item_name: '', description: '', category_id: '', unit: '' })
-        }}>
+        }} className="whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" />
-          Add Item
+          <span className="hidden sm:inline">Add Item</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -2970,8 +2972,8 @@ const SuppliersManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative w-96">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -2981,9 +2983,10 @@ const SuppliersManagement = () => {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
           />
         </div>
-        <Button onClick={() => setShowAddModal(true)}>
+        <Button onClick={() => setShowAddModal(true)} className="whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" />
-          Add Supplier
+          <span className="hidden sm:inline">Add Supplier</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
@@ -4911,8 +4914,8 @@ const EmployeesManagement = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="relative w-96">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -4926,9 +4929,10 @@ const EmployeesManagement = () => {
           setShowAddModal(true)
           setError('')
           setFormData({ employee_no: '', first_name: '', middle_initial: '', last_name: '', role: 'engineer', department: '' })
-        }}>
+        }} className="whitespace-nowrap">
           <Plus className="w-4 h-4 mr-2" />
-          Add Employee
+          <span className="hidden sm:inline">Add Employee</span>
+          <span className="sm:hidden">Add</span>
         </Button>
       </div>
 
