@@ -9,6 +9,7 @@ import { notificationService } from './services/notifications'
 import { employeeService } from './services/employees'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
+import { authService } from './services/auth'
 import {
   LayoutDashboard,
   Package,
@@ -35,7 +36,8 @@ import {
   LogOut,
   Users,
   FileDown,
-  ExternalLink
+  ExternalLink,
+  Settings
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -191,6 +193,108 @@ const Badge = ({ children, status }) => (
 )
 
 const StatusBadge = ({ status }) => <Badge status={status}>{status}</Badge>
+
+const SettingsPage = () => {
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setSuccess('')
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setError('Please fill out all fields')
+      return
+    }
+
+    if (newPassword.length < 8) {
+      setError('New password must be at least 8 characters long')
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      const res = await authService.changePassword(currentPassword, newPassword, confirmPassword)
+      setSuccess(res?.message || 'Password updated successfully')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+    } catch (err) {
+      const apiErrors = err.response?.data?.errors
+      if (Array.isArray(apiErrors) && apiErrors.length > 0) {
+        setError(apiErrors[0]?.msg || 'Failed to update password')
+      } else {
+        setError(err.response?.data?.message || 'Failed to update password')
+      }
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div className="max-w-xl">
+      <Card>
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900">Settings</h2>
+          <p className="text-sm text-gray-500 mt-1">Change your account password</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="p-3 rounded-md bg-red-50 text-red-700 text-sm border border-red-200">
+              {error}
+            </div>
+          )}
+          {success && (
+            <div className="p-3 rounded-md bg-green-50 text-green-700 text-sm border border-green-200">
+              {success}
+            </div>
+          )}
+
+          <Input
+            label="Current Password"
+            type="password"
+            placeholder="Enter current password"
+            value={currentPassword}
+            onChange={(e) => setCurrentPassword(e.target.value)}
+          />
+
+          <Input
+            label="New Password"
+            type="password"
+            placeholder="Enter new password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+          />
+
+          <Input
+            label="Confirm New Password"
+            type="password"
+            placeholder="Confirm new password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+          />
+
+          <div className="pt-2">
+            <Button disabled={submitting}>
+              {submitting ? 'Updating...' : 'Update Password'}
+            </Button>
+          </div>
+        </form>
+      </Card>
+    </div>
+  )
+}
 
 const PRDetailsModal = ({ prId, onClose }) => {
   const [pr, setPR] = useState(null)
@@ -446,6 +550,7 @@ const Layout = ({ currentRole, children }) => {
       { id: 'items', label: 'Browse Items', icon: Package },
       { id: 'purchase-requests', label: 'My Purchase Requests', icon: ShoppingCart },
       { id: 'history', label: 'Purchase History', icon: ClipboardList },
+      { id: 'settings', label: 'Settings', icon: Settings },
     ],
     procurement: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -453,6 +558,7 @@ const Layout = ({ currentRole, children }) => {
       { id: 'items', label: 'Items', icon: Package },
       { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
+      { id: 'settings', label: 'Settings', icon: Settings },
     ],
     admin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -460,6 +566,7 @@ const Layout = ({ currentRole, children }) => {
       { id: 'suppliers', label: 'Suppliers', icon: Building2 },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: FileText },
       { id: 'pending-prs', label: 'Pending PRs', icon: Clock },
+      { id: 'settings', label: 'Settings', icon: Settings },
     ],
     superadmin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -471,6 +578,7 @@ const Layout = ({ currentRole, children }) => {
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
       { id: 'all-pos', label: 'All Purchase Orders', icon: FileText },
       { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp },
+      { id: 'settings', label: 'Settings', icon: Settings },
     ],
   }
 
@@ -4510,6 +4618,8 @@ function App() {
           return <MyPurchaseRequests />
         case 'history':
           return <MyPurchaseRequests />
+        case 'settings':
+          return <SettingsPage />
         default:
           return <EngineerDashboard />
       }
@@ -4528,6 +4638,8 @@ function App() {
           return <AddItem />
         case 'all-prs':
           return <AllPurchaseRequests />
+        case 'settings':
+          return <SettingsPage />
         default:
           return <ProcurementDashboard />
       }
@@ -4546,6 +4658,8 @@ function App() {
           return <PurchaseOrders />
         case 'pending-prs':
           return <PendingPRs />
+        case 'settings':
+          return <SettingsPage />
         default:
           return <AdminDashboard />
       }
@@ -4572,6 +4686,8 @@ function App() {
           return <PurchaseOrders />
         case 'reports':
           return <ReportsAnalytics />
+        case 'settings':
+          return <SettingsPage />
         default:
           return <SuperAdminDashboard />
       }

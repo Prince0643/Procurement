@@ -36,5 +36,14 @@ export const authService = {
   getMe: async () => {
     const response = await api.get('/auth/me');
     return response.data;
+  },
+
+  changePassword: async (current_password, new_password, confirm_password) => {
+    const response = await api.post('/auth/change-password', {
+      current_password,
+      new_password,
+      confirm_password
+    });
+    return response.data;
   }
 };
