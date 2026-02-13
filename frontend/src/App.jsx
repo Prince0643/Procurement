@@ -197,6 +197,253 @@ const Badge = ({ children, status }) => (
 
 const StatusBadge = ({ status }) => <Badge status={status}>{status}</Badge>
 
+const getPricingTrendSeries = (itemId, period) => {
+  const base = {
+    day: [120, 135, 128, 150, 142, 160, 155],
+    month: [95, 110, 105, 120, 140, 135, 150, 145, 160, 155, 170, 165],
+    year: [80, 92, 88, 100, 115]
+  }[period] || []
+
+  const multiplier = 1 + ((Number(itemId) || 1) % 7) * 0.05
+  return base.map((v, idx) => {
+    const jitter = (Math.sin((idx + 1) * 1.7) + 1) * 2
+    return Math.round((v * multiplier + jitter) * 100) / 100
+  })
+}
+
+const getPricingTrendLabels = (period) => {
+  if (period === 'day') return ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  if (period === 'month') return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  if (period === 'year') return ['2021', '2022', '2023', '2024', '2025']
+  return []
+}
+
+const PricingTrendChart = ({ values, labels, selectedIndex, onSelectIndex }) => {
+  const width = 600
+  const height = 200
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+
+    media.addListener(update)
+    return () => media.removeListener(update)
+  }, [])
+
+  const padX = isMobile ? 48 : 62
+  const padY = isMobile ? 18 : 22
+  const plotW = width - padX * 2
+  const plotH = height - padY * 2
+
+  if (!Array.isArray(values) || values.length === 0) {
+    return (
+      <div className="h-48 flex items-center justify-center text-sm text-gray-500 bg-gray-50 rounded-lg border border-gray-200">
+        No data
+      </div>
+    )
+  }
+
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const range = max - min || 1
+
+  const points = values.map((v, i) => {
+    const x = padX + (i * plotW) / Math.max(values.length - 1, 1)
+    const y = padY + (1 - (v - min) / range) * plotH
+    return { x, y, v, label: labels?.[i] || '' }
+  })
+
+  const d = points
+    .map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
+    .join(' ')
+
+  const maxIndex = values.findIndex(v => v === max)
+
+  const ticks = isMobile ? 2 : 3
+  const tickValues = Array.from({ length: ticks + 1 }, (_, i) => min + ((ticks - i) * range) / ticks)
+  const tickFontSize = isMobile ? 8 : 9
+
+  return (
+    <div className="w-full">
+      <div className="h-56 md:h-64 bg-gray-50 rounded-lg border border-gray-200 overflow-hidden">
+        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full">
+          <rect x="0" y="0" width={width} height={height} fill="#f9fafb" />
+
+          {tickValues.map((tv, i) => {
+            const y = padY + (i * plotH) / ticks
+            return (
+              <g key={i}>
+                <line x1={padX} y1={y} x2={padX + plotW} y2={y} stroke="#e5e7eb" strokeWidth="1" />
+                <text x={padX - 10} y={y} fontSize={tickFontSize} textAnchor="end" dominantBaseline="middle" fill="#6b7280">
+                  {formatCurrency(tv)}
+                </text>
+              </g>
+            )
+          })}
+
+          <line x1={padX} y1={padY} x2={padX} y2={padY + plotH} stroke="#d1d5db" strokeWidth="1" />
+          <line x1={padX} y1={padY + plotH} x2={padX + plotW} y2={padY + plotH} stroke="#d1d5db" strokeWidth="1" />
+
+          <path d={d} fill="none" stroke="#eab308" strokeWidth="3" />
+          {points.map((p, idx) => {
+            const isSelected = Number(selectedIndex) === idx
+            const isMax = idx === maxIndex
+            const dotFill = isMax ? '#16a34a' : '#eab308'
+            return (
+              <g key={idx}>
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={10}
+                  fill="transparent"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelectIndex?.(idx)}
+                />
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={isSelected ? (isMax ? 6 : 5) : (isMax ? 5 : 3.5)}
+                  fill={dotFill}
+                  stroke={isSelected ? '#111827' : '#ffffff'}
+                  strokeWidth={isSelected ? 2.5 : 2}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelectIndex?.(idx)}
+                />
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+
+      <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <span className="inline-block w-3 h-0.5 bg-yellow-500" />
+          <span>Unit Price (PHP)</span>
+        </div>
+        <div className="text-xs text-gray-500">Green dot = highest</div>
+      </div>
+
+      <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
+        <span>{labels?.[0] || ''}</span>
+        <span>{labels?.[Math.floor((labels?.length || 1) / 2)] || ''}</span>
+        <span>{labels?.[labels?.length - 1] || ''}</span>
+      </div>
+    </div>
+  )
+}
+
+const PricingTrendCard = () => {
+  const defaultItemId = MOCK_ITEMS?.[0]?.id || ''
+  const [selectedItemId, setSelectedItemId] = useState(defaultItemId)
+  const [period, setPeriod] = useState('month')
+  const [selectedPointIndex, setSelectedPointIndex] = useState(null)
+
+  const item = MOCK_ITEMS.find(i => String(i.id) === String(selectedItemId))
+  const labels = getPricingTrendLabels(period)
+  const values = getPricingTrendSeries(selectedItemId, period)
+  const maxVal = values.length > 0 ? Math.max(...values) : 0
+  const maxIndex = values.findIndex(v => v === maxVal)
+  const maxLabel = labels?.[maxIndex] || '-'
+  const selectedLabel = (selectedPointIndex !== null && selectedPointIndex >= 0) ? (labels?.[selectedPointIndex] || '-') : null
+  const selectedValue = (selectedPointIndex !== null && selectedPointIndex >= 0) ? (values?.[selectedPointIndex] ?? null) : null
+
+  const itemOptions = (MOCK_ITEMS || []).map(i => ({
+    value: i.id,
+    label: `${i.item_code} - ${i.item_name}`
+  }))
+
+  return (
+    <Card className="p-6">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+            <TrendingUp className="w-5 h-5 text-yellow-700" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Pricing Trend per Item</h2>
+            <p className="text-sm text-gray-500">UI preview (mock data)</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <Select
+            label="Item"
+            value={selectedItemId}
+            onChange={(e) => setSelectedItemId(e.target.value)}
+            options={itemOptions}
+            className="w-full sm:w-80"
+          />
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPeriod('day')}
+              className={`px-3 py-2 text-sm rounded-md border transition-colors ${period === 'day' ? 'bg-yellow-500 text-gray-900 border-yellow-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              Day
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('month')}
+              className={`px-3 py-2 text-sm rounded-md border transition-colors ${period === 'month' ? 'bg-yellow-500 text-gray-900 border-yellow-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              Month
+            </button>
+            <button
+              type="button"
+              onClick={() => setPeriod('year')}
+              className={`px-3 py-2 text-sm rounded-md border transition-colors ${period === 'year' ? 'bg-yellow-500 text-gray-900 border-yellow-500' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}
+            >
+              Year
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <div className="lg:col-span-3">
+          <PricingTrendChart
+            values={values}
+            labels={labels}
+            selectedIndex={selectedPointIndex}
+            onSelectIndex={(idx) => setSelectedPointIndex(idx)}
+          />
+          {selectedLabel !== null && selectedValue !== null && (
+            <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <p className="text-sm text-gray-800">
+                <span className="font-medium">Selected:</span> {selectedLabel} — {formatCurrency(selectedValue)}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-1">
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 h-full">
+            <p className="text-sm text-gray-600">Highest Price</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(maxVal)}</p>
+            <div className="mt-3 space-y-1 text-sm text-gray-600">
+              <p>
+                <span className="text-gray-500">Period:</span> {period}
+              </p>
+              <p>
+                <span className="text-gray-500">When:</span> {maxLabel}
+              </p>
+              <p className="pt-2 text-xs text-gray-500">{item ? `${item.item_name} (${item.unit})` : ''}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 const SettingsPage = () => {
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
@@ -4292,6 +4539,7 @@ const SuperAdminDashboard = () => {
 
   return (
     <div className="space-y-6">
+      <PricingTrendCard />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card className="p-6">
           <div className="flex items-center justify-between">

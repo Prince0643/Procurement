@@ -241,24 +241,25 @@ Content-Type: application/json
 **Request:**
 ```json
 {
-  "email": "john.doe@company.com",
-  "password": "your_password"
+  "employee_no": "ENG-2026-0001",
+  "password": "jajrconstruction"
 }
 ```
 
 **Response:**
 ```json
 {
-  "success": true,
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "user": {
-    "id": 1,
-    "employee_code": "EMP001",
-    "first_name": "John",
-    "last_name": "Doe",
-    "position": "Engineer",
-    "email": "john.doe@company.com"
-  }
+    "message": "Login successful",
+    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NSwicm9sZSI6ImVuZ2luZWVyIiwiaWF0IjoxNzcwOTU1ODczLCJleHAiOjE3NzEwNDIyNzN9.TFFiTGMqb7QPOU6F1xqKLxl4GrApz3iWti0yVmJU7co",
+    "user": {
+        "id": 5,
+        "employee_no": "ENG-2026-0001",
+        "first_name": "Michelle",
+        "middle_initial": "T",
+        "last_name": "Norial",
+        "role": "engineer",
+        "is_active": 1
+    }
 }
 ```
 
@@ -266,6 +267,112 @@ Content-Type: application/json
 ```
 Authorization: Bearer {jwt_token}
 ```
+
+### Auto-Login Flow (Attendance ↔ Procurement)
+
+When a user logs in to the **Attendance Mobile App**, the app must also automatically log in to the **Procurement System** to enable procurement features.
+
+**Flow:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Mobile App Login                             │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  1. User enters credentials in Attendance App                   │
+│          ↓                                                      │
+│  2. Call Attendance API (PHP) to authenticate                   │
+│          ↓                                                      │
+│  3. If Attendance login SUCCESS →                               │
+│          ↓                                                      │
+│  4. Call Procurement API /api/auth/login                        │
+│     (using same employee_no and password)                     │
+│          ↓                                                      │
+│  5. Store Procurement JWT token                                 │
+│          ↓                                                      │
+│  6. User now has access to BOTH:                              │
+│     - Attendance features (Check-in/out)                        │
+│     - Procurement features (Create PR, View Orders, etc.)       │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Implementation Example:**
+
+```javascript
+// services/authService.js
+import { API_CONFIG } from '../config/api.config.js';
+
+class AuthService {
+  constructor() {
+    this.attendanceBaseURL = API_CONFIG.attendance.baseURL;
+    this.procurementBaseURL = API_CONFIG.procurement.baseURL;
+    this.attendanceApiKey = API_CONFIG.attendance.apiKey;
+  }
+
+  async login(employee_no, password) {
+    // Step 1: Login to Attendance System
+    const attendanceResponse = await fetch(`${this.attendanceBaseURL}/auth/login`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-API-Key': this.attendanceApiKey
+      },
+      body: JSON.stringify({ employee_no, password })
+    });
+    
+    const attendanceData = await attendanceResponse.json();
+    
+    if (!attendanceData.success) {
+      throw new Error('Attendance login failed');
+    }
+    
+    // Step 2: Store Attendance session
+    localStorage.setItem('attendance_token', attendanceData.token);
+    localStorage.setItem('employee_no', employee_no);
+    
+    // Step 3: Auto-login to Procurement System
+    const procurementResponse = await fetch(`${this.procurementBaseURL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_no, password })
+    });
+    
+    const procurementData = await procurementResponse.json();
+    
+    if (procurementData.message === 'Login successful') {
+      // Step 4: Store Procurement token
+      localStorage.setItem('procurement_token', procurementData.token);
+      localStorage.setItem('procurement_user', JSON.stringify(procurementData.user));
+    }
+    
+    return {
+      attendance: attendanceData,
+      procurement: procurementData,
+      success: true
+    };
+  }
+
+  async logout() {
+    // Clear both tokens
+    localStorage.removeItem('attendance_token');
+    localStorage.removeItem('procurement_token');
+    localStorage.removeItem('employee_no');
+    localStorage.removeItem('procurement_user');
+  }
+  
+  isLoggedInToProcurement() {
+    return !!localStorage.getItem('procurement_token');
+  }
+}
+
+export const authService = new AuthService();
+```
+
+**Important Notes:**
+- Both systems use the same `employee_no` and `password` for authentication
+- The Procurement token must be stored separately from the Attendance token
+- If Procurement login fails, the Attendance login should still succeed (procurement features will be disabled)
+- Procurement JWT token expires in 24 hours (re-login required)
 
 ## Mobile App Implementation
 
@@ -358,11 +465,11 @@ class ProcurementService {
     };
   }
 
-  async login(email, password) {
+  async login(employee_no, password) {
     const response = await fetch(`${this.baseURL}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
+      body: JSON.stringify({ employee_no, password })
     });
     
     const data = await response.json();
