@@ -324,4 +324,94 @@ router.get('/:id/export', authenticate, async (req, res) => {
   }
 });
 
+// Resubmit rejected PO (admin)
+router.put('/:id/resubmit', authenticate, requireAdmin, async (req, res) => {
+  let conn;
+  try {
+    const { supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items } = req.body;
+
+    // Check if PO exists and is cancelled (rejected)
+    const [pos] = await db.query('SELECT * FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    const po = pos[0];
+
+    // Only cancelled (rejected) POs can be resubmitted
+    if (po.status !== 'Cancelled') {
+      return res.status(400).json({ message: 'Only cancelled (rejected) purchase orders can be resubmitted' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Calculate new total amount if items provided
+    let totalAmount = po.total_amount;
+    if (items && items.length > 0) {
+      totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+
+      // Delete existing items
+      await conn.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [req.params.id]);
+
+      // Insert new items
+      for (const item of items) {
+        await conn.query(
+          'INSERT INTO purchase_order_items (purchase_order_id, purchase_request_item_id, item_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.params.id, item.purchase_request_item_id, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
+        );
+      }
+    }
+
+    // Update PO details and reset status to Draft
+    await conn.query(
+      `UPDATE purchase_orders 
+       SET supplier_id = ?, expected_delivery_date = ?, place_of_delivery = ?, 
+           project = ?, delivery_term = ?, payment_term = ?, notes = ?,
+           total_amount = ?, status = 'Draft', updated_at = NOW()
+       WHERE id = ?`,
+      [
+        supplier_id || po.supplier_id,
+        expected_delivery_date || po.expected_delivery_date,
+        place_of_delivery || po.place_of_delivery,
+        project || po.project,
+        delivery_term || po.delivery_term || 'COD',
+        payment_term || po.payment_term || 'CASH',
+        notes ?? po.notes,
+        totalAmount,
+        req.params.id
+      ]
+    );
+
+    await conn.commit();
+
+    // Notify Super Admins about resubmitted PO
+    const superAdmins = await getSuperAdmins();
+    for (const adminId of superAdmins) {
+      await createNotification(
+        adminId,
+        'PO Resubmitted - Pending Approval',
+        `Purchase Order ${po.po_number} has been resubmitted and requires your approval`,
+        'PO Created',
+        po.id,
+        'purchase_order'
+      );
+    }
+
+    res.json({ message: 'Purchase order resubmitted successfully', status: 'Draft' });
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
+    console.error('Resubmit PO error:', error);
+    res.status(500).json({ message: 'Failed to resubmit purchase order: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
 export default router;

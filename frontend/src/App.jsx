@@ -39,7 +39,8 @@ import {
   ExternalLink,
   Settings,
   Menu,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -1820,19 +1821,46 @@ const MyPurchaseRequests = () => {
   )
 }
 
-const PRExpandedDetails = ({ pr }) => {
+const PRExpandedDetails = ({ pr: initialPr }) => {
   const [items, setItems] = useState([])
+  const [pr, setPr] = useState(initialPr)
   const [loading, setLoading] = useState(true)
+  const [showPreview, setShowPreview] = useState(false)
+  const [showResubmitModal, setShowResubmitModal] = useState(false)
+  const [resubmitLoading, setResubmitLoading] = useState(false)
+  const [resubmitError, setResubmitError] = useState('')
+  const [resubmitSuccess, setResubmitSuccess] = useState(false)
+  const [resubmitFormData, setResubmitFormData] = useState({
+    purpose: '',
+    remarks: '',
+    date_needed: '',
+    project: '',
+    project_address: ''
+  })
+  const [editedItems, setEditedItems] = useState([])
   const { user } = useAuth()
 
   // Check if user can export (Super Admin, Procurement, Admin, Engineer)
   const canExport = ['super_admin', 'procurement', 'admin', 'engineer'].includes(user?.role)
 
+  // Check if user can resubmit (only original requester and status is Rejected)
+  const canResubmit = pr.status === 'Rejected' && pr.requested_by === user?.id
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
-        const data = await purchaseRequestService.getById(pr.id)
+        const data = await purchaseRequestService.getById(initialPr.id)
+        setPr(data)
         setItems(data.items || [])
+        setEditedItems(data.items || [])
+        // Initialize form data with current PR values
+        setResubmitFormData({
+          purpose: data.purpose || '',
+          remarks: data.remarks || '',
+          date_needed: data.date_needed ? data.date_needed.split('T')[0] : '',
+          project: data.project || '',
+          project_address: data.project_address || ''
+        })
       } catch (err) {
         console.error('Failed to fetch PR details', err)
       } finally {
@@ -1840,7 +1868,7 @@ const PRExpandedDetails = ({ pr }) => {
       }
     }
     fetchDetails()
-  }, [pr.id])
+  }, [initialPr.id])
 
   const handleExportExcel = async () => {
     try {
@@ -1859,6 +1887,44 @@ const PRExpandedDetails = ({ pr }) => {
     }
   }
 
+  const handleResubmit = async () => {
+    setResubmitLoading(true)
+    setResubmitError('')
+    setResubmitSuccess(false)
+
+    try {
+      const resubmitData = {
+        purpose: resubmitFormData.purpose,
+        remarks: resubmitFormData.remarks,
+        date_needed: resubmitFormData.date_needed,
+        project: resubmitFormData.project,
+        project_address: resubmitFormData.project_address,
+        items: editedItems.map(item => ({
+          item_id: item.item_id,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          remarks: item.remarks
+        }))
+      }
+
+      await purchaseRequestService.resubmit(pr.id, resubmitData)
+      setResubmitSuccess(true)
+      
+      // Update local state
+      setPr(prev => ({ ...prev, status: 'Pending' }))
+      
+      // Close modal after success
+      setTimeout(() => {
+        setShowResubmitModal(false)
+        setResubmitSuccess(false)
+      }, 2000)
+    } catch (err) {
+      setResubmitError(err.response?.data?.message || 'Failed to resubmit PR')
+    } finally {
+      setResubmitLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -1874,10 +1940,24 @@ const PRExpandedDetails = ({ pr }) => {
           <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
         </div>
         {canExport && (
-          <Button size="sm" variant="secondary" onClick={handleExportExcel}>
-            <FileDown className="w-4 h-4 mr-1" />
-            Export Excel
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="secondary" onClick={handleExportExcel}>
+              <FileDown className="w-4 h-4 mr-1" />
+              Export Excel
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowPreview(true)}>
+              <Eye className="w-4 h-4 mr-1" />
+              Preview
+            </Button>
+          </div>
+        )}
+        {canResubmit && (
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="primary" onClick={() => setShowResubmitModal(true)}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Edit & Resubmit
+            </Button>
+          </div>
         )}
       </div>
       
@@ -1922,6 +2002,230 @@ const PRExpandedDetails = ({ pr }) => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* PR Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Purchase Request Preview</h2>
+                <p className="text-sm text-gray-500 mt-1">{pr.pr_number}</p>
+              </div>
+              <Button variant="secondary" onClick={() => setShowPreview(false)}>Close</Button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* PR Header - Excel-like layout */}
+              <div className="border border-gray-300 bg-white">
+                {/* Row 1: PR Number */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">PR Number:</div>
+                  <div className="col-span-5 p-3 text-sm font-semibold text-gray-900">{pr.pr_number || '-'}</div>
+                </div>
+                {/* Row 2: Supplier */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Supplier:</div>
+                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.supplier_name || '-'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Date Prepared:</div>
+                  <div className="col-span-1 p-3 text-sm text-gray-900">{formatDate(pr.created_at)}</div>
+                </div>
+                {/* Row 3: Supplier Address */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Address:</div>
+                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.supplier_address || '-'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Date Needed:</div>
+                  <div className="col-span-1 p-3 text-sm text-gray-900">{formatDate(pr.date_needed)}</div>
+                </div>
+                {/* Row 4: Project */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project:</div>
+                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.project || '-'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Requested By:</div>
+                  <div className="col-span-1 p-3 text-sm text-gray-900">{pr.requester_first_name} {pr.requester_last_name}</div>
+                </div>
+                {/* Row 5: Project Address */}
+                <div className="grid grid-cols-6">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project Address:</div>
+                  <div className="col-span-5 p-3 text-sm text-gray-900">{pr.project_address || '-'}</div>
+                </div>
+              </div>
+
+              {/* Items Table - Excel-like */}
+              <div className="border border-gray-300 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-gray-300">
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-16">QTY</th>
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-20">UNIT</th>
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300">DESCRIPTION</th>
+                      <th className="text-right py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-32">UNIT COST</th>
+                      <th className="text-right py-3 px-3 font-semibold text-gray-700 w-32">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => (
+                      <tr key={item.id} className="border-b border-gray-200">
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.item_name || item.item_code || '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 text-right border-r border-gray-200">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
+                      </tr>
+                    ))}
+                    {items.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="py-4 text-center text-gray-500">No items found</td>
+                      </tr>
+                    )}
+                    {items.length > 0 && (
+                      <tr className="bg-gray-50 italic">
+                        <td colSpan="5" className="py-2 px-3 text-center text-gray-500">*** NOTHING FOLLOWS ***</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Total Amount */}
+              <div className="flex justify-end">
+                <div className="border border-gray-300 bg-white">
+                  <div className="flex">
+                    <div className="bg-gray-100 px-6 py-3 text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
+                    <div className="px-6 py-3 text-sm font-bold text-gray-900 min-w-[150px] text-right">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* PR Resubmit Modal */}
+      {showResubmitModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit & Resubmit PR</h2>
+              <p className="text-sm text-gray-500 mt-1">{pr.pr_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {resubmitError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{resubmitError}</p>
+                </div>
+              )}
+              {resubmitSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-700">PR resubmitted successfully! Status changed to Pending.</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose *</label>
+                <input
+                  type="text"
+                  value={resubmitFormData.purpose}
+                  onChange={(e) => setResubmitFormData({ ...resubmitFormData, purpose: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
+                  <input
+                    type="date"
+                    value={resubmitFormData.date_needed}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, date_needed: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                  <input
+                    type="text"
+                    value={resubmitFormData.project}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, project: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Address</label>
+                <input
+                  type="text"
+                  value={resubmitFormData.project_address}
+                  onChange={(e) => setResubmitFormData({ ...resubmitFormData, project_address: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  value={resubmitFormData.remarks}
+                  onChange={(e) => setResubmitFormData({ ...resubmitFormData, remarks: e.target.value })}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                <div className="border rounded-md overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editedItems.map((item, index) => (
+                        <tr key={item.id} className="border-t border-gray-100">
+                          <td className="py-2 px-3">{item.item_name || item.item_code}</td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newItems = [...editedItems]
+                                newItems[index].quantity = parseInt(e.target.value) || 1
+                                setEditedItems(newItems)
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </td>
+                          <td className="py-2 px-3">{item.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setShowResubmitModal(false)}
+                disabled={resubmitLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleResubmit}
+                disabled={resubmitLoading || !resubmitFormData.purpose}
+              >
+                {resubmitLoading ? 'Resubmitting...' : 'Resubmit PR'}
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </div>
@@ -3438,16 +3742,41 @@ const PurchaseOrders = () => {
 const POExpandedDetails = ({ po }) => {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showPreview, setShowPreview] = useState(false)
+  const [showResubmitModal, setShowResubmitModal] = useState(false)
+  const [resubmitLoading, setResubmitLoading] = useState(false)
+  const [resubmitError, setResubmitError] = useState('')
+  const [resubmitSuccess, setResubmitSuccess] = useState(false)
+  const [resubmitFormData, setResubmitFormData] = useState({
+    expected_delivery_date: '',
+    place_of_delivery: '',
+    project: '',
+    delivery_term: 'COD',
+    payment_term: 'CASH',
+    notes: ''
+  })
   const { user } = useAuth()
 
   // Check if user can export (Super Admin, Procurement, Admin, Engineer)
   const canExport = ['super_admin', 'procurement', 'admin', 'engineer'].includes(user?.role)
+
+  // Check if user can resubmit (admin only and status is Cancelled)
+  const canResubmit = po.status === 'Cancelled' && user?.role === 'admin'
 
   useEffect(() => {
     const fetchDetails = async () => {
       try {
         const data = await purchaseOrderService.getById(po.id)
         setItems(data.items || [])
+        // Initialize form data with current PO values
+        setResubmitFormData({
+          expected_delivery_date: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
+          place_of_delivery: data.place_of_delivery || '',
+          project: data.project || '',
+          delivery_term: data.delivery_term || 'COD',
+          payment_term: data.payment_term || 'CASH',
+          notes: data.notes || ''
+        })
       } catch (err) {
         console.error('Failed to fetch PO details', err)
       } finally {
@@ -3474,6 +3803,39 @@ const POExpandedDetails = ({ po }) => {
     }
   }
 
+  const handleResubmit = async () => {
+    setResubmitLoading(true)
+    setResubmitError('')
+    setResubmitSuccess(false)
+
+    try {
+      const resubmitData = {
+        expected_delivery_date: resubmitFormData.expected_delivery_date,
+        place_of_delivery: resubmitFormData.place_of_delivery,
+        project: resubmitFormData.project,
+        delivery_term: resubmitFormData.delivery_term,
+        payment_term: resubmitFormData.payment_term,
+        notes: resubmitFormData.notes
+      }
+
+      await purchaseOrderService.resubmit(po.id, resubmitData)
+      setResubmitSuccess(true)
+      
+      // Update local state
+      po.status = 'Draft'
+      
+      // Close modal after success
+      setTimeout(() => {
+        setShowResubmitModal(false)
+        setResubmitSuccess(false)
+      }, 2000)
+    } catch (err) {
+      setResubmitError(err.response?.data?.message || 'Failed to resubmit PO')
+    } finally {
+      setResubmitLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -3486,10 +3848,24 @@ const POExpandedDetails = ({ po }) => {
           <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={po.status} /></div>
         </div>
         {canExport && (
-          <Button size="sm" variant="secondary" onClick={handleExportExcel}>
-            <FileDown className="w-4 h-4 mr-1" />
-            Export Excel
-          </Button>
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="secondary" onClick={handleExportExcel}>
+              <FileDown className="w-4 h-4 mr-1" />
+              Export Excel
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setShowPreview(true)}>
+              <Eye className="w-4 h-4 mr-1" />
+              Preview
+            </Button>
+          </div>
+        )}
+        {canResubmit && (
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="primary" onClick={() => setShowResubmitModal(true)}>
+              <RefreshCw className="w-4 h-4 mr-1" />
+              Edit & Resubmit
+            </Button>
+          </div>
         )}
       </div>
       
@@ -3526,6 +3902,212 @@ const POExpandedDetails = ({ po }) => {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* PO Preview Modal */}
+      {showPreview && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Purchase Order Preview</h2>
+                <p className="text-sm text-gray-500 mt-1">{po.po_number}</p>
+              </div>
+              <Button variant="secondary" onClick={() => setShowPreview(false)}>Close</Button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* PO Header - Excel-like layout */}
+              <div className="border border-gray-300 bg-white">
+                {/* Row 1: PO Number and Supplier */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">PO Number:</div>
+                  <div className="col-span-2 p-3 text-sm font-semibold text-gray-900">{po.po_number || '-'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Supplier:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.supplier_name || '-'}</div>
+                </div>
+                {/* Row 2: Related PR and Supplier Address */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Related PR:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.pr_number || '-'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Address:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.supplier_address || '-'}</div>
+                </div>
+                {/* Row 3: PO Date and Project */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">PO Date:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{formatDate(po.po_date || po.created_at)}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.project || '-'}</div>
+                </div>
+                {/* Row 4: Expected Delivery and Place of Delivery */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Expected Delivery:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{formatDate(po.expected_delivery_date)}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Place of Delivery:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.place_of_delivery || '-'}</div>
+                </div>
+                {/* Row 5: Delivery Term and Payment Term */}
+                <div className="grid grid-cols-6">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Delivery Term:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.delivery_term || 'COD'}</div>
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Payment Term:</div>
+                  <div className="col-span-2 p-3 text-sm text-gray-900">{po.payment_term || 'CASH'}</div>
+                </div>
+              </div>
+
+              {/* Items Table - Excel-like */}
+              <div className="border border-gray-300 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-gray-300">
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-16">QTY</th>
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-20">UNIT</th>
+                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300">DESCRIPTION</th>
+                      <th className="text-right py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-32">UNIT COST</th>
+                      <th className="text-right py-3 px-3 font-semibold text-gray-700 w-32">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => (
+                      <tr key={item.id} className="border-b border-gray-200">
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.item_name || item.item_code || '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 text-right border-r border-gray-200">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
+                        <td className="py-2 px-3 text-gray-900 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
+                      </tr>
+                    ))}
+                    {items.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="py-4 text-center text-gray-500">No items found</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Total Amount */}
+              <div className="flex justify-end">
+                <div className="border border-gray-300 bg-white">
+                  <div className="flex">
+                    <div className="bg-gray-100 px-6 py-3 text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
+                    <div className="px-6 py-3 text-sm font-bold text-gray-900 min-w-[150px] text-right">{po.total_amount ? formatCurrency(po.total_amount) : '-'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
+      {/* PO Resubmit Modal */}
+      {showResubmitModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit & Resubmit PO</h2>
+              <p className="text-sm text-gray-500 mt-1">{po.po_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {resubmitError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{resubmitError}</p>
+                </div>
+              )}
+              {resubmitSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-700">PO resubmitted successfully! Status changed to Draft.</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Expected Delivery Date</label>
+                  <input
+                    type="date"
+                    value={resubmitFormData.expected_delivery_date}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, expected_delivery_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                  <input
+                    type="text"
+                    value={resubmitFormData.project}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, project: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Place of Delivery</label>
+                <input
+                  type="text"
+                  value={resubmitFormData.place_of_delivery}
+                  onChange={(e) => setResubmitFormData({ ...resubmitFormData, place_of_delivery: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Term</label>
+                  <select
+                    value={resubmitFormData.delivery_term}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, delivery_term: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="COD">COD</option>
+                    <option value="Prepaid">Prepaid</option>
+                    <option value="7 Days">7 Days</option>
+                    <option value="15 Days">15 Days</option>
+                    <option value="30 Days">30 Days</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Term</label>
+                  <select
+                    value={resubmitFormData.payment_term}
+                    onChange={(e) => setResubmitFormData({ ...resubmitFormData, payment_term: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="CASH">CASH</option>
+                    <option value="CHECK">CHECK</option>
+                    <option value="BANK TRANSFER">BANK TRANSFER</option>
+                    <option value="CREDIT CARD">CREDIT CARD</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                <textarea
+                  value={resubmitFormData.notes}
+                  onChange={(e) => setResubmitFormData({ ...resubmitFormData, notes: e.target.value })}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setShowResubmitModal(false)}
+                disabled={resubmitLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleResubmit}
+                disabled={resubmitLoading}
+              >
+                {resubmitLoading ? 'Resubmitting...' : 'Resubmit PO'}
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
     </div>

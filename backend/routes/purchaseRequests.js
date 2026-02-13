@@ -48,10 +48,12 @@ router.get('/:id', authenticate, async (req, res) => {
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
              approver.first_name as approver_first_name,
-             approver.last_name as approver_last_name
+             approver.last_name as approver_last_name,
+             s.supplier_name
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN employees approver ON pr.approved_by = approver.id
+      LEFT JOIN suppliers s ON pr.supplier_id = s.id
       WHERE pr.id = ?
     `, [req.params.id]);
 
@@ -60,6 +62,8 @@ router.get('/:id', authenticate, async (req, res) => {
     }
 
     const pr = prs[0];
+    console.log('PR from DB:', pr);
+    console.log('Supplier name from DB:', pr.supplier_name);
 
     // Get items for this PR
     const [items] = await db.query(`
@@ -472,6 +476,110 @@ router.get('/:id/export', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Export PR error:', error);
     res.status(500).json({ message: 'Failed to export purchase request: ' + error.message });
+  }
+});
+
+// Resubmit rejected PR (engineer)
+router.put('/:id/resubmit', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
+
+    // Check if PR exists and is rejected
+    const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+
+    const pr = prs[0];
+
+    // Only the original requester can resubmit
+    if (pr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can resubmit this PR' });
+    }
+
+    // Only rejected PRs can be resubmitted
+    if (pr.status !== 'Rejected') {
+      return res.status(400).json({ message: 'Only rejected purchase requests can be resubmitted' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Update PR details and reset status to Pending, clear all pricing data
+    await conn.query(
+      `UPDATE purchase_requests 
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, 
+           status = 'Pending', approved_by = NULL, approved_at = NULL, 
+           supplier_id = NULL, supplier_address = NULL, rejection_reason = NULL, 
+           total_amount = NULL, updated_at = NOW()
+       WHERE id = ?`,
+      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, req.params.id]
+    );
+
+    // Update items if provided
+    if (items && items.length > 0) {
+      // Delete existing items
+      await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
+
+      // Insert new items with unit_price and total_price reset to NULL
+      // (Procurement will need to set these again during review)
+      for (const item of items) {
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
+
+        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        }
+
+        // Reset prices to NULL - procurement will set them again
+        await conn.query(
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, NULL, NULL, ?)',
+          [req.params.id, itemId, quantity, item.remarks ?? item.notes ?? null]
+        );
+      }
+    }
+
+    await conn.commit();
+
+    // Notify procurement officers and Super Admins about resubmitted PR
+    const procurementOfficers = await getProcurementOfficers();
+    for (const officerId of procurementOfficers) {
+      await createNotification(
+        officerId,
+        'PR Resubmitted',
+        `Purchase Request ${pr.pr_number} has been resubmitted by ${req.user.first_name} ${req.user.last_name}`,
+        'PR Created',
+        pr.id,
+        'purchase_request'
+      );
+    }
+
+    const superAdmins = await getSuperAdmins();
+    for (const adminId of superAdmins) {
+      await createNotification(
+        adminId,
+        'PR Resubmitted - Pending Approval',
+        `Purchase Request ${pr.pr_number} has been resubmitted and requires your approval`,
+        'PR Created',
+        pr.id,
+        'purchase_request'
+      );
+    }
+
+    res.json({ message: 'Purchase request resubmitted successfully', status: 'Pending' });
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
+    console.error('Resubmit PR error:', error);
+    res.status(500).json({ message: 'Failed to resubmit purchase request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

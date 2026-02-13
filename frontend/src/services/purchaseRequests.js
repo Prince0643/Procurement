@@ -37,5 +37,10 @@ export const purchaseRequestService = {
       responseType: 'blob'
     });
     return response.data;
+  },
+
+  resubmit: async (id, prData) => {
+    const response = await api.put(`/purchase-requests/${id}/resubmit`, prData);
+    return response.data;
   }
 };

@@ -54,6 +54,31 @@ Your mobile app will **add new calls** to the Procurement System for:
 
 ### Engineer Role Endpoints
 
+#### Get Categories
+```
+GET /api/categories
+Headers: Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "categories": [
+    {
+      "id": 1,
+      "category_name": "IT Equipment",
+      "items_count": 15
+    },
+    {
+      "id": 2,
+      "category_name": "Office Supplies",
+      "items_count": 8
+    }
+  ]
+}
+```
+
 #### Browse Items
 ```
 GET /api/items
@@ -183,6 +208,20 @@ Headers: Authorization: Bearer {token}
 }
 ```
 
+#### Mark All Notifications as Read
+```
+PUT /api/notifications/mark-all-read
+Headers: Authorization: Bearer {token}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "All notifications marked as read"
+}
+```
+
 #### Mark Notification as Read
 ```
 PUT /api/notifications/{id}/read
@@ -246,7 +285,7 @@ export const API_CONFIG = {
   
   // New Procurement System (Node.js)
   procurement: {
-    baseURL: 'https://procurement.yourcompany.com/api',
+    baseURL: 'https://procurement-api.xandree.com/api',
     timeout: 30000
   }
 };
@@ -331,6 +370,13 @@ class ProcurementService {
     return data;
   }
 
+  async getCategories() {
+    const response = await fetch(`${this.baseURL}/categories`, {
+      headers: this.getAuthHeaders()
+    });
+    return await response.json();
+  }
+
   async getItems() {
     const response = await fetch(`${this.baseURL}/items`, {
       headers: this.getAuthHeaders()
@@ -374,10 +420,15 @@ export const procurementService = new ProcurementService();
 | Feature | Method | Endpoint | Auth |
 |---------|--------|----------|------|
 | Login | POST | `/api/auth/login` | None |
+| Categories | GET | `/api/categories` | JWT |
 | Browse Items | GET | `/api/items` | JWT |
 | Create PR | POST | `/api/purchase-requests` | JWT |
 | My PRs | GET | `/api/purchase-requests/my-requests` | JWT |
+| PR Details | GET | `/api/purchase-requests/{id}` | JWT |
+| Mark Items Received | PUT | `/api/purchase-requests/{id}/receive` | JWT |
 | Notifications | GET | `/api/notifications` | JWT |
+| Mark Notification Read | PUT | `/api/notifications/{id}/read` | JWT |
+| Mark All Read | PUT | `/api/notifications/mark-all-read` | JWT |
 
 ## Deployment Checklist
 
