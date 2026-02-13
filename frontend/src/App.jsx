@@ -503,7 +503,7 @@ const PODetailsModal = ({ poId, onClose }) => {
 }
 
 // ============ LAYOUT ============
-const Layout = ({ currentRole, children }) => {
+const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -511,6 +511,7 @@ const Layout = ({ currentRole, children }) => {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
+  const [internalActiveNav, setInternalActiveNav] = useState(null)
   const { user, logout } = useAuth()
 
   // Handle responsive detection
@@ -546,6 +547,45 @@ const Layout = ({ currentRole, children }) => {
       console.error('Failed to fetch notifications', err)
     } finally {
       setLoadingNotifications(false)
+    }
+  }
+
+  const handleNotificationClick = (notif) => {
+    // Mark as read first
+    if (!notif.is_read) {
+      handleMarkAsRead(notif.id)
+    }
+    
+    // Close notifications dropdown
+    setNotificationsOpen(false)
+    
+    // Navigate based on notification type
+    if (notif.related_type === 'purchase_request' || 
+        notif.type?.includes('PR') || 
+        notif.title?.includes('PR')) {
+      // Navigate to PR-related tab
+      if (onNavigate) {
+        if (user?.role === 'engineer') {
+          onNavigate('purchase-requests')
+        } else if (user?.role === 'procurement') {
+          onNavigate('approve-prs')
+        } else if (user?.role === 'super_admin') {
+          onNavigate('approve-prs')
+        } else if (user?.role === 'admin') {
+          onNavigate('pending-prs')
+        }
+      }
+    } else if (notif.related_type === 'purchase_order' || 
+               notif.type?.includes('PO') || 
+               notif.title?.includes('PO')) {
+      // Navigate to PO-related tab
+      if (onNavigate) {
+        if (user?.role === 'super_admin') {
+          onNavigate('approve-pos')
+        } else if (user?.role === 'admin') {
+          onNavigate('purchase-orders')
+        }
+      }
     }
   }
 
@@ -627,13 +667,19 @@ const Layout = ({ currentRole, children }) => {
 
   const frontendRole = mapRole(currentRole)
   const navItems = roleNavItems[frontendRole] || []
-  const [activeNav, setActiveNav] = useState(navItems[0]?.id || 'dashboard')
 
   const displayRole = roleLabels[currentRole] || currentRole
   const displayRoleColor = roleColors[currentRole] || 'bg-gray-100 text-gray-800'
 
+  // Use parent activeNav if provided, otherwise use internal state
+  const activeNav = parentActiveNav !== undefined ? parentActiveNav : (internalActiveNav || navItems[0]?.id)
+
   const handleNavClick = (itemId) => {
-    setActiveNav(itemId)
+    if (onNavigate) {
+      onNavigate(itemId)
+    } else {
+      setInternalActiveNav(itemId)
+    }
     if (isMobile) {
       setMobileMenuOpen(false)
     }
@@ -803,7 +849,7 @@ const Layout = ({ currentRole, children }) => {
                       notifications.map(notif => (
                         <div 
                           key={notif.id} 
-                          onClick={() => !notif.is_read && handleMarkAsRead(notif.id)}
+                          onClick={() => handleNotificationClick(notif)}
                           className={`p-3 border-b border-gray-100 cursor-pointer transition-colors ${
                             !notif.is_read ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-gray-50'
                           }`}
@@ -836,7 +882,7 @@ const Layout = ({ currentRole, children }) => {
 
         {/* Page Content */}
         <main className="flex-1 overflow-auto p-4 md:p-6">
-          {children({ activeNav, currentRole })}
+          {children}
         </main>
       </div>
     </div>
@@ -1927,8 +1973,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="grid grid-cols-2 gap-4 text-sm">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
           <div><span className="font-medium text-gray-700">Requested By:</span> {pr.requester_first_name} {pr.requester_last_name}</div>
           <div><span className="font-medium text-gray-700">Created:</span> {formatDate(pr.created_at)}</div>
           <div><span className="font-medium text-gray-700">Purpose:</span> {pr.purpose || '-'}</div>
@@ -1939,26 +1985,40 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
           <div><span className="font-medium text-gray-700">Total Amount:</span> {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
           <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
         </div>
-        {canExport && (
-          <div className="flex flex-col gap-2">
-            <Button size="sm" variant="secondary" onClick={handleExportExcel}>
-              <FileDown className="w-4 h-4 mr-1" />
-              Export Excel
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowPreview(true)}>
-              <Eye className="w-4 h-4 mr-1" />
-              Preview
-            </Button>
-          </div>
-        )}
-        {canResubmit && (
-          <div className="flex flex-col gap-2">
+        <div className="flex flex-row sm:flex-col gap-2">
+          {canExport && (
+            <>
+              <Button size="sm" variant="secondary" onClick={handleExportExcel}>
+                <FileDown className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Export Excel</span>
+                <span className="sm:hidden">Excel</span>
+              </Button>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={(e) => { 
+                  e.stopPropagation(); 
+                  e.preventDefault(); 
+                  console.log('Preview clicked'); 
+                  setShowPreview(true); 
+                }} 
+                className="min-h-[44px] touch-manipulation cursor-pointer select-none"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                <span className="hidden sm:inline">Preview</span>
+                <span className="sm:hidden">View</span>
+              </Button>
+            </>
+          )}
+          {canResubmit && (
             <Button size="sm" variant="primary" onClick={() => setShowResubmitModal(true)}>
               <RefreshCw className="w-4 h-4 mr-1" />
-              Edit & Resubmit
+              <span className="hidden sm:inline">Edit & Resubmit</span>
+              <span className="sm:hidden">Resubmit</span>
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
       
       {loading ? (
@@ -2007,72 +2067,72 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
 
       {/* PR Preview Modal */}
       {showPreview && (
-        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-4xl max-h-[90vh] overflow-auto">
-            <div className="p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-2 sm:p-4">
+          <Card className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Purchase Request Preview</h2>
-                <p className="text-sm text-gray-500 mt-1">{pr.pr_number}</p>
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Purchase Request Preview</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">{pr.pr_number}</p>
               </div>
-              <Button variant="secondary" onClick={() => setShowPreview(false)}>Close</Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowPreview(false)}>Close</Button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* PR Header - Excel-like layout */}
-              <div className="border border-gray-300 bg-white">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              {/* PR Header - Mobile Responsive */}
+              <div className="border border-gray-300 bg-white text-xs sm:text-sm">
                 {/* Row 1: PR Number */}
-                <div className="grid grid-cols-6 border-b border-gray-300">
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">PR Number:</div>
-                  <div className="col-span-5 p-3 text-sm font-semibold text-gray-900">{pr.pr_number || '-'}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">PR Number:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 font-semibold text-gray-900">{pr.pr_number || '-'}</div>
                 </div>
-                {/* Row 2: Supplier */}
-                <div className="grid grid-cols-6 border-b border-gray-300">
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Supplier:</div>
-                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.supplier_name || '-'}</div>
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Date Prepared:</div>
-                  <div className="col-span-1 p-3 text-sm text-gray-900">{formatDate(pr.created_at)}</div>
+                {/* Row 2: Supplier & Date */}
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Supplier:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">{pr.supplier_name || '-'}</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Date Prepared:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{formatDate(pr.created_at)}</div>
                 </div>
-                {/* Row 3: Supplier Address */}
-                <div className="grid grid-cols-6 border-b border-gray-300">
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Address:</div>
-                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.supplier_address || '-'}</div>
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Date Needed:</div>
-                  <div className="col-span-1 p-3 text-sm text-gray-900">{formatDate(pr.date_needed)}</div>
+                {/* Row 3: Address & Date Needed */}
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Address:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">{pr.supplier_address || '-'}</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Date Needed:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{formatDate(pr.date_needed)}</div>
                 </div>
-                {/* Row 4: Project */}
-                <div className="grid grid-cols-6 border-b border-gray-300">
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project:</div>
-                  <div className="col-span-3 p-3 text-sm text-gray-900">{pr.project || '-'}</div>
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Requested By:</div>
-                  <div className="col-span-1 p-3 text-sm text-gray-900">{pr.requester_first_name} {pr.requester_last_name}</div>
+                {/* Row 4: Project & Requested By */}
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Project:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">{pr.project || '-'}</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Requested By:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{pr.requester_first_name} {pr.requester_last_name}</div>
                 </div>
                 {/* Row 5: Project Address */}
-                <div className="grid grid-cols-6">
-                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project Address:</div>
-                  <div className="col-span-5 p-3 text-sm text-gray-900">{pr.project_address || '-'}</div>
+                <div className="grid grid-cols-1 sm:grid-cols-6">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Project Address:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{pr.project_address || '-'}</div>
                 </div>
               </div>
 
-              {/* Items Table - Excel-like */}
-              <div className="border border-gray-300 overflow-hidden">
-                <table className="w-full text-sm">
+              {/* Items Table - Scrollable on mobile */}
+              <div className="border border-gray-300 overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm min-w-[500px]">
                   <thead>
                     <tr className="bg-gray-100 border-b border-gray-300">
-                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-16">QTY</th>
-                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-20">UNIT</th>
-                      <th className="text-left py-3 px-3 font-semibold text-gray-700 border-r border-gray-300">DESCRIPTION</th>
-                      <th className="text-right py-3 px-3 font-semibold text-gray-700 border-r border-gray-300 w-32">UNIT COST</th>
-                      <th className="text-right py-3 px-3 font-semibold text-gray-700 w-32">AMOUNT</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-12 sm:w-16">QTY</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-16 sm:w-20">UNIT</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300">DESCRIPTION</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-24 sm:w-32">UNIT COST</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 w-24 sm:w-32">AMOUNT</th>
                     </tr>
                   </thead>
                   <tbody>
                     {items.map((item, index) => (
                       <tr key={item.id} className="border-b border-gray-200">
-                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
-                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
-                        <td className="py-2 px-3 text-gray-900 border-r border-gray-200">{item.item_name || item.item_code || '-'}</td>
-                        <td className="py-2 px-3 text-gray-900 text-right border-r border-gray-200">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
-                        <td className="py-2 px-3 text-gray-900 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.item_name || item.item_code || '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right border-r border-gray-200">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
                       </tr>
                     ))}
                     {items.length === 0 && (
@@ -2082,7 +2142,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                     )}
                     {items.length > 0 && (
                       <tr className="bg-gray-50 italic">
-                        <td colSpan="5" className="py-2 px-3 text-center text-gray-500">*** NOTHING FOLLOWS ***</td>
+                        <td colSpan="5" className="py-2 px-2 sm:px-3 text-center text-gray-500">*** NOTHING FOLLOWS ***</td>
                       </tr>
                     )}
                   </tbody>
@@ -2093,8 +2153,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
               <div className="flex justify-end">
                 <div className="border border-gray-300 bg-white">
                   <div className="flex">
-                    <div className="bg-gray-100 px-6 py-3 text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
-                    <div className="px-6 py-3 text-sm font-bold text-gray-900 min-w-[150px] text-right">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
+                    <div className="bg-gray-100 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
+                    <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
                   </div>
                 </div>
               </div>
@@ -5816,6 +5876,7 @@ const EmployeesManagement = () => {
 // ============ MAIN APP ============
 function App() {
   const { user, isAuthenticated, loading } = useAuth()
+  const [activeNav, setActiveNav] = useState('dashboard')
 
   // Show loading state while checking auth
   if (loading) {
@@ -5842,7 +5903,11 @@ function App() {
 
   const currentRole = mapRole(user?.role)
 
-  const renderContent = ({ activeNav }) => {
+  const handleNavigate = (navId) => {
+    setActiveNav(navId)
+  }
+
+  const renderContent = () => {
     // Engineer Views
     if (currentRole === 'engineer') {
       switch (activeNav) {
@@ -5935,8 +6000,8 @@ function App() {
   }
 
   return (
-    <Layout currentRole={user?.role}>
-      {renderContent}
+    <Layout currentRole={user?.role} onNavigate={handleNavigate} activeNav={activeNav}>
+      {renderContent()}
     </Layout>
   )
 }
