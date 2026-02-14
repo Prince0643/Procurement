@@ -759,6 +759,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
   const [unreadCount, setUnreadCount] = useState(0)
   const [loadingNotifications, setLoadingNotifications] = useState(false)
   const [internalActiveNav, setInternalActiveNav] = useState(null)
+  const [superAdminApprovalCounts, setSuperAdminApprovalCounts] = useState({ prs: 0, pos: 0 })
   const { user, logout } = useAuth()
 
   // Handle responsive detection
@@ -782,6 +783,34 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
   useEffect(() => {
     fetchNotifications()
   }, [])
+
+  useEffect(() => {
+    const fetchSuperAdminApprovalCounts = async () => {
+      try {
+        if (user?.role !== 'super_admin') return
+
+        const [prs, pos] = await Promise.all([
+          purchaseRequestService.getAll(),
+          purchaseOrderService.getAll()
+        ])
+
+        const prCount = Array.isArray(prs)
+          ? prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Super Admin Final Approval').length
+          : 0
+
+        const poCount = Array.isArray(pos)
+          ? pos.filter(po => po.status === 'Draft').length
+          : 0
+
+        setSuperAdminApprovalCounts({ prs: prCount, pos: poCount })
+      } catch (err) {
+        console.error('Failed to fetch super admin approval counts', err)
+        setSuperAdminApprovalCounts({ prs: 0, pos: 0 })
+      }
+    }
+
+    fetchSuperAdminApprovalCounts()
+  }, [user?.role])
 
   const fetchNotifications = async () => {
     try {
@@ -915,6 +944,16 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
   const frontendRole = mapRole(currentRole)
   const navItems = roleNavItems[frontendRole] || []
 
+  const getNavLabel = (item) => {
+    if (frontendRole === 'superadmin' && item.id === 'approve-prs') {
+      return `PRs for Approval (${superAdminApprovalCounts.prs})`
+    }
+    if (frontendRole === 'superadmin' && item.id === 'approve-pos') {
+      return `POs for Approval (${superAdminApprovalCounts.pos})`
+    }
+    return item.label
+  }
+
   const displayRole = roleLabels[currentRole] || currentRole
   const displayRoleColor = roleColors[currentRole] || 'bg-gray-100 text-gray-800'
 
@@ -974,6 +1013,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
           {navItems.map(item => {
             const Icon = item.icon
             const isActive = activeNav === item.id
+            const label = getNavLabel(item)
             return (
               <button
                 key={item.id}
@@ -985,7 +1025,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
                 }`}
               >
                 <Icon className="w-5 h-5 flex-shrink-0" />
-                {(sidebarOpen || isMobile) && <span className="font-medium text-sm">{item.label}</span>}
+                {(sidebarOpen || isMobile) && <span className="font-medium text-sm">{label}</span>}
               </button>
             )
           })}
@@ -1268,6 +1308,7 @@ const BrowseItems = () => {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [showCreatePR, setShowCreatePR] = useState(false)
+  const [showCreatePRPreview, setShowCreatePRPreview] = useState(false)
   const [selectedItems, setSelectedItems] = useState([])
   const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
   const [submitting, setSubmitting] = useState(false)
@@ -1275,6 +1316,7 @@ const BrowseItems = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [branches, setBranches] = useState([])
   const [loadingBranches, setLoadingBranches] = useState(false)
+  const { user } = useAuth()
 
   useEffect(() => {
     fetchItems()
@@ -1665,12 +1707,124 @@ const BrowseItems = () => {
               >
                 Cancel
               </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowCreatePRPreview(true)}
+                disabled={selectedItems.length === 0}
+              >
+                <Eye className="w-4 h-4 mr-1" />
+                Preview
+              </Button>
               <Button 
                 onClick={handleSubmitPR}
                 disabled={submitting || selectedItems.length === 0}
               >
                 {submitting ? 'Submitting...' : 'Submit Request'}
               </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {showCreatePRPreview && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-2 sm:p-4">
+          <Card className="w-full max-w-4xl max-h-[95vh] sm:max-h-[90vh] overflow-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200 flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900">Purchase Request Preview</h2>
+                <p className="text-xs sm:text-sm text-gray-500 mt-1">Draft</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setShowCreatePRPreview(false)}>Close</Button>
+            </div>
+
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="border border-gray-300 bg-white text-xs sm:text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">PR Number:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 font-semibold text-gray-900">Draft</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Supplier:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">-</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Date Prepared:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{formatDate(new Date().toISOString())}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Address:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">-</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Date Needed:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{prFormData.date_needed ? formatDate(prFormData.date_needed) : '-'}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Project:</div>
+                  <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">{prFormData.project || '-'}</div>
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Requested By:</div>
+                  <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{user?.first_name || ''} {user?.last_name || ''}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Purpose:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{prFormData.purpose || '-'}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Remarks:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900 whitespace-pre-wrap">{prFormData.remarks || '-'}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Project Address:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{prFormData.project_address || '-'}</div>
+                </div>
+              </div>
+
+              <div className="border border-gray-300 overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm min-w-[500px]">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-gray-300">
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-12 sm:w-16">QTY</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-16 sm:w-20">UNIT</th>
+                      <th className="text-left py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300">DESCRIPTION</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 border-r border-gray-300 w-24 sm:w-32">UNIT COST</th>
+                      <th className="text-right py-2 sm:py-3 px-2 sm:px-3 font-semibold text-gray-700 w-24 sm:w-32">AMOUNT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedItems.map((item) => (
+                      <tr key={item.id} className="border-b border-gray-200">
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.name || item.item_name || item.item_code || '-'}</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right border-r border-gray-200">-</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right font-medium">-</td>
+                      </tr>
+                    ))}
+                    {selectedItems.length === 0 && (
+                      <tr>
+                        <td colSpan="5" className="py-4 text-center text-gray-500">No items selected</td>
+                      </tr>
+                    )}
+                    {selectedItems.length > 0 && (
+                      <tr className="bg-gray-50 italic">
+                        <td colSpan="5" className="py-2 px-2 sm:px-3 text-center text-gray-500">*** NOTHING FOLLOWS ***</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end">
+                <div className="border border-gray-300 bg-white">
+                  <div className="flex">
+                    <div className="bg-gray-100 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
+                    <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">-</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3">
+                <Button variant="secondary" onClick={() => setShowCreatePRPreview(false)}>Back</Button>
+                <Button onClick={handleSubmitPR} disabled={submitting || selectedItems.length === 0}>
+                  {submitting ? 'Submitting...' : 'Submit Request'}
+                </Button>
+              </div>
             </div>
           </Card>
         </div>
