@@ -73,7 +73,27 @@ router.get('/:id', authenticate, async (req, res) => {
       WHERE pri.purchase_request_id = ?
     `, [req.params.id]);
 
-    res.json({ purchaseRequest: { ...pr, items } });
+    // Get per-item rejection remarks if PR is rejected
+    let itemRemarks = [];
+    if (pr.status === 'Rejected') {
+      const [remarks] = await db.query(`
+        SELECT pirr.purchase_request_item_id, pirr.item_id, pirr.remark, pirr.created_at,
+               e.first_name as created_by_first_name, e.last_name as created_by_last_name
+        FROM pr_item_rejection_remarks pirr
+        LEFT JOIN employees e ON pirr.created_by = e.id
+        WHERE pirr.purchase_request_id = ?
+        ORDER BY pirr.created_at DESC
+      `, [req.params.id]);
+      itemRemarks = remarks;
+    }
+
+    // Add remarks to items
+    const itemsWithRemarks = items.map(item => ({
+      ...item,
+      rejection_remarks: itemRemarks.filter(r => r.purchase_request_item_id === item.id)
+    }));
+
+    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks } });
   } catch (error) {
     console.error('Fetch purchase request error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase request: ' + error.message });
@@ -196,17 +216,23 @@ router.post('/', authenticate, async (req, res) => {
 
 // Approve/Reject PR by Super Admin (First Approval - to Procurement)
 router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, async (req, res) => {
+  let conn;
   try {
-    const { status, remarks } = req.body;
+    const { status, remarks, item_remarks } = req.body;
     
-    const [prs] = await db.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    
+    const [prs] = await conn.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     
     const currentStatus = prs[0].status;
     
     if (currentStatus !== 'Pending' && currentStatus !== 'For Super Admin Final Approval') {
+      await conn.rollback();
       return res.status(400).json({ message: 'Invalid status for this approval step' });
     }
     
@@ -217,10 +243,31 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
       newStatus = 'Rejected';
     }
     
-    await db.query(
+    await conn.query(
       'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
       [newStatus, req.user.id, remarks, req.params.id]
     );
+
+    // Save per-item rejection remarks if rejecting
+    if (status === 'rejected' && item_remarks && item_remarks.length > 0) {
+      for (const itemRemark of item_remarks) {
+        // Get the actual item_id from purchase_request_items table
+        const [priResult] = await conn.query(
+          'SELECT item_id FROM purchase_request_items WHERE id = ? AND purchase_request_id = ?',
+          [itemRemark.item_id, req.params.id]
+        );
+        
+        if (priResult.length > 0) {
+          const actualItemId = priResult[0].item_id;
+          await conn.query(
+            'INSERT INTO pr_item_rejection_remarks (purchase_request_id, purchase_request_item_id, item_id, remark, created_by) VALUES (?, ?, ?, ?, ?)',
+            [req.params.id, itemRemark.item_id, actualItemId, itemRemark.remark, req.user.id]
+          );
+        }
+      }
+    }
+    
+    await conn.commit();
 
     // Get PR details for notification
     const [prDetails] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -279,24 +326,33 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
 
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error('Super Admin first approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
 // Approve/Reject PR by Procurement (to Super Admin Final Approval)
 router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
+  let conn;
   try {
-    const { status, rejection_reason, items, supplier_id, supplier_address } = req.body;
+    const { status, rejection_reason, items, supplier_id, supplier_address, item_remarks } = req.body;
     
-    const [prs] = await db.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    
+    const [prs] = await conn.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     
     const currentStatus = prs[0].status;
     
     if (currentStatus !== 'For Procurement Review') {
+      await conn.rollback();
       return res.status(400).json({ message: 'Purchase request not ready for Procurement approval' });
     }
     
@@ -308,6 +364,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       
       // Validate supplier_id is provided
       if (!supplier_id) {
+        await conn.rollback();
         return res.status(400).json({ message: 'Supplier is required for approval' });
       }
       
@@ -320,7 +377,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           const totalPrice = unitPrice * item.quantity;
           calculatedTotal += totalPrice;
           
-          await db.query(
+          await conn.query(
             'UPDATE purchase_request_items SET unit_price = ?, total_price = ? WHERE id = ?',
             [unitPrice, totalPrice, item.id]
           );
@@ -330,17 +387,38 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       }
       
       // Update PR status, total_amount, supplier_id and supplier_address
-      await db.query(
+      await conn.query(
         'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_address = ? WHERE id = ?',
         [newStatus, totalAmount, supplier_id, supplier_address || null, req.params.id]
       );
     } else {
       newStatus = 'Rejected';
-      await db.query(
+      await conn.query(
         'UPDATE purchase_requests SET status = ?, rejection_reason = ? WHERE id = ?',
         [newStatus, rejection_reason || null, req.params.id]
       );
+      
+      // Save per-item rejection remarks
+      if (item_remarks && item_remarks.length > 0) {
+        for (const itemRemark of item_remarks) {
+          // Get the actual item_id from purchase_request_items table
+          const [priResult] = await conn.query(
+            'SELECT item_id FROM purchase_request_items WHERE id = ? AND purchase_request_id = ?',
+            [itemRemark.item_id, req.params.id]
+          );
+          
+          if (priResult.length > 0) {
+            const actualItemId = priResult[0].item_id;
+            await conn.query(
+              'INSERT INTO pr_item_rejection_remarks (purchase_request_id, purchase_request_item_id, item_id, remark, created_by) VALUES (?, ?, ?, ?, ?)',
+              [req.params.id, itemRemark.item_id, actualItemId, itemRemark.remark, req.user.id]
+            );
+          }
+        }
+      }
     }
+    
+    await conn.commit();
 
     // Get PR details for notification
     const [prDetails] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -373,8 +451,11 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
 
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus, total_amount: totalAmount });
   } catch (error) {
+    if (conn) await conn.rollback();
     console.error('Procurement approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

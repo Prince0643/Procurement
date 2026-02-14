@@ -1385,13 +1385,19 @@ const BrowseItems = () => {
     if (selectedItems.find(i => i.id === item.id)) {
       setSelectedItems(selectedItems.filter(i => i.id !== item.id))
     } else {
-      setSelectedItems([...selectedItems, { ...item, quantity: 1 }])
+      setSelectedItems([...selectedItems, { ...item, quantity: 1, unit_cost: '' }])
     }
   }
 
   const updateQuantity = (itemId, quantity) => {
     setSelectedItems(selectedItems.map(item => 
       item.id === itemId ? { ...item, quantity: Math.max(1, quantity) } : item
+    ))
+  }
+
+  const updateUnitCost = (itemId, unitCost) => {
+    setSelectedItems(selectedItems.map(item =>
+      item.id === itemId ? { ...item, unit_cost: unitCost } : item
     ))
   }
 
@@ -1424,7 +1430,10 @@ const BrowseItems = () => {
         project_address: prFormData.project_address,
         items: selectedItems.map(item => ({
           item_id: item.id,
-          quantity: item.quantity
+          quantity: item.quantity,
+          ...((item.unit_cost !== '' && Number(item.unit_cost) > 0)
+            ? { unit_price: Number(item.unit_cost) }
+            : {})
         }))
       })
 
@@ -1691,8 +1700,20 @@ const BrowseItems = () => {
                         <p className="font-medium text-sm text-gray-900">{item.name || item.item_name}</p>
                         <p className="text-xs text-gray-500">{item.item_code}</p>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        Qty: {item.quantity}
+                      <div className="flex items-center gap-3">
+                        <div className="text-sm text-gray-600">Qty: {item.quantity}</div>
+                        <div className="w-40">
+                          <label className="block text-xs text-gray-500 mb-1">Unit Cost (optional)</label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={item.unit_cost}
+                            onChange={(e) => updateUnitCost(item.id, e.target.value)}
+                            className="w-full px-2 py-1 border border-gray-300 rounded text-sm bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            placeholder="e.g. 120.50"
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1738,6 +1759,16 @@ const BrowseItems = () => {
             </div>
 
             <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              {(() => {
+                const total = selectedItems.reduce((sum, it) => {
+                  const unitCost = Number(it.unit_cost)
+                  const qty = Number(it.quantity) || 0
+                  if (!Number.isFinite(unitCost) || it.unit_cost === '' || unitCost <= 0) return sum
+                  return sum + unitCost * qty
+                }, 0)
+                const totalAmountLabel = total > 0 ? formatCurrency(total) : '-'
+                return (
+                  <>
               <div className="border border-gray-300 bg-white text-xs sm:text-sm">
                 <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
                   <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">PR Number:</div>
@@ -1792,8 +1823,12 @@ const BrowseItems = () => {
                         <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.quantity}</td>
                         <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.unit || '-'}</td>
                         <td className="py-2 px-2 sm:px-3 text-gray-900 border-r border-gray-200">{item.name || item.item_name || item.item_code || '-'}</td>
-                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right border-r border-gray-200">-</td>
-                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right font-medium">-</td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right border-r border-gray-200">
+                          {item.unit_cost !== '' && Number(item.unit_cost) > 0 ? formatCurrency(Number(item.unit_cost)) : '-'}
+                        </td>
+                        <td className="py-2 px-2 sm:px-3 text-gray-900 text-right font-medium">
+                          {item.unit_cost !== '' && Number(item.unit_cost) > 0 ? formatCurrency(Number(item.unit_cost) * (Number(item.quantity) || 0)) : '-'}
+                        </td>
                       </tr>
                     ))}
                     {selectedItems.length === 0 && (
@@ -1814,7 +1849,7 @@ const BrowseItems = () => {
                 <div className="border border-gray-300 bg-white">
                   <div className="flex">
                     <div className="bg-gray-100 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
-                    <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">-</div>
+                    <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">{totalAmountLabel}</div>
                   </div>
                 </div>
               </div>
@@ -1825,6 +1860,9 @@ const BrowseItems = () => {
                   {submitting ? 'Submitting...' : 'Submit Request'}
                 </Button>
               </div>
+                  </>
+                )
+              })()}
             </div>
           </Card>
         </div>
@@ -2440,6 +2478,9 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                     <th className="text-right py-2 px-3 font-medium text-gray-600">Total</th>
                   </>
                 )}
+                {pr.status === 'Rejected' && (
+                  <th className="text-left py-2 px-3 font-medium text-gray-600 text-red-600">Rejection Remark</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -2454,11 +2495,29 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                       <td className="py-2 px-3 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
                     </>
                   )}
+                  {pr.status === 'Rejected' && (
+                    <td className="py-2 px-3">
+                      {item.rejection_remarks?.length > 0 ? (
+                        <div className="space-y-1">
+                          {item.rejection_remarks.map((remark, idx) => (
+                            <div key={idx} className="text-xs text-red-600 bg-red-50 p-1.5 rounded">
+                              <span className="font-medium">{remark.remark}</span>
+                              <span className="text-gray-500 ml-1">
+                                — {remark.created_by_first_name} {remark.created_by_last_name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">-</span>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={pr.status === 'Pending' ? 3 : 5} className="py-4 text-center text-gray-500">No items found</td>
+                  <td colSpan={pr.status === 'Pending' ? 3 : pr.status === 'Rejected' ? 6 : 5} className="py-4 text-center text-gray-500">No items found</td>
                 </tr>
               )}
             </tbody>
@@ -2550,15 +2609,26 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                 </table>
               </div>
 
-              {/* Total Amount */}
-              <div className="flex justify-end">
-                <div className="border border-gray-300 bg-white">
-                  <div className="flex">
-                    <div className="bg-gray-100 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
-                    <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">{pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
+              {/* Total Amount - compute from items if pr.total_amount not available */}
+              {(() => {
+                const computedTotal = items.reduce((sum, it) => {
+                  const up = Number(it.unit_price)
+                  const qty = Number(it.quantity) || 0
+                  if (!Number.isFinite(up) || up <= 0) return sum
+                  return sum + up * qty
+                }, 0)
+                const totalToShow = pr.total_amount || computedTotal
+                return (
+                  <div className="flex justify-end">
+                    <div className="border border-gray-300 bg-white">
+                      <div className="flex">
+                        <div className="bg-gray-100 px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-semibold text-gray-700 border-r border-gray-300">TOTAL AMOUNT:</div>
+                        <div className="px-4 sm:px-6 py-2 sm:py-3 text-xs sm:text-sm font-bold text-gray-900 min-w-[100px] sm:min-w-[150px] text-right">{totalToShow > 0 ? formatCurrency(totalToShow) : '-'}</div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                )
+              })()}
             </div>
           </Card>
         </div>
@@ -4779,6 +4849,7 @@ const ApprovePRs = () => {
   const [showRejectModal, setShowRejectModal] = useState(false)
   const [showApproveModal, setShowApproveModal] = useState(false)
   const [rejectionReason, setRejectionReason] = useState('')
+  const [itemRejectionRemarks, setItemRejectionRemarks] = useState({})
   const [approvalItems, setApprovalItems] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [selectedSupplier, setSelectedSupplier] = useState('')
@@ -4860,6 +4931,15 @@ const ApprovePRs = () => {
     ))
   }
 
+  const handleItemQuantityChange = (itemId, quantity) => {
+    const newQty = parseInt(quantity) || 1
+    setApprovalItems(prev => prev.map(item => 
+      item.id === itemId 
+        ? { ...item, quantity: newQty, total_price: (item.unit_price || 0) * newQty }
+        : item
+    ))
+  }
+
   const handleSupplierChange = (supplierId) => {
     setSelectedSupplier(supplierId)
     const selectedSupplierData = suppliers.find(s => s.id === parseInt(supplierId))
@@ -4909,30 +4989,48 @@ const ApprovePRs = () => {
   }
 
   const handleReject = async (pr) => {
-    // If rejection reason is empty and it's Procurement (required), show modal first
-    if (!rejectionReason.trim() && isProcurement) {
-      setSelectedPR(pr)
-      setShowRejectModal(true)
+    // If modal is not open yet, fetch PR details and show modal
+    if (!showRejectModal) {
+      try {
+        setActionLoading(true)
+        const prDetails = await purchaseRequestService.getById(pr.id)
+        setSelectedPR(prDetails)
+        
+        // Initialize item remarks
+        const initialRemarks = {}
+        prDetails.items?.forEach(item => {
+          initialRemarks[item.id] = ''
+        })
+        setItemRejectionRemarks(initialRemarks)
+        
+        setShowRejectModal(true)
+      } catch (err) {
+        console.error('Failed to fetch PR details', err)
+      } finally {
+        setActionLoading(false)
+      }
       return
     }
 
-    // For Super Admin, rejection reason is optional - proceed with or without reason
-    if (!rejectionReason.trim() && !showRejectModal) {
-      // First click - show modal to give SA chance to add reason (optional)
-      setSelectedPR(pr)
-      setShowRejectModal(true)
-      return
-    }
-
+    // Modal is already open - proceed with rejection
     setActionLoading(true)
     try {
+      // Build item remarks array for API (only include items with remarks)
+      const itemRemarksArray = Object.entries(itemRejectionRemarks)
+        .filter(([_, remark]) => remark.trim())
+        .map(([itemId, remark]) => ({
+          item_id: parseInt(itemId),
+          remark: remark.trim()
+        }))
+
       if (isSuperAdmin) {
-        await purchaseRequestService.superAdminFirstApprove(pr.id, 'rejected', rejectionReason)
+        await purchaseRequestService.superAdminFirstApprove(selectedPR.id, 'rejected', rejectionReason, itemRemarksArray)
       } else if (isProcurement) {
-        await purchaseRequestService.procurementApprove(pr.id, 'rejected', rejectionReason)
+        await purchaseRequestService.procurementApprove(selectedPR.id, 'rejected', rejectionReason, null, null, null, itemRemarksArray)
       }
       setShowRejectModal(false)
       setRejectionReason('')
+      setItemRejectionRemarks({})
       await fetchPRs()
     } catch (err) {
       console.error('Rejection failed', err)
@@ -5131,7 +5229,8 @@ const ApprovePRs = () => {
               <h2 className="text-lg font-semibold text-gray-900">Reject Purchase Request</h2>
               <p className="text-sm text-gray-500 mt-1">{selectedPR?.pr_number}</p>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-auto">
+              {/* General Rejection Reason */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   {isProcurement ? 'Rejection Reason (Required)' : 'Rejection Reason (Optional)'}
@@ -5140,10 +5239,36 @@ const ApprovePRs = () => {
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   placeholder="Enter reason for rejection..."
-                  rows="4"
+                  rows="3"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
+
+              {/* Per-Item Remarks */}
+              {selectedPR?.items?.length > 0 && (
+                <div className="border-t border-gray-200 pt-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Per-Item Remarks (Optional)
+                  </label>
+                  <div className="space-y-3">
+                    {selectedPR.items.map((item) => (
+                      <div key={item.id} className="bg-gray-50 rounded-md p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-900">{item.item_name || item.item_code}</span>
+                          <span className="text-xs text-gray-500">Qty: {item.quantity}</span>
+                        </div>
+                        <textarea
+                          value={itemRejectionRemarks[item.id] || ''}
+                          onChange={(e) => setItemRejectionRemarks(prev => ({ ...prev, [item.id]: e.target.value }))}
+                          placeholder={`Remark for ${item.item_name || item.item_code}...`}
+                          rows="2"
+                          className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
               <Button variant="secondary" onClick={() => setShowRejectModal(false)}>Cancel</Button>
@@ -5182,7 +5307,15 @@ const ApprovePRs = () => {
                     {approvalItems.map((item) => (
                       <tr key={item.id} className="border-t border-gray-100">
                         <td className="py-2 px-3">{item.item_name || item.item_code}</td>
-                        <td className="py-2 px-3">{item.quantity}</td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => handleItemQuantityChange(item.id, e.target.value)}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                          />
+                        </td>
                         <td className="py-2 px-3">{item.unit}</td>
                         <td className="py-2 px-3">
                           <input

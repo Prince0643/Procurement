@@ -16,13 +16,13 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  superAdminFirstApprove: async (id, status, remarks) => {
-    const response = await api.put(`/purchase-requests/${id}/super-admin-first-approve`, { status, remarks });
+  superAdminFirstApprove: async (id, status, remarks, itemRemarks) => {
+    const response = await api.put(`/purchase-requests/${id}/super-admin-first-approve`, { status, remarks, item_remarks: itemRemarks });
     return response.data;
   },
 
-  procurementApprove: async (id, status, rejection_reason, items, supplier_id, supplier_address) => {
-    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, { status, rejection_reason, items, supplier_id, supplier_address });
+  procurementApprove: async (id, status, rejection_reason, items, supplier_id, supplier_address, itemRemarks) => {
+    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, { status, rejection_reason, items, supplier_id, supplier_address, item_remarks: itemRemarks });
     return response.data;
   },
 
