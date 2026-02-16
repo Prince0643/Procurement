@@ -25,12 +25,15 @@ const PORT = process.env.PORT || 5000;
 const io = initSocket(httpServer);
 
 // Middleware
-app.use(cors({
+const corsOptions = {
   origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-app.options('*', cors());
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
