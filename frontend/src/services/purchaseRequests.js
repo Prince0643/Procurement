@@ -42,5 +42,20 @@ export const purchaseRequestService = {
   resubmit: async (id, prData) => {
     const response = await api.put(`/purchase-requests/${id}/resubmit`, prData);
     return response.data;
+  },
+
+  saveDraft: async (prData) => {
+    const response = await api.post('/purchase-requests', { ...prData, save_as_draft: true });
+    return response.data;
+  },
+
+  updateDraft: async (id, prData) => {
+    const response = await api.put(`/purchase-requests/${id}/draft`, prData);
+    return response.data;
+  },
+
+  submitDraft: async (id) => {
+    const response = await api.put(`/purchase-requests/${id}/submit-draft`);
+    return response.data;
   }
 };

@@ -73,9 +73,9 @@ router.get('/:id', authenticate, async (req, res) => {
       WHERE pri.purchase_request_id = ?
     `, [req.params.id]);
 
-    // Get per-item rejection remarks if PR is rejected
+    // Get per-item rejection remarks if PR is rejected or sent back to procurement
     let itemRemarks = [];
-    if (pr.status === 'Rejected') {
+    if (pr.status === 'Rejected' || pr.status === 'For Procurement Review') {
       const [remarks] = await db.query(`
         SELECT pirr.purchase_request_item_id, pirr.item_id, pirr.remark, pirr.created_at,
                e.first_name as created_by_first_name, e.last_name as created_by_last_name
@@ -104,14 +104,18 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, save_as_draft } = req.body;
+    const isDraft = save_as_draft === true;
 
-    if (!purpose || !String(purpose).trim()) {
-      return res.status(400).json({ message: 'Purpose is required' });
-    }
+    // Only validate required fields if NOT saving as draft
+    if (!isDraft) {
+      if (!purpose || !String(purpose).trim()) {
+        return res.status(400).json({ message: 'Purpose is required' });
+      }
 
-    if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ message: 'At least one item is required' });
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ message: 'At least one item is required' });
+      }
     }
 
     conn = await db.getConnection();
@@ -141,63 +145,57 @@ router.post('/', authenticate, async (req, res) => {
     }
 
     const prNumber = `${initials}-${year}-${month}-${String(counter).padStart(3, '0')}`;
+    const status = isDraft ? 'Draft' : 'For Procurement Review';
 
     const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address) VALUES (?, ?, ?, ?, 'Pending', ?, ?, ?)",
-      [prNumber, req.user.id, purpose, remarks ?? '', date_needed || null, project || null, project_address || null]
+      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null]
     );
 
     const prId = result.insertId;
 
-    for (const item of items) {
-      const itemId = item.item_id ?? item.id;
-      const quantity = Number(item.quantity);
+    // Insert items if provided (required for submit, optional for draft)
+    if (items && Array.isArray(items) && items.length > 0) {
+      for (const item of items) {
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
 
-      if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-        throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        }
+
+        const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        const totalPrice = unitPrice * quantity;
+
+        await conn.query(
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
+          [prId, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
+        );
       }
-
-      const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
-      const totalPrice = unitPrice * quantity;
-
-      await conn.query(
-        'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
-        [prId, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
-      );
     }
 
     await conn.commit();
 
-    // Notify procurement officers and Super Admins about new PR
-    const procurementOfficers = await getProcurementOfficers();
-    for (const officerId of procurementOfficers) {
-      await createNotification(
-        officerId,
-        'New PR Created',
-        `Purchase Request ${prNumber} has been created and is pending Super Admin approval`,
-        'PR Created',
-        prId,
-        'purchase_request'
-      );
-    }
-
-    // Also notify Super Admins for first approval
-    const superAdmins = await getSuperAdmins();
-    for (const adminId of superAdmins) {
-      await createNotification(
-        adminId,
-        'New PR Pending Approval',
-        `Purchase Request ${prNumber} has been created and requires your approval`,
-        'PR Created',
-        prId,
-        'purchase_request'
-      );
+    // Notify procurement officers only if NOT a draft
+    if (!isDraft) {
+      const procurementOfficers = await getProcurementOfficers();
+      for (const officerId of procurementOfficers) {
+        await createNotification(
+          officerId,
+          'New PR Created',
+          `Purchase Request ${prNumber} has been created and is ready for your review`,
+          'PR Created',
+          prId,
+          'purchase_request'
+        );
+      }
     }
 
     res.status(201).json({
-      message: 'Purchase request created successfully',
+      message: isDraft ? 'Draft saved successfully' : 'Purchase request created successfully',
       prId,
-      pr_number: prNumber
+      pr_number: prNumber,
+      status: status
     });
   } catch (error) {
     if (conn) {
@@ -209,6 +207,160 @@ router.post('/', authenticate, async (req, res) => {
     }
     console.error('Create purchase request error:', error);
     res.status(500).json({ message: 'Failed to create purchase request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Update Draft PR (engineer only)
+router.put('/:id/draft', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
+
+    // Check if PR exists and is draft
+    const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+
+    const pr = prs[0];
+
+    // Only the original requester can update draft
+    if (pr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can update this draft' });
+    }
+
+    // Only draft PRs can be updated
+    if (pr.status !== 'Draft') {
+      return res.status(400).json({ message: 'Only draft purchase requests can be updated' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Update PR details
+    await conn.query(
+      `UPDATE purchase_requests 
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, updated_at = NOW()
+       WHERE id = ?`,
+      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, req.params.id]
+    );
+
+    // Update items if provided
+    if (items && items.length > 0) {
+      // Delete existing items
+      await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
+
+      // Insert new items
+      for (const item of items) {
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
+
+        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        }
+
+        const unitPrice = Number(item.unit_price ?? 0);
+        const totalPrice = unitPrice * quantity;
+
+        await conn.query(
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.params.id, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
+        );
+      }
+    }
+
+    await conn.commit();
+
+    res.json({ message: 'Draft updated successfully', status: 'Draft' });
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
+    console.error('Update draft error:', error);
+    res.status(500).json({ message: 'Failed to update draft: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Submit Draft PR (engineer only) - moves to For Procurement Review and notifies procurement
+router.put('/:id/submit-draft', authenticate, async (req, res) => {
+  let conn;
+  try {
+    // Check if PR exists and is draft
+    const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+
+    const pr = prs[0];
+
+    // Only the original requester can submit
+    if (pr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can submit this draft' });
+    }
+
+    // Only draft PRs can be submitted
+    if (pr.status !== 'Draft') {
+      return res.status(400).json({ message: 'Only draft purchase requests can be submitted' });
+    }
+
+    // Validate required fields for submission
+    if (!pr.purpose || !String(pr.purpose).trim()) {
+      return res.status(400).json({ message: 'Purpose is required to submit' });
+    }
+
+    // Check if PR has items
+    const [itemCount] = await db.query(
+      'SELECT COUNT(*) as count FROM purchase_request_items WHERE purchase_request_id = ?',
+      [req.params.id]
+    );
+
+    if (itemCount[0].count === 0) {
+      return res.status(400).json({ message: 'At least one item is required to submit' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Update status to For Procurement Review
+    await conn.query(
+      "UPDATE purchase_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
+      [req.params.id]
+    );
+
+    await conn.commit();
+
+    // Notify procurement officers
+    const procurementOfficers = await getProcurementOfficers();
+    for (const officerId of procurementOfficers) {
+      await createNotification(
+        officerId,
+        'New PR Created',
+        `Purchase Request ${pr.pr_number} has been created and is ready for your review`,
+        'PR Created',
+        pr.id,
+        'purchase_request'
+      );
+    }
+
+    res.json({ message: 'Draft submitted successfully', status: 'For Procurement Review' });
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
+    console.error('Submit draft error:', error);
+    res.status(500).json({ message: 'Failed to submit draft: ' + error.message });
   } finally {
     if (conn) conn.release();
   }
@@ -231,14 +383,18 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     
     const currentStatus = prs[0].status;
     
-    if (currentStatus !== 'Pending' && currentStatus !== 'For Super Admin Final Approval') {
+    if (currentStatus !== 'For Super Admin Final Approval' && currentStatus !== 'On Hold') {
       await conn.rollback();
       return res.status(400).json({ message: 'Invalid status for this approval step' });
     }
     
     let newStatus;
     if (status === 'approved') {
-      newStatus = currentStatus === 'Pending' ? 'For Procurement Review' : 'For Purchase';
+      newStatus = 'For Purchase';
+    } else if (status === 'hold') {
+      newStatus = 'On Hold';
+    } else if (status === 'rejected') {
+      newStatus = 'For Procurement Review';
     } else {
       newStatus = 'Rejected';
     }
@@ -274,44 +430,39 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     const pr = prDetails[0];
 
     if (status === 'approved') {
-      if (currentStatus === 'Pending') {
-        // First approval - notify procurement
-        const procurementOfficers = await getProcurementOfficers();
-        for (const officerId of procurementOfficers) {
-          await createNotification(
-            officerId,
-            'PR Approved - Review Required',
-            `Purchase Request ${pr.pr_number} has been approved by Super Admin and requires your review`,
-            'PR Approved',
-            req.params.id,
-            'purchase_request'
-          );
-        }
-      } else {
-        // Final approval - notify engineer
+      // Final approval - notify engineer
+      await createNotification(
+        pr.requested_by,
+        'PR Fully Approved',
+        `Your Purchase Request ${pr.pr_number} has been fully approved and is ready for purchase`,
+        'PR Approved',
+        req.params.id,
+        'purchase_request'
+      );
+      
+      // Also notify admins who can create POs
+      const { getAdmins } = await import('../utils/notifications.js');
+      const admins = await getAdmins();
+      for (const adminId of admins) {
         await createNotification(
-          pr.requested_by,
-          'PR Fully Approved',
-          `Your Purchase Request ${pr.pr_number} has been fully approved and is ready for purchase`,
+          adminId,
+          'PR Ready for PO Creation',
+          `Purchase Request ${pr.pr_number} has been approved and is ready for PO creation`,
           'PR Approved',
           req.params.id,
           'purchase_request'
         );
-        
-        // Also notify admins who can create POs
-        const { getAdmins } = await import('../utils/notifications.js');
-        const admins = await getAdmins();
-        for (const adminId of admins) {
-          await createNotification(
-            adminId,
-            'PR Ready for PO Creation',
-            `Purchase Request ${pr.pr_number} has been approved and is ready for PO creation`,
-            'PR Approved',
-            req.params.id,
-            'purchase_request'
-          );
-        }
       }
+    } else if (status === 'hold') {
+      // On Hold - notify engineer
+      await createNotification(
+        pr.requested_by,
+        'PR On Hold',
+        `Your Purchase Request ${pr.pr_number} has been placed on hold by Super Admin${remarks ? ': ' + remarks : ''}`,
+        'PR On Hold',
+        req.params.id,
+        'purchase_request'
+      );
     } else {
       // Rejected - notify engineer
       await createNotification(
@@ -377,9 +528,10 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           const totalPrice = unitPrice * item.quantity;
           calculatedTotal += totalPrice;
           
+          // Update unit_price, total_price, and unit if provided
           await conn.query(
-            'UPDATE purchase_request_items SET unit_price = ?, total_price = ? WHERE id = ?',
-            [unitPrice, totalPrice, item.id]
+            'UPDATE purchase_request_items SET unit_price = ?, total_price = ?, unit = ? WHERE id = ?',
+            [unitPrice, totalPrice, item.unit || null, item.id]
           );
         }
         
@@ -587,11 +739,11 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
-    // Update PR details and reset status to Pending, clear all pricing data
+    // Update PR details and reset status to For Procurement Review, clear all pricing data
     await conn.query(
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, 
-           status = 'Pending', approved_by = NULL, approved_at = NULL, 
+           status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
            supplier_id = NULL, supplier_address = NULL, rejection_reason = NULL, 
            total_amount = NULL, updated_at = NOW()
        WHERE id = ?`,
@@ -623,7 +775,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
     await conn.commit();
 
-    // Notify procurement officers and Super Admins about resubmitted PR
+    // Notify procurement officers about resubmitted PR
     const procurementOfficers = await getProcurementOfficers();
     for (const officerId of procurementOfficers) {
       await createNotification(
@@ -636,19 +788,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       );
     }
 
-    const superAdmins = await getSuperAdmins();
-    for (const adminId of superAdmins) {
-      await createNotification(
-        adminId,
-        'PR Resubmitted - Pending Approval',
-        `Purchase Request ${pr.pr_number} has been resubmitted and requires your approval`,
-        'PR Created',
-        pr.id,
-        'purchase_request'
-      );
-    }
-
-    res.json({ message: 'Purchase request resubmitted successfully', status: 'Pending' });
+    res.json({ message: 'Purchase request resubmitted successfully', status: 'For Procurement Review' });
   } catch (error) {
     if (conn) {
       try {

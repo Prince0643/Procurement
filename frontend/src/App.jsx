@@ -40,7 +40,8 @@ import {
   Settings,
   Menu,
   X,
-  RefreshCw
+  RefreshCw,
+  PauseCircle
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -60,7 +61,7 @@ const MOCK_SUPPLIERS = [
 
 const MOCK_PURCHASE_REQUESTS = [
   { id: 1, pr_number: 'PR-2024-001', requested_by: 'Engineer 1', purpose: 'New laptop for development', remarks: 'Urgent need', status: 'Approved', approved_by: 'Super Admin', approved_at: '2024-01-15', rejection_reason: null, created_at: '2024-01-10' },
-  { id: 2, pr_number: 'PR-2024-002', requested_by: 'Engineer 2', purpose: 'Office supplies replenishment', remarks: 'Monthly restock', status: 'Pending', approved_by: null, approved_at: null, rejection_reason: null, created_at: '2024-01-16' },
+  { id: 2, pr_number: 'PR-2024-002', requested_by: 'Engineer 2', purpose: 'Office supplies replenishment', remarks: 'Monthly restock', status: 'For Procurement Review', approved_by: null, approved_at: null, rejection_reason: null, created_at: '2024-01-16' },
   { id: 3, pr_number: 'PR-2024-003', requested_by: 'Engineer 1', purpose: 'New chairs for conference room', remarks: 'For 10 people', status: 'For Purchase', approved_by: 'Super Admin', approved_at: '2024-01-12', rejection_reason: null, created_at: '2024-01-08' },
   { id: 4, pr_number: 'PR-2024-004', requested_by: 'Engineer 3', purpose: 'Printer maintenance kit', remarks: 'Annual maintenance', status: 'Rejected', approved_by: 'Super Admin', approved_at: null, rejection_reason: 'Budget exceeded for this quarter', created_at: '2024-01-14' },
   { id: 5, pr_number: 'PR-2024-005', requested_by: 'Engineer 2', purpose: 'Wireless keyboards', remarks: 'For new hires', status: 'Completed', approved_by: 'Super Admin', approved_at: '2024-01-05', rejection_reason: null, created_at: '2024-01-01' },
@@ -108,9 +109,9 @@ const getStatusColor = (status) => {
   const colors = {
     'Active': 'bg-green-100 text-green-800',
     'Inactive': 'bg-gray-100 text-gray-800',
-    'Pending': 'bg-yellow-100 text-yellow-800',
     'For Procurement Review': 'bg-blue-100 text-blue-800',
     'For Super Admin Final Approval': 'bg-indigo-100 text-indigo-800',
+    'On Hold': 'bg-yellow-100 text-yellow-800',
     'For Purchase': 'bg-purple-100 text-purple-800',
     'PO Created': 'bg-orange-100 text-orange-800',
     'Approved': 'bg-green-100 text-green-800',
@@ -795,7 +796,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
         ])
 
         const prCount = Array.isArray(prs)
-          ? prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Super Admin Final Approval').length
+          ? prs.filter(pr => pr.status === 'For Super Admin Final Approval').length
           : 0
 
         const poCount = Array.isArray(pos)
@@ -1200,7 +1201,7 @@ const EngineerDashboard = () => {
     }
   }
 
-  const pendingCount = prs.filter(pr => pr.status === 'Pending').length
+  const pendingCount = prs.filter(pr => pr.status === 'For Procurement Review').length
   const inReviewCount = prs.filter(pr => ['For Procurement Review', 'For Super Admin Final Approval'].includes(pr.status)).length
   const forPurchaseCount = prs.filter(pr => pr.status === 'For Purchase').length
   const completedCount = prs.filter(pr => pr.status === 'Completed').length
@@ -1219,7 +1220,7 @@ const EngineerDashboard = () => {
         <Card className="p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Pending</p>
+              <p className="text-sm font-medium text-gray-600">For Procurement Review</p>
               <p className="text-3xl font-bold text-yellow-600 mt-2">{pendingCount}</p>
             </div>
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center">
@@ -1447,6 +1448,42 @@ const BrowseItems = () => {
       }, 2000)
     } catch (err) {
       setSubmitError(err.response?.data?.message || 'Failed to create purchase request')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSaveDraft = async () => {
+    setSubmitting(true)
+    setSubmitError('')
+    setSubmitSuccess(false)
+
+    try {
+      await purchaseRequestService.saveDraft({
+        purpose: prFormData.purpose,
+        remarks: prFormData.remarks,
+        date_needed: prFormData.date_needed,
+        project: prFormData.project,
+        project_address: prFormData.project_address,
+        items: selectedItems.map(item => ({
+          item_id: item.id,
+          quantity: item.quantity,
+          ...((item.unit_cost !== '' && Number(item.unit_cost) > 0)
+            ? { unit_price: Number(item.unit_cost) }
+            : {})
+        }))
+      })
+
+      setSubmitSuccess(true)
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
+      setSelectedItems([])
+      
+      setTimeout(() => {
+        setShowCreatePR(false)
+        setSubmitSuccess(false)
+      }, 2000)
+    } catch (err) {
+      setSubmitError(err.response?.data?.message || 'Failed to save draft')
     } finally {
       setSubmitting(false)
     }
@@ -1735,6 +1772,13 @@ const BrowseItems = () => {
               >
                 <Eye className="w-4 h-4 mr-1" />
                 Preview
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={handleSaveDraft}
+                disabled={submitting || selectedItems.length === 0}
+              >
+                {submitting ? 'Saving...' : 'Save Draft'}
               </Button>
               <Button 
                 onClick={handleSubmitPR}
@@ -2170,7 +2214,7 @@ const MyPurchaseRequests = () => {
     }
   }
 
-  const allStatuses = ['all', 'Pending', 'For Procurement Review', 'For Super Admin Final Approval', 'For Purchase', 'PO Created', 'Completed', 'Rejected', 'Cancelled']
+  const allStatuses = ['all', 'Draft', 'For Procurement Review', 'For Super Admin Final Approval', 'For Purchase', 'PO Created', 'Completed', 'Rejected', 'Cancelled']
   const filteredPRs = filterStatus === 'all' ? prs : prs.filter(pr => pr.status === filterStatus)
 
   if (loading) {
@@ -2331,6 +2375,26 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
   // Check if user can resubmit (only original requester and status is Rejected)
   const canResubmit = pr.status === 'Rejected' && pr.requested_by === user?.id
 
+  // Check if user can submit draft (only original requester and status is Draft)
+  const canSubmitDraft = pr.status === 'Draft' && pr.requested_by === user?.id
+
+  // Check if user can edit draft (only original requester and status is Draft)
+  const canEditDraft = pr.status === 'Draft' && pr.requested_by === user?.id
+
+  // State for edit draft modal
+  const [showEditDraftModal, setShowEditDraftModal] = useState(false)
+  const [editDraftLoading, setEditDraftLoading] = useState(false)
+  const [editDraftError, setEditDraftError] = useState('')
+  const [editDraftSuccess, setEditDraftSuccess] = useState(false)
+  const [editDraftFormData, setEditDraftFormData] = useState({
+    purpose: '',
+    remarks: '',
+    date_needed: '',
+    project: '',
+    project_address: ''
+  })
+  const [editDraftItems, setEditDraftItems] = useState([])
+
   useEffect(() => {
     const fetchDetails = async () => {
       try {
@@ -2338,8 +2402,17 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
         setPr(data)
         setItems(data.items || [])
         setEditedItems(data.items || [])
+        setEditDraftItems(data.items || [])
         // Initialize form data with current PR values
         setResubmitFormData({
+          purpose: data.purpose || '',
+          remarks: data.remarks || '',
+          date_needed: data.date_needed ? data.date_needed.split('T')[0] : '',
+          project: data.project || '',
+          project_address: data.project_address || ''
+        })
+        // Initialize edit draft form data
+        setEditDraftFormData({
           purpose: data.purpose || '',
           remarks: data.remarks || '',
           date_needed: data.date_needed ? data.date_needed.split('T')[0] : '',
@@ -2396,7 +2469,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
       setResubmitSuccess(true)
       
       // Update local state
-      setPr(prev => ({ ...prev, status: 'Pending' }))
+      setPr(prev => ({ ...prev, status: 'For Procurement Review' }))
       
       // Close modal after success
       setTimeout(() => {
@@ -2407,6 +2480,68 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
       setResubmitError(err.response?.data?.message || 'Failed to resubmit PR')
     } finally {
       setResubmitLoading(false)
+    }
+  }
+
+  const handleSubmitDraft = async () => {
+    if (!pr.purpose || !String(pr.purpose).trim()) {
+      alert('Purpose is required to submit this draft')
+      return
+    }
+    if (items.length === 0) {
+      alert('At least one item is required to submit this draft')
+      return
+    }
+    try {
+      await purchaseRequestService.submitDraft(pr.id)
+      setPr(prev => ({ ...prev, status: 'For Procurement Review' }))
+      alert('Draft submitted successfully!')
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to submit draft')
+    }
+  }
+
+  const handleEditDraft = async () => {
+    setEditDraftLoading(true)
+    setEditDraftError('')
+    setEditDraftSuccess(false)
+
+    try {
+      const updateData = {
+        purpose: editDraftFormData.purpose,
+        remarks: editDraftFormData.remarks,
+        date_needed: editDraftFormData.date_needed,
+        project: editDraftFormData.project,
+        project_address: editDraftFormData.project_address,
+        items: editDraftItems.map(item => ({
+          item_id: item.item_id,
+          quantity: item.quantity,
+          ...((item.unit_price > 0) ? { unit_price: item.unit_price } : {})
+        }))
+      }
+
+      await purchaseRequestService.updateDraft(pr.id, updateData)
+      setEditDraftSuccess(true)
+      
+      // Update local PR state
+      setPr(prev => ({
+        ...prev,
+        purpose: editDraftFormData.purpose,
+        remarks: editDraftFormData.remarks,
+        date_needed: editDraftFormData.date_needed,
+        project: editDraftFormData.project,
+        project_address: editDraftFormData.project_address
+      }))
+      
+      // Close modal after success
+      setTimeout(() => {
+        setShowEditDraftModal(false)
+        setEditDraftSuccess(false)
+      }, 2000)
+    } catch (err) {
+      setEditDraftError(err.response?.data?.message || 'Failed to update draft')
+    } finally {
+      setEditDraftLoading(false)
     }
   }
 
@@ -2457,6 +2592,20 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
               <span className="sm:hidden">Resubmit</span>
             </Button>
           )}
+          {canEditDraft && (
+            <Button size="sm" variant="secondary" onClick={() => setShowEditDraftModal(true)}>
+              <Edit className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Edit Draft</span>
+              <span className="sm:hidden">Edit</span>
+            </Button>
+          )}
+          {canSubmitDraft && (
+            <Button size="sm" variant="primary" onClick={handleSubmitDraft}>
+              <CheckCircle className="w-4 h-4 mr-1" />
+              <span className="hidden sm:inline">Submit Draft</span>
+              <span className="sm:hidden">Submit</span>
+            </Button>
+          )}
         </div>
       </div>
       
@@ -2472,13 +2621,13 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
                 <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
-                {pr.status !== 'Pending' && (
+                {pr.status !== 'For Procurement Review' && (
                   <>
                     <th className="text-right py-2 px-3 font-medium text-gray-600">Unit Cost</th>
                     <th className="text-right py-2 px-3 font-medium text-gray-600">Total</th>
                   </>
                 )}
-                {pr.status === 'Rejected' && (
+                {pr.status === 'Rejected' || pr.status === 'For Procurement Review' && (
                   <th className="text-left py-2 px-3 font-medium text-gray-600 text-red-600">Rejection Remark</th>
                 )}
               </tr>
@@ -2489,13 +2638,13 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                   <td className="py-2 px-3">{item.item_name || item.item_code}</td>
                   <td className="py-2 px-3">{item.quantity}</td>
                   <td className="py-2 px-3">{item.unit}</td>
-                  {pr.status !== 'Pending' && (
+                  {pr.status !== 'For Procurement Review' && (
                     <>
                       <td className="py-2 px-3 text-right">{item.unit_price ? formatCurrency(item.unit_price) : '-'}</td>
                       <td className="py-2 px-3 text-right font-medium">{item.total_price ? formatCurrency(item.total_price) : '-'}</td>
                     </>
                   )}
-                  {pr.status === 'Rejected' && (
+                  {pr.status === 'Rejected' || pr.status === 'For Procurement Review' && (
                     <td className="py-2 px-3">
                       {item.rejection_remarks?.length > 0 ? (
                         <div className="space-y-1">
@@ -2517,7 +2666,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
               ))}
               {items.length === 0 && (
                 <tr>
-                  <td colSpan={pr.status === 'Pending' ? 3 : pr.status === 'Rejected' ? 6 : 5} className="py-4 text-center text-gray-500">No items found</td>
+                  <td colSpan={pr.status === 'For Procurement Review' ? 4 : pr.status === 'Rejected' ? 6 : 5} className="py-4 text-center text-gray-500">No items found</td>
                 </tr>
               )}
             </tbody>
@@ -2650,7 +2799,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
               )}
               {resubmitSuccess && (
                 <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                  <p className="text-sm text-green-700">PR resubmitted successfully! Status changed to Pending.</p>
+                  <p className="text-sm text-green-700">PR resubmitted successfully! Status changed to For Procurement Review.</p>
                 </div>
               )}
 
@@ -2754,6 +2903,132 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                 disabled={resubmitLoading || !resubmitFormData.purpose}
               >
                 {resubmitLoading ? 'Resubmitting...' : 'Resubmit PR'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Edit Draft Modal */}
+      {showEditDraftModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Edit Draft PR</h2>
+              <p className="text-sm text-gray-500 mt-1">{pr.pr_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {editDraftError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{editDraftError}</p>
+                </div>
+              )}
+              {editDraftSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-700">Draft updated successfully!</p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose *</label>
+                <input
+                  type="text"
+                  value={editDraftFormData.purpose}
+                  onChange={(e) => setEditDraftFormData({ ...editDraftFormData, purpose: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
+                  <input
+                    type="date"
+                    value={editDraftFormData.date_needed}
+                    onChange={(e) => setEditDraftFormData({ ...editDraftFormData, date_needed: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                  <input
+                    type="text"
+                    value={editDraftFormData.project}
+                    onChange={(e) => setEditDraftFormData({ ...editDraftFormData, project: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Address</label>
+                <input
+                  type="text"
+                  value={editDraftFormData.project_address}
+                  onChange={(e) => setEditDraftFormData({ ...editDraftFormData, project_address: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  value={editDraftFormData.remarks}
+                  onChange={(e) => setEditDraftFormData({ ...editDraftFormData, remarks: e.target.value })}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Items</label>
+                <div className="border rounded-md overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
+                        <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {editDraftItems.map((item, index) => (
+                        <tr key={item.id} className="border-t border-gray-100">
+                          <td className="py-2 px-3">{item.item_name || item.item_code}</td>
+                          <td className="py-2 px-3">
+                            <input
+                              type="number"
+                              min="1"
+                              value={item.quantity}
+                              onChange={(e) => {
+                                const newItems = [...editDraftItems]
+                                newItems[index].quantity = parseInt(e.target.value) || 1
+                                setEditDraftItems(newItems)
+                              }}
+                              className="w-20 px-2 py-1 border border-gray-300 rounded text-sm"
+                            />
+                          </td>
+                          <td className="py-2 px-3">{item.unit}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button
+                variant="secondary"
+                onClick={() => setShowEditDraftModal(false)}
+                disabled={editDraftLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleEditDraft}
+                disabled={editDraftLoading || !editDraftFormData.purpose}
+              >
+                {editDraftLoading ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </Card>
@@ -4727,7 +5002,7 @@ const ProcurementDashboard = () => {
 
 // ============ SUPER ADMIN VIEWS ============
 const SuperAdminDashboard = () => {
-  const pendingApprovals = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Pending').length
+  const pendingApprovals = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'For Procurement Review').length
   const totalPRs = MOCK_PURCHASE_REQUESTS.length
   const approvedPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Approved').length
   const rejectedPRs = MOCK_PURCHASE_REQUESTS.filter(pr => pr.status === 'Rejected').length
@@ -4863,10 +5138,8 @@ const ApprovePRs = () => {
   // Determine which PRs to show based on role
   const getPendingPRs = () => {
     if (isSuperAdmin) {
-      // Super Admin sees: Pending (first approval) and For Super Admin Final Approval (final approval)
-      return prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Super Admin Final Approval')
+      return prs.filter(pr => pr.status === 'For Super Admin Final Approval' || pr.status === 'On Hold')
     } else if (isProcurement) {
-      // Procurement sees: For Procurement Review
       return prs.filter(pr => pr.status === 'For Procurement Review')
     }
     return []
@@ -4940,6 +5213,14 @@ const ApprovePRs = () => {
     ))
   }
 
+  const handleItemUnitChange = (itemId, unit) => {
+    setApprovalItems(prev => prev.map(item => 
+      item.id === itemId 
+        ? { ...item, unit: unit || '' }
+        : item
+    ))
+  }
+
   const handleSupplierChange = (supplierId) => {
     setSelectedSupplier(supplierId)
     const selectedSupplierData = suppliers.find(s => s.id === parseInt(supplierId))
@@ -4960,11 +5241,12 @@ const ApprovePRs = () => {
     
     setActionLoading(true)
     try {
-      // Prepare items array with id, unit_price, and quantity
+      // Prepare items array with id, unit_price, quantity, and unit
       const itemsForApi = approvalItems.map(item => ({
         id: item.id,
         unit_price: item.unit_price || 0,
-        quantity: item.quantity
+        quantity: item.quantity,
+        unit: item.unit
       }))
       
       await purchaseRequestService.procurementApprove(
@@ -5039,8 +5321,19 @@ const ApprovePRs = () => {
     }
   }
 
+  const handleHold = async (pr) => {
+    setActionLoading(true)
+    try {
+      await purchaseRequestService.superAdminFirstApprove(pr.id, 'hold')
+      await fetchPRs()
+    } catch (err) {
+      console.error('Hold failed', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   const getApprovalLabel = (status) => {
-    if (status === 'Pending') return 'SA First Approval'
     if (status === 'For Procurement Review') return 'Procurement Review'
     if (status === 'For Super Admin Final Approval') return 'SA Final Approval'
     return ''
@@ -5063,7 +5356,7 @@ const ApprovePRs = () => {
           </h2>
           <p className="text-sm text-gray-500 mt-1">
             {isSuperAdmin 
-              ? 'First approval: Pending → For Procurement Review | Final approval: For Super Admin Final Approval → For Purchase'
+              ? 'Final approval: For Super Admin Final Approval → For Purchase'
               : 'Review PRs and forward to Super Admin for final approval'}
           </p>
         </div>
@@ -5110,6 +5403,17 @@ const ApprovePRs = () => {
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Approve
                         </Button>
+                        {isSuperAdmin && (
+                          <Button 
+                            size="sm" 
+                            variant="warning" 
+                            onClick={(e) => { e.stopPropagation(); handleHold(pr); }}
+                            disabled={actionLoading}
+                          >
+                            <PauseCircle className="w-4 h-4 mr-1" />
+                            Hold
+                          </Button>
+                        )}
                         <Button 
                           size="sm" 
                           variant="danger" 
@@ -5196,6 +5500,16 @@ const ApprovePRs = () => {
                     >
                       <CheckCircle className="w-4 h-4" />
                     </Button>
+                    {isSuperAdmin && (
+                      <Button 
+                        size="sm" 
+                        variant="warning" 
+                        onClick={(e) => { e.stopPropagation(); handleHold(pr); }}
+                        disabled={actionLoading}
+                      >
+                        <PauseCircle className="w-4 h-4" />
+                      </Button>
+                    )}
                     <Button 
                       size="sm" 
                       variant="danger" 
@@ -5316,7 +5630,15 @@ const ApprovePRs = () => {
                             className="w-16 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
                           />
                         </td>
-                        <td className="py-2 px-3">{item.unit}</td>
+                        <td className="py-2 px-3">
+                          <input
+                            type="text"
+                            value={item.unit || ''}
+                            onChange={(e) => handleItemUnitChange(item.id, e.target.value)}
+                            placeholder="unit"
+                            className="w-20 px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                          />
+                        </td>
                         <td className="py-2 px-3">
                           <input
                             type="number"

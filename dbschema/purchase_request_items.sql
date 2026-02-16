@@ -5,6 +5,7 @@ CREATE TABLE `purchase_request_items` (
   `quantity` INT NOT NULL,
   `unit_price` DECIMAL(10,2) DEFAULT 0.00,
   `total_price` DECIMAL(10,2) DEFAULT 0.00,
+  `unit` VARCHAR(50) DEFAULT NULL,
   `remarks` TEXT,
   `status` ENUM('Pending', 'For Purchase', 'Purchased', 'Received') DEFAULT 'Pending',
   `received_by` INT,
