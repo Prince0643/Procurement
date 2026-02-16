@@ -1,7 +1,9 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { createServer } from 'http';
 import db from './config/database.js';
+import { initSocket } from './utils/socket.js';
 
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
@@ -16,7 +18,11 @@ import employeeRoutes from './routes/employees.js';
 dotenv.config();
 
 const app = express();
+const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
+
+// Initialize Socket.IO
+const io = initSocket(httpServer);
 
 // Middleware
 app.use(cors({
@@ -27,6 +33,12 @@ app.use(cors({
 app.options('*', cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Make io available to routes
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
 
 // Test database connection
 app.get('/api/health', async (req, res) => {
@@ -71,7 +83,9 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-app.listen(PORT, () => {
+httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
 });
+
+export { io };

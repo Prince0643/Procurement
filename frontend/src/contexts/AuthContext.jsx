@@ -45,7 +45,8 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated,
     loading,
     login,
-    logout
+    logout,
+    token: authService.getToken()
   };
 
   return (

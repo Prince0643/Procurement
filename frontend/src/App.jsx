@@ -7,6 +7,7 @@ import { supplierService } from './services/suppliers'
 import { reportService } from './services/reports'
 import { notificationService } from './services/notifications'
 import { employeeService } from './services/employees'
+import { socketService } from './services/socket'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
 import { authService } from './services/auth'
@@ -783,6 +784,19 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
 
   useEffect(() => {
     fetchNotifications()
+  }, [])
+
+  // Listen for real-time notifications
+  useEffect(() => {
+    const handleNewNotification = () => {
+      fetchNotifications()
+    }
+    
+    window.addEventListener('new-notification', handleNewNotification)
+    
+    return () => {
+      window.removeEventListener('new-notification', handleNewNotification)
+    }
   }, [])
 
   useEffect(() => {
@@ -2198,6 +2212,21 @@ const MyPurchaseRequests = () => {
 
   useEffect(() => {
     fetchPRs()
+  }, [])
+
+  // Listen for real-time updates
+  useEffect(() => {
+    const handlePRUpdate = () => {
+      fetchPRs()
+    }
+    
+    window.addEventListener('pr-updated', handlePRUpdate)
+    window.addEventListener('pr-status-changed', handlePRUpdate)
+    
+    return () => {
+      window.removeEventListener('pr-updated', handlePRUpdate)
+      window.removeEventListener('pr-status-changed', handlePRUpdate)
+    }
   }, [])
 
   const fetchPRs = async () => {
@@ -5151,6 +5180,21 @@ const ApprovePRs = () => {
     fetchPRs()
   }, [])
 
+  // Listen for real-time updates
+  useEffect(() => {
+    const handlePRUpdate = () => {
+      fetchPRs()
+    }
+    
+    window.addEventListener('pr-updated', handlePRUpdate)
+    window.addEventListener('pr-status-changed', handlePRUpdate)
+    
+    return () => {
+      window.removeEventListener('pr-updated', handlePRUpdate)
+      window.removeEventListener('pr-status-changed', handlePRUpdate)
+    }
+  }, [])
+
   const fetchPRs = async () => {
     try {
       setLoading(true)
@@ -6732,8 +6776,38 @@ const EmployeesManagement = () => {
 
 // ============ MAIN APP ============
 function App() {
-  const { user, isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, loading, token } = useAuth()
   const [activeNav, setActiveNav] = useState('dashboard')
+
+  // Initialize socket connection when authenticated
+  useEffect(() => {
+    if (isAuthenticated && user && token) {
+      socketService.connect(token, user.id, user.role)
+      
+      // Listen for real-time updates
+      socketService.on('pr_updated', (data) => {
+        console.log('Real-time PR update:', data)
+        // Trigger a refresh of PR data
+        window.dispatchEvent(new CustomEvent('pr-updated', { detail: data }))
+      })
+      
+      socketService.on('pr_status_changed', (data) => {
+        console.log('Real-time PR status change:', data)
+        // Trigger a refresh of PR data
+        window.dispatchEvent(new CustomEvent('pr-status-changed', { detail: data }))
+      })
+      
+      socketService.on('notification', (data) => {
+        console.log('Real-time notification:', data)
+        // Trigger notification refresh
+        window.dispatchEvent(new CustomEvent('new-notification', { detail: data }))
+      })
+      
+      return () => {
+        socketService.disconnect()
+      }
+    }
+  }, [isAuthenticated, user, token])
 
   // Show loading state while checking auth
   if (loading) {

@@ -350,6 +350,14 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
       );
     }
 
+    // Emit real-time PR update to all procurement officers
+    req.io.to('role_procurement').emit('pr_updated', {
+      id: pr.id,
+      pr_number: pr.pr_number,
+      status: 'For Procurement Review',
+      type: 'new_pr'
+    });
+
     res.json({ message: 'Draft submitted successfully', status: 'For Procurement Review' });
   } catch (error) {
     if (conn) {
@@ -475,6 +483,15 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
       );
     }
 
+    // Emit real-time PR status update
+    req.io.emit('pr_status_changed', {
+      id: req.params.id,
+      pr_number: pr.pr_number,
+      status: newStatus,
+      type: 'status_update',
+      updated_by: 'super_admin'
+    });
+
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
@@ -519,6 +536,15 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         return res.status(400).json({ message: 'Supplier is required for approval' });
       }
       
+      // Fetch original items for comparison
+      const [originalItems] = await conn.query(
+        'SELECT id, quantity, unit, unit_price, item_id FROM purchase_request_items WHERE purchase_request_id = ?',
+        [req.params.id]
+      );
+      
+      // Track changes made by procurement
+      const changes = [];
+      
       // Update unit prices for items and calculate totals
       if (items && items.length > 0) {
         let calculatedTotal = 0;
@@ -527,6 +553,28 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           const unitPrice = parseFloat(item.unit_price) || 0;
           const totalPrice = unitPrice * item.quantity;
           calculatedTotal += totalPrice;
+          
+          // Find original item to compare
+          const originalItem = originalItems.find(oi => oi.id === item.id);
+          if (originalItem) {
+            const changeDetails = [];
+            if (originalItem.unit_price !== unitPrice && unitPrice > 0) {
+              changeDetails.push(`unit price from ₱${originalItem.unit_price} to ₱${unitPrice}`);
+            }
+            if (originalItem.unit !== item.unit && item.unit) {
+              changeDetails.push(`unit from "${originalItem.unit}" to "${item.unit}"`);
+            }
+            if (originalItem.quantity !== item.quantity) {
+              changeDetails.push(`quantity from ${originalItem.quantity} to ${item.quantity}`);
+            }
+            if (changeDetails.length > 0) {
+              changes.push({
+                item_id: item.id,
+                item_name: item.item_name || item.item_code,
+                changes: changeDetails
+              });
+            }
+          }
           
           // Update unit_price, total_price, and unit if provided
           await conn.query(
@@ -543,6 +591,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_address = ? WHERE id = ?',
         [newStatus, totalAmount, supplier_id, supplier_address || null, req.params.id]
       );
+      
+      // Store changes info for notification
+      req.changes = changes;
     } else {
       newStatus = 'Rejected';
       await conn.query(
@@ -589,6 +640,19 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           'purchase_request'
         );
       }
+      
+      // Notify engineer about any changes made by procurement
+      if (req.changes && req.changes.length > 0) {
+        const changesSummary = req.changes.map(c => `${c.item_name}: ${c.changes.join(', ')}`).join('; ');
+        await createNotification(
+          pr.requested_by,
+          'PR Values Modified by Procurement',
+          `Procurement modified values in your PR ${pr.pr_number}: ${changesSummary}`,
+          'PR Modified',
+          req.params.id,
+          'purchase_request'
+        );
+      }
     } else {
       // Rejected - notify engineer and Super Admin
       await createNotification(
@@ -600,6 +664,15 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         'purchase_request'
       );
     }
+
+    // Emit real-time PR status update
+    req.io.emit('pr_status_changed', {
+      id: req.params.id,
+      pr_number: pr.pr_number,
+      status: newStatus,
+      type: 'status_update',
+      updated_by: 'procurement'
+    });
 
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus, total_amount: totalAmount });
   } catch (error) {

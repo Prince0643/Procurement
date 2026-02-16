@@ -1,4 +1,5 @@
 import db from '../config/database.js';
+import { emitToUser } from './socket.js';
 
 /**
  * Create a notification for a user
@@ -16,6 +17,18 @@ export async function createNotification(recipientId, title, message, type = 'Sy
       INSERT INTO notifications (recipient_id, title, message, type, related_id, related_type, is_read, created_at)
       VALUES (?, ?, ?, ?, ?, ?, false, NOW())
     `, [recipientId, title, message, type, relatedId, relatedType]);
+    
+    // Emit real-time notification to the user
+    emitToUser(recipientId, 'notification', {
+      id: result.insertId,
+      title,
+      message,
+      type,
+      related_id: relatedId,
+      related_type: relatedType,
+      is_read: false,
+      created_at: new Date().toISOString()
+    });
     
     return result.insertId;
   } catch (error) {
