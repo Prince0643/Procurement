@@ -1,10 +1,12 @@
 import express from 'express';
 import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import upload from '../middleware/upload.js';
 import db from '../config/database.js';
 import { createNotification, getSuperAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,7 +72,16 @@ router.get('/:id', authenticate, async (req, res) => {
       WHERE poi.purchase_order_id = ?
     `, [req.params.id]);
 
-    res.json({ purchaseOrder: { ...pos[0], items } });
+    // Get attachments for this PO
+    const [attachments] = await db.query(`
+      SELECT pa.*, e.first_name as uploaded_by_first_name, e.last_name as uploaded_by_last_name
+      FROM po_attachments pa
+      LEFT JOIN employees e ON pa.uploaded_by = e.id
+      WHERE pa.purchase_order_id = ?
+      ORDER BY pa.uploaded_at DESC
+    `, [req.params.id]);
+
+    res.json({ purchaseOrder: { ...pos[0], items, attachments } });
   } catch (error) {
     console.error('Failed to fetch purchase order', error);
     res.status(500).json({ message: 'Failed to fetch purchase order' });
@@ -411,6 +422,114 @@ router.put('/:id/resubmit', authenticate, requireAdmin, async (req, res) => {
     res.status(500).json({ message: 'Failed to resubmit purchase order: ' + error.message });
   } finally {
     if (conn) conn.release();
+  }
+});
+
+// Get all attachments for a PO
+router.get('/:id/attachments', authenticate, async (req, res) => {
+  try {
+    // Check if PO exists
+    const [pos] = await db.query('SELECT id FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    const [attachments] = await db.query(`
+      SELECT pa.*, e.first_name as uploaded_by_first_name, e.last_name as uploaded_by_last_name
+      FROM po_attachments pa
+      LEFT JOIN employees e ON pa.uploaded_by = e.id
+      WHERE pa.purchase_order_id = ?
+      ORDER BY pa.uploaded_at DESC
+    `, [req.params.id]);
+
+    res.json({ attachments });
+  } catch (error) {
+    console.error('Failed to fetch attachments', error);
+    res.status(500).json({ message: 'Failed to fetch attachments' });
+  }
+});
+
+// Upload attachment to a PO (admin or super admin only)
+router.post('/:id/attachments', authenticate, requireAdmin, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
+
+    // Check if PO exists
+    const [pos] = await db.query('SELECT id, po_number FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    // Save attachment record to database
+    const [result] = await db.query(
+      'INSERT INTO po_attachments (purchase_order_id, file_path, file_name, file_size, mime_type, uploaded_by) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        req.params.id,
+        `/uploads/receipts/${req.file.filename}`,
+        req.file.originalname,
+        req.file.size,
+        req.file.mimetype,
+        req.user.id
+      ]
+    );
+
+    res.status(201).json({
+      message: 'File uploaded successfully',
+      attachment: {
+        id: result.insertId,
+        purchase_order_id: parseInt(req.params.id),
+        file_path: `/uploads/receipts/${req.file.filename}`,
+        file_name: req.file.originalname,
+        file_size: req.file.size,
+        mime_type: req.file.mimetype,
+        uploaded_by: req.user.id,
+        uploaded_at: new Date()
+      }
+    });
+  } catch (error) {
+    console.error('Failed to upload attachment', error);
+    res.status(500).json({ message: 'Failed to upload attachment' });
+  }
+});
+
+// Delete attachment (admin or super admin only, or the uploader)
+router.delete('/:id/attachments/:attachmentId', authenticate, async (req, res) => {
+  try {
+    // Check if attachment exists and get file info
+    const [attachments] = await db.query(
+      'SELECT * FROM po_attachments WHERE id = ? AND purchase_order_id = ?',
+      [req.params.attachmentId, req.params.id]
+    );
+
+    if (attachments.length === 0) {
+      return res.status(404).json({ message: 'Attachment not found' });
+    }
+
+    const attachment = attachments[0];
+
+    // Check permissions - allow if user is admin, super admin, or the original uploader
+    if (req.user.role !== 'admin' && req.user.role !== 'super_admin' && attachment.uploaded_by !== req.user.id) {
+      return res.status(403).json({ message: 'Not authorized to delete this attachment' });
+    }
+
+    // Delete file from filesystem
+    try {
+      const relativePath = String(attachment.file_path || '').replace(/^\/+/, '');
+      const filePath = path.resolve(__dirname, '..', relativePath);
+      await fs.unlink(filePath);
+    } catch (err) {
+      console.log('File may not exist on disk:', err.message);
+    }
+
+    // Delete record from database
+    await db.query('DELETE FROM po_attachments WHERE id = ?', [req.params.attachmentId]);
+
+    res.json({ message: 'Attachment deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete attachment', error);
+    res.status(500).json({ message: 'Failed to delete attachment' });
   }
 });
 

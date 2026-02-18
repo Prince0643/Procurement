@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { itemService } from './services/items'
 import { purchaseRequestService } from './services/purchaseRequests'
 import { purchaseOrderService } from './services/purchaseOrders'
+import { disbursementVoucherService } from './services/disbursementVouchers'
 import { categoryService } from './services/categories'
 import { supplierService } from './services/suppliers'
 import { reportService } from './services/reports'
@@ -42,7 +43,8 @@ import {
   Menu,
   X,
   RefreshCw,
-  PauseCircle
+  PauseCircle,
+  Receipt
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -919,6 +921,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
       { id: 'items', label: 'Items', icon: Package },
       { id: 'suppliers', label: 'Suppliers', icon: Building2 },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: FileText },
+      { id: 'disbursement-vouchers', label: 'Disbursement Vouchers', icon: Receipt },
       { id: 'pending-prs', label: 'Pending PRs', icon: Clock },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
@@ -4577,6 +4580,10 @@ const PurchaseOrders = () => {
 const POExpandedDetails = ({ po }) => {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
+  const [attachments, setAttachments] = useState([])
+  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState(null)
+  const [attachmentsLoading, setAttachmentsLoading] = useState(false)
+  const [attachmentsError, setAttachmentsError] = useState('')
   const [showPreview, setShowPreview] = useState(false)
   const [showResubmitModal, setShowResubmitModal] = useState(false)
   const [resubmitLoading, setResubmitLoading] = useState(false)
@@ -4595,6 +4602,8 @@ const POExpandedDetails = ({ po }) => {
   // Check if user can export (Super Admin, Procurement, Admin, Engineer)
   const canExport = ['super_admin', 'procurement', 'admin', 'engineer'].includes(user?.role)
 
+  const canUploadAttachments = ['admin', 'super_admin'].includes(user?.role)
+
   // Check if user can resubmit (admin only and status is Cancelled)
   const canResubmit = po.status === 'Cancelled' && user?.role === 'admin'
 
@@ -4603,6 +4612,7 @@ const POExpandedDetails = ({ po }) => {
       try {
         const data = await purchaseOrderService.getById(po.id)
         setItems(data.items || [])
+        setAttachments(data.attachments || [])
         // Initialize form data with current PO values
         setResubmitFormData({
           expected_delivery_date: data.expected_delivery_date ? data.expected_delivery_date.split('T')[0] : '',
@@ -4620,6 +4630,63 @@ const POExpandedDetails = ({ po }) => {
     }
     fetchDetails()
   }, [po.id])
+
+  const getAttachmentUrl = (filePath) => {
+    if (!filePath) return ''
+    if (/^https?:\/\//i.test(filePath)) return filePath
+    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+    const base = apiUrl.replace(/\/api\/?$/, '')
+    return `${base}${filePath}`
+  }
+
+  const getAttachmentType = (attachment) => {
+    const mime = String(attachment?.mime_type || '').toLowerCase()
+    const name = String(attachment?.file_name || '').toLowerCase()
+
+    if (mime === 'application/pdf' || name.endsWith('.pdf')) return 'pdf'
+    if (mime.startsWith('image/') || name.match(/\.(png|jpe?g|gif|webp)$/)) return 'image'
+    return 'other'
+  }
+
+  const formatBytes = (bytes) => {
+    const size = Number(bytes)
+    if (!size || size <= 0) return '-'
+    const units = ['B', 'KB', 'MB', 'GB']
+    const i = Math.min(Math.floor(Math.log(size) / Math.log(1024)), units.length - 1)
+    return `${(size / Math.pow(1024, i)).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+  }
+
+  const handleUploadAttachment = async () => {
+    if (!selectedAttachmentFile) return
+    setAttachmentsError('')
+    setAttachmentsLoading(true)
+
+    try {
+      const attachment = await purchaseOrderService.uploadAttachment(po.id, selectedAttachmentFile)
+      setAttachments(prev => [attachment, ...prev])
+      setSelectedAttachmentFile(null)
+    } catch (err) {
+      setAttachmentsError(err.response?.data?.message || 'Failed to upload attachment')
+    } finally {
+      setAttachmentsLoading(false)
+    }
+  }
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    const confirmDelete = window.confirm('Delete this attachment?')
+    if (!confirmDelete) return
+
+    setAttachmentsError('')
+    setAttachmentsLoading(true)
+    try {
+      await purchaseOrderService.deleteAttachment(po.id, attachmentId)
+      setAttachments(prev => prev.filter(a => a.id !== attachmentId))
+    } catch (err) {
+      setAttachmentsError(err.response?.data?.message || 'Failed to delete attachment')
+    } finally {
+      setAttachmentsLoading(false)
+    }
+  }
 
   const handleExportExcel = async () => {
     try {
@@ -4703,42 +4770,102 @@ const POExpandedDetails = ({ po }) => {
           </div>
         )}
       </div>
-      
-      {loading ? (
-        <div className="flex items-center justify-center py-4">
-          <div className="w-6 h-6 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+
+      <div className="border rounded-md bg-white overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+          <div className="text-sm font-semibold text-gray-900">Receipts / Attachments</div>
+          {canUploadAttachments && (
+            <div className="flex items-center gap-2">
+              <input
+                type="file"
+                onChange={(e) => setSelectedAttachmentFile(e.target.files?.[0] || null)}
+                className="text-sm"
+                disabled={attachmentsLoading}
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={handleUploadAttachment}
+                disabled={!selectedAttachmentFile || attachmentsLoading}
+              >
+                Upload
+              </Button>
+            </div>
+          )}
         </div>
-      ) : (
-        <div className="border rounded-md overflow-hidden bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="text-left py-2 px-3 font-medium text-gray-600">Item</th>
-                <th className="text-left py-2 px-3 font-medium text-gray-600">Qty</th>
-                <th className="text-left py-2 px-3 font-medium text-gray-600">Unit</th>
-                <th className="text-left py-2 px-3 font-medium text-gray-600">Unit Price</th>
-                <th className="text-left py-2 px-3 font-medium text-gray-600">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} className="border-t border-gray-100">
-                  <td className="py-2 px-3">{item.item_name || '-'}</td>
-                  <td className="py-2 px-3">{item.quantity}</td>
-                  <td className="py-2 px-3">{item.unit || '-'}</td>
-                  <td className="py-2 px-3">{formatCurrency(item.unit_price || 0)}</td>
-                  <td className="py-2 px-3 font-medium">{formatCurrency(item.total_price || 0)}</td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan="5" className="py-4 text-center text-gray-500">No items found</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+
+        {attachmentsError && (
+          <div className="px-4 py-3 bg-red-50 border-b border-red-200">
+            <p className="text-sm text-red-700">{attachmentsError}</p>
+          </div>
+        )}
+
+        <div className="p-4">
+          {attachments.length === 0 ? (
+            <div className="text-sm text-gray-500">No attachments yet</div>
+          ) : (
+            <div className="space-y-2">
+              {attachments.map((a) => {
+                const canDelete = ['admin', 'super_admin'].includes(user?.role) || a.uploaded_by === user?.id
+                const attachmentType = getAttachmentType(a)
+                return (
+                  <div key={a.id} className="border border-gray-200 rounded-md overflow-hidden bg-white">
+                    <div className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{a.file_name}</div>
+                        <div className="text-xs text-gray-500">
+                          {formatBytes(a.file_size)}
+                          {a.uploaded_at ? ` • ${formatDate(a.uploaded_at)}` : ''}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => window.open(getAttachmentUrl(a.file_path), '_blank', 'noopener,noreferrer')}
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </Button>
+                        {canDelete && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleDeleteAttachment(a.id)}
+                            disabled={attachmentsLoading}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-600" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    {attachmentType === 'pdf' && (
+                      <div className="border-t border-gray-200 bg-gray-50">
+                        <iframe
+                          title={a.file_name}
+                          src={getAttachmentUrl(a.file_path)}
+                          className="w-full h-[340px]"
+                        />
+                      </div>
+                    )}
+
+                    {attachmentType === 'image' && (
+                      <div className="border-t border-gray-200 bg-gray-50 p-3 flex items-center justify-center">
+                        <img
+                          src={getAttachmentUrl(a.file_path)}
+                          alt={a.file_name}
+                          className="max-h-[340px] rounded-md border border-gray-200"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* PO Preview Modal */}
       {showPreview && (
@@ -6133,6 +6260,545 @@ const AllPurchaseRequests = () => {
   )
 }
 
+const DisbursementVouchers = () => {
+  const [vouchers, setVouchers] = useState([])
+  const [purchaseOrders, setPurchaseOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDetailsModal, setShowDetailsModal] = useState(false)
+  const [selectedVoucher, setSelectedVoucher] = useState(null)
+  const [expandedVoucherId, setExpandedVoucherId] = useState(null)
+  const [submitting, setSubmitting] = useState(false)
+  const [createError, setCreateError] = useState('')
+  const [createSuccess, setCreateSuccess] = useState(false)
+  
+  const [formData, setFormData] = useState({
+    purchase_order_id: '',
+    particulars: 'Payment for the procurement of materials',
+    project: '',
+    check_number: '',
+    bank_name: '',
+    payment_date: '',
+    received_by: ''
+  })
+
+  useEffect(() => {
+    fetchVouchers()
+    fetchPurchaseOrders()
+  }, [])
+
+  const fetchVouchers = async () => {
+    try {
+      setLoading(true)
+      const data = await disbursementVoucherService.getAll()
+      setVouchers(data)
+    } catch (err) {
+      setError('Failed to fetch disbursement vouchers')
+      console.error('Failed to fetch vouchers', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchPurchaseOrders = async () => {
+    try {
+      const data = await purchaseOrderService.getAll()
+      // Filter POs that are approved (Ordered, Delivered, or Draft) and don't have a DV yet
+      const approvedPOs = data.filter(po => 
+        (po.status === 'Ordered' || po.status === 'Delivered' || po.status === 'Draft')
+      )
+      setPurchaseOrders(approvedPOs)
+    } catch (err) {
+      console.error('Failed to fetch purchase orders', err)
+    }
+  }
+
+  const handlePOSelect = (e) => {
+    const poId = e.target.value
+    const selectedPO = purchaseOrders.find(po => po.id.toString() === poId)
+    setFormData({ 
+      ...formData, 
+      purchase_order_id: poId,
+      project: selectedPO?.project || ''
+    })
+  }
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target
+    setFormData({ ...formData, [name]: value })
+  }
+
+  const handleCreate = async () => {
+    if (!formData.purchase_order_id) {
+      setCreateError('Please select a purchase order')
+      return
+    }
+
+    setSubmitting(true)
+    setCreateError('')
+    setCreateSuccess(false)
+    
+    try {
+      await disbursementVoucherService.create({
+        purchase_order_id: formData.purchase_order_id,
+        particulars: formData.particulars,
+        project: formData.project,
+        check_number: formData.check_number || undefined,
+        bank_name: formData.bank_name || undefined,
+        payment_date: formData.payment_date || undefined,
+        received_by: formData.received_by || undefined
+      })
+      setCreateSuccess(true)
+      setTimeout(() => {
+        setShowCreateModal(false)
+        setFormData({
+          purchase_order_id: '',
+          particulars: 'Payment for the procurement of materials',
+          project: '',
+          check_number: '',
+          bank_name: '',
+          payment_date: '',
+          received_by: ''
+        })
+        setCreateSuccess(false)
+        fetchVouchers()
+      }, 1500)
+    } catch (err) {
+      setCreateError(err.response?.data?.message || 'Failed to create disbursement voucher')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleExport = async (voucher) => {
+    try {
+      const blob = await disbursementVoucherService.exportToExcel(voucher.id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', `DV-${voucher.dv_number}.xlsx`)
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Failed to export voucher', err)
+      alert('Failed to export voucher')
+    }
+  }
+
+  const handleDelete = async (voucher) => {
+    if (!confirm(`Are you sure you want to delete DV ${voucher.dv_number}?`)) {
+      return
+    }
+    
+    try {
+      await disbursementVoucherService.delete(voucher.id)
+      fetchVouchers()
+    } catch (err) {
+      console.error('Failed to delete voucher', err)
+      alert('Failed to delete voucher')
+    }
+  }
+
+  const handleViewDetails = async (voucher) => {
+    try {
+      const data = await disbursementVoucherService.getById(voucher.id)
+      setSelectedVoucher(data)
+      setShowDetailsModal(true)
+    } catch (err) {
+      console.error('Failed to fetch voucher details', err)
+    }
+  }
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'Draft': 'bg-gray-100 text-gray-800',
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'Paid': 'bg-green-100 text-green-800',
+      'Cancelled': 'bg-red-100 text-red-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <Button onClick={() => {
+          setShowCreateModal(true)
+          setCreateError('')
+          setCreateSuccess(false)
+        }} className="whitespace-nowrap">
+          <Plus className="w-4 h-4 mr-2" />
+          <span className="hidden sm:inline">Create Disbursement Voucher</span>
+          <span className="sm:hidden">Create DV</span>
+        </Button>
+      </div>
+
+      <Card>
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">DV Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Date</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vouchers.map(voucher => (
+                <React.Fragment key={voucher.id}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50">
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{voucher.dv_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{voucher.po_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{voucher.supplier_name}</td>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{formatCurrency(voucher.amount)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-500">{formatDate(voucher.dv_date)}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(voucher.status)}`}>
+                        {voucher.status}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="flex gap-2">
+                        <Button variant="ghost" size="sm" onClick={() => handleViewDetails(voucher)}>
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleExport(voucher)}>
+                          <FileDown className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => handleDelete(voucher)} disabled={voucher.status === 'Paid'}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                </React.Fragment>
+              ))}
+              {vouchers.length === 0 && (
+                <tr>
+                  <td colSpan="7" className="py-8 text-center text-gray-500">
+                    No disbursement vouchers found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {vouchers.map(voucher => (
+              <div
+                key={voucher.id}
+                className="border rounded-lg p-3 bg-white"
+              >
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{voucher.dv_number}</p>
+                    <p className="text-sm font-semibold text-gray-900">{voucher.supplier_name}</p>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(voucher.status)}`}>
+                    {voucher.status}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                  <span>PO: {voucher.po_number}</span>
+                  <span>{formatDate(voucher.dv_date)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-medium text-gray-900">{formatCurrency(voucher.amount)}</span>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => handleViewDetails(voucher)}>
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleExport(voucher)}>
+                      <FileDown className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(voucher)} disabled={voucher.status === 'Paid'}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {vouchers.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No disbursement vouchers found</p>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Create DV Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Create Disbursement Voucher</h2>
+              <p className="text-sm text-gray-500 mt-1">Create a new DV for an approved purchase order</p>
+            </div>
+            <div className="p-6 space-y-4">
+              {createError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-md">
+                  <p className="text-sm text-red-700">{createError}</p>
+                </div>
+              )}
+              {createSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-md">
+                  <p className="text-sm text-green-700">Disbursement voucher created successfully!</p>
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Order *</label>
+                <select
+                  name="purchase_order_id"
+                  value={formData.purchase_order_id}
+                  onChange={handlePOSelect}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  <option value="">Select a Purchase Order</option>
+                  {purchaseOrders.map(po => (
+                    <option key={po.id} value={po.id}>
+                      {po.po_number} - {po.supplier_name} ({formatCurrency(po.total_amount)})
+                    </option>
+                  ))}
+                </select>
+                {purchaseOrders.length === 0 && (
+                  <p className="text-xs text-red-500 mt-1">No approved purchase orders available</p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Particulars</label>
+                <textarea
+                  name="particulars"
+                  value={formData.particulars}
+                  onChange={handleInputChange}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                <input
+                  type="text"
+                  name="project"
+                  value={formData.project}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 focus:outline-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">Auto-filled from Purchase Order</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Check Number</label>
+                  <input
+                    type="text"
+                    name="check_number"
+                    value={formData.check_number}
+                    onChange={handleInputChange}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Bank Name</label>
+                  <input
+                    type="text"
+                    name="bank_name"
+                    value={formData.bank_name}
+                    onChange={handleInputChange}
+                    placeholder="Optional"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Payment Date</label>
+                  <input
+                    type="date"
+                    name="payment_date"
+                    value={formData.payment_date}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Received By</label>
+                  <input
+                    type="text"
+                    name="received_by"
+                    value={formData.received_by}
+                    onChange={handleInputChange}
+                    placeholder="Person receiving payment"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={submitting}>Cancel</Button>
+              <Button onClick={handleCreate} disabled={submitting || !formData.purchase_order_id}>
+                {submitting ? 'Creating...' : 'Create DV'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* View Details Modal */}
+      {showDetailsModal && selectedVoucher && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Disbursement Voucher Details</h2>
+              <p className="text-sm text-gray-500 mt-1">{selectedVoucher.dv_number}</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">DV Number</p>
+                  <p className="text-sm font-medium">{selectedVoucher.dv_number}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Date</p>
+                  <p className="text-sm font-medium">{formatDate(selectedVoucher.dv_date)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">PO Number</p>
+                  <p className="text-sm font-medium">{selectedVoucher.po_number}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">PR Number</p>
+                  <p className="text-sm font-medium">{selectedVoucher.pr_number}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Supplier</p>
+                  <p className="text-sm font-medium">{selectedVoucher.supplier_name}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Amount</p>
+                  <p className="text-sm font-medium">{formatCurrency(selectedVoucher.amount)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Status</p>
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(selectedVoucher.status)}`}>
+                    {selectedVoucher.status}
+                  </span>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Project</p>
+                  <p className="text-sm font-medium">{selectedVoucher.project || '-'}</p>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-gray-500 uppercase mb-1">Particulars</p>
+                <p className="text-sm">{selectedVoucher.particulars || 'Payment for the procurement of materials'}</p>
+              </div>
+
+              {selectedVoucher.check_number && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Check Number</p>
+                    <p className="text-sm font-medium">{selectedVoucher.check_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Bank Name</p>
+                    <p className="text-sm font-medium">{selectedVoucher.bank_name || '-'}</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedVoucher.received_by && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Received By</p>
+                    <p className="text-sm font-medium">{selectedVoucher.received_by}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500 uppercase">Payment Date</p>
+                    <p className="text-sm font-medium">{formatDate(selectedVoucher.payment_date)}</p>
+                  </div>
+                </div>
+              )}
+
+              {selectedVoucher.items && selectedVoucher.items.length > 0 && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-2">PO Items</p>
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-100">
+                        <tr>
+                          <th className="text-left py-2 px-3 font-medium">Item</th>
+                          <th className="text-left py-2 px-3 font-medium">Qty</th>
+                          <th className="text-left py-2 px-3 font-medium">Unit</th>
+                          <th className="text-right py-2 px-3 font-medium">Price</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedVoucher.items.map(item => (
+                          <tr key={item.id} className="border-t border-gray-100">
+                            <td className="py-2 px-3">{item.item_name || item.item_code}</td>
+                            <td className="py-2 px-3">{item.quantity}</td>
+                            <td className="py-2 px-3">{item.unit || '-'}</td>
+                            <td className="py-2 px-3 text-right">{formatCurrency(item.total_price)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {selectedVoucher.certified_by_accounting && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Certified by Accounting</p>
+                  <p className="text-sm">{selectedVoucher.accounting_first_name} {selectedVoucher.accounting_last_name}</p>
+                </div>
+              )}
+
+              {selectedVoucher.certified_by_manager && (
+                <div>
+                  <p className="text-xs text-gray-500 uppercase mb-1">Certified by Manager</p>
+                  <p className="text-sm">{selectedVoucher.manager_first_name} {selectedVoucher.manager_last_name}</p>
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowDetailsModal(false)}>Close</Button>
+              <Button onClick={() => handleExport(selectedVoucher)}>
+                <FileDown className="w-4 h-4 mr-2" />
+                Export to Excel
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const ReportsAnalytics = () => {
   const [spendingByCategory, setSpendingByCategory] = useState([])
   const [topSuppliers, setTopSuppliers] = useState([])
@@ -6890,6 +7556,8 @@ function App() {
           return <SuppliersManagement />
         case 'purchase-orders':
           return <PurchaseOrders />
+        case 'disbursement-vouchers':
+          return <DisbursementVouchers />
         case 'pending-prs':
           return <PendingPRs />
         case 'settings':

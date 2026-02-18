@@ -2,8 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import db from './config/database.js';
 import { initSocket } from './utils/socket.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
@@ -14,6 +19,7 @@ import categoryRoutes from './routes/categories.js';
 import notificationRoutes from './routes/notifications.js';
 import reportRoutes from './routes/reports.js';
 import employeeRoutes from './routes/employees.js';
+import disbursementVoucherRoutes from './routes/disbursementVouchers.js';
 
 dotenv.config();
 
@@ -43,6 +49,9 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files from uploads folder
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 // Test database connection
 app.get('/api/health', async (req, res) => {
   try {
@@ -71,6 +80,7 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/employees', employeeRoutes);
+app.use('/api/disbursement-vouchers', disbursementVoucherRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

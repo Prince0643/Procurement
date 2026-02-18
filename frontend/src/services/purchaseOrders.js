@@ -36,5 +36,26 @@ export const purchaseOrderService = {
   resubmit: async (id, poData) => {
     const response = await api.put(`/purchase-orders/${id}/resubmit`, poData);
     return response.data;
+  },
+
+  getAttachments: async (id) => {
+    const response = await api.get(`/purchase-orders/${id}/attachments`);
+    return response.data.attachments;
+  },
+
+  uploadAttachment: async (id, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post(`/purchase-orders/${id}/attachments`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data.attachment;
+  },
+
+  deleteAttachment: async (id, attachmentId) => {
+    const response = await api.delete(`/purchase-orders/${id}/attachments/${attachmentId}`);
+    return response.data;
   }
 };
