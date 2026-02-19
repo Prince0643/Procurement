@@ -815,8 +815,14 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
           ? prs.filter(pr => pr.status === 'For Super Admin Final Approval').length
           : 0
 
-        const poCount = Array.isArray(pos)
-          ? pos.filter(po => po.status === 'Draft').length
+        const poCount = pos.length > 0
+          ? pos.filter(po => {
+              const s = String(po?.status ?? '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase()
+              return s === 'draft' || s.includes('hold')
+            }).length
           : 0
 
         setSuperAdminApprovalCounts({ prs: prCount, pos: poCount })
@@ -5882,7 +5888,7 @@ const ApprovePRs = () => {
 
 const ApprovePOs = () => {
   const [selectedPO, setSelectedPO] = useState(null)
-  const [showRejectModal, setShowRejectModal] = useState(false)
+  const [showHoldModal, setShowHoldModal] = useState(false)
   const [pos, setPOs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -5905,7 +5911,13 @@ const ApprovePOs = () => {
     fetchPOs()
   }, [])
 
-  const pendingPOs = pos.filter(po => po.status === 'Draft')
+  const pendingPOs = pos.filter(po => {
+    const s = String(po?.status ?? '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase()
+    return s === 'draft' || s.includes('hold')
+  })
 
   const handleApprove = async (po) => {
     setActionLoading(true)
@@ -5919,21 +5931,21 @@ const ApprovePOs = () => {
     }
   }
 
-  const handleReject = (po) => {
+  const handleHold = (po) => {
     setSelectedPO(po)
-    setShowRejectModal(true)
+    setShowHoldModal(true)
   }
 
-  const handleConfirmReject = async () => {
+  const handleConfirmHold = async () => {
     if (!selectedPO) return
     setActionLoading(true)
     try {
-      await purchaseOrderService.superAdminApprove(selectedPO.id, 'rejected')
-      setShowRejectModal(false)
+      await purchaseOrderService.superAdminApprove(selectedPO.id, 'hold')
+      setShowHoldModal(false)
       setSelectedPO(null)
       await fetchPOs()
     } catch (err) {
-      console.error('Failed to reject PO', err)
+      console.error('Failed to hold PO', err)
     } finally {
       setActionLoading(false)
     }
@@ -5958,7 +5970,7 @@ const ApprovePOs = () => {
       <Card>
         <div className="p-6 border-b border-gray-200">
           <h2 className="text-lg font-semibold text-gray-900">Purchase Orders Pending Approval</h2>
-          <p className="text-sm text-gray-500 mt-1">Review and approve/reject purchase orders placed by Admin</p>
+          <p className="text-sm text-gray-500 mt-1">Review and approve/hold purchase orders placed by Admin</p>
         </div>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full">
@@ -5991,9 +6003,9 @@ const ApprovePOs = () => {
                             <CheckCircle className="w-4 h-4 mr-1" />
                             {actionLoading ? 'Approving...' : 'Approve'}
                           </Button>
-                          <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); handleReject(po); }} disabled={actionLoading}>
+                          <Button size="sm" variant="warning" onClick={(e) => { e.stopPropagation(); handleHold(po); }} disabled={actionLoading}>
                             <XCircle className="w-4 h-4 mr-1" />
-                            Reject
+                            Hold
                           </Button>
                         </div>
                       </td>
@@ -6056,7 +6068,7 @@ const ApprovePOs = () => {
                     <Button size="sm" variant="success" onClick={(e) => { e.stopPropagation(); handleApprove(po); }} disabled={actionLoading}>
                       <CheckCircle className="w-4 h-4" />
                     </Button>
-                    <Button size="sm" variant="danger" onClick={(e) => { e.stopPropagation(); handleReject(po); }} disabled={actionLoading}>
+                    <Button size="sm" variant="warning" onClick={(e) => { e.stopPropagation(); handleHold(po); }} disabled={actionLoading}>
                       <XCircle className="w-4 h-4" />
                     </Button>
                   </div>
@@ -6077,27 +6089,24 @@ const ApprovePOs = () => {
         </div>
       </Card>
 
-      {showRejectModal && (
+      {showHoldModal && (
         <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-lg">
             <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Reject Purchase Order</h2>
-              <p className="text-sm text-gray-500 mt-1">{selectedPO?.po_number}</p>
+              <h3 className="text-lg font-semibold">Hold Purchase Order</h3>
+              <p className="text-sm text-gray-500 mt-1">Are you sure you want to put this purchase order on hold?</p>
             </div>
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
-                <textarea
-                  placeholder="Enter reason for rejection..."
-                  rows="4"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                />
+            <div className="p-6">
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm"><span className="font-medium">PO Number:</span> {selectedPO?.po_number}</p>
+                <p className="text-sm mt-1"><span className="font-medium">Supplier:</span> {selectedPO?.supplier_name}</p>
+                <p className="text-sm mt-1"><span className="font-medium">Amount:</span> ₱{selectedPO?.total_amount}</p>
               </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowRejectModal(false)} disabled={actionLoading}>Cancel</Button>
-              <Button variant="danger" onClick={handleConfirmReject} disabled={actionLoading}>
-                {actionLoading ? 'Rejecting...' : 'Reject PO'}
+              <Button variant="secondary" onClick={() => setShowHoldModal(false)} disabled={actionLoading}>Cancel</Button>
+              <Button variant="warning" onClick={handleConfirmHold} disabled={actionLoading}>
+                {actionLoading ? 'Holding...' : 'Hold PO'}
               </Button>
             </div>
           </Card>

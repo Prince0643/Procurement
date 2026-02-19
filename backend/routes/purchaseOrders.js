@@ -164,7 +164,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // Approve/Reject PO (super admin only)
 router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (req, res) => {
   try {
-    const { status } = req.body; // 'approved' | 'rejected'
+    const { status } = req.body; // 'approved' | 'hold'
 
     const [pos] = await db.query('SELECT status FROM purchase_orders WHERE id = ?', [req.params.id]);
     if (pos.length === 0) {
@@ -172,11 +172,15 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
     }
 
     const currentStatus = pos[0].status;
-    if (currentStatus !== 'Draft') {
+    if (currentStatus !== 'Draft' && currentStatus !== 'On Hold') {
       return res.status(400).json({ message: 'Purchase order not ready for Super Admin approval' });
     }
 
-    const newStatus = status === 'approved' ? 'Ordered' : 'Cancelled';
+    if (status !== 'approved' && status !== 'hold') {
+      return res.status(400).json({ message: 'Invalid status. Allowed values: approved, hold' });
+    }
+
+    const newStatus = status === 'approved' ? 'Ordered' : 'On Hold';
 
     await db.query(
       'UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?',
@@ -341,7 +345,7 @@ router.put('/:id/resubmit', authenticate, requireAdmin, async (req, res) => {
   try {
     const { supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items } = req.body;
 
-    // Check if PO exists and is cancelled (rejected)
+    // Check if PO exists and is cancelled (rejected) or on hold
     const [pos] = await db.query('SELECT * FROM purchase_orders WHERE id = ?', [req.params.id]);
     if (pos.length === 0) {
       return res.status(404).json({ message: 'Purchase order not found' });
@@ -349,9 +353,9 @@ router.put('/:id/resubmit', authenticate, requireAdmin, async (req, res) => {
 
     const po = pos[0];
 
-    // Only cancelled (rejected) POs can be resubmitted
-    if (po.status !== 'Cancelled') {
-      return res.status(400).json({ message: 'Only cancelled (rejected) purchase orders can be resubmitted' });
+    // Only cancelled (rejected) or on-hold POs can be resubmitted
+    if (po.status !== 'Cancelled' && po.status !== 'On Hold') {
+      return res.status(400).json({ message: 'Only cancelled (rejected) or on-hold purchase orders can be resubmitted' });
     }
 
     conn = await db.getConnection();
