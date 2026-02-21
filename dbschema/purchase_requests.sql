@@ -7,6 +7,7 @@ CREATE TABLE `purchase_requests` (
   `date_needed` DATE NULL,
   `project` VARCHAR(100) NULL,
   `project_address` VARCHAR(255) NULL,
+  `order_number` VARCHAR(100) NULL,
   `supplier_id` INT NULL,
   `supplier_address` VARCHAR(255) NULL,
   `status` ENUM('Draft', 'Pending', 'For Procurement Review', 'For Super Admin Final Approval', 'On Hold', 'For Purchase', 'PO Created', 'Completed', 'Rejected', 'Cancelled') DEFAULT 'For Procurement Review',

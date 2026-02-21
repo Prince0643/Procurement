@@ -104,7 +104,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, save_as_draft } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft } = req.body;
     const isDraft = save_as_draft === true;
 
     // Only validate required fields if NOT saving as draft
@@ -148,8 +148,8 @@ router.post('/', authenticate, async (req, res) => {
     const status = isDraft ? 'Draft' : 'For Procurement Review';
 
     const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null]
+      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null, order_number || null]
     );
 
     const prId = result.insertId;
@@ -216,7 +216,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number } = req.body;
 
     // Check if PR exists and is draft
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -242,9 +242,9 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     // Update PR details
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, updated_at = NOW()
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, updated_at = NOW()
        WHERE id = ?`,
-      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, req.params.id]
+      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, req.params.id]
     );
 
     // Update items if provided
@@ -739,6 +739,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
     
     // Fill project (C10)
     worksheet.getCell('C10').value = pr.project || '';
+
+    // Fill order number (F10)
+    worksheet.getCell('F10').value = pr.order_number || '';
     
     // Fill project address (C11)
     worksheet.getCell('C11').value = pr.project_address || '';
@@ -789,7 +792,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number } = req.body;
 
     // Check if PR exists and is rejected
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -815,12 +818,12 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     // Update PR details and reset status to For Procurement Review, clear all pricing data
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, 
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
            status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
            supplier_id = NULL, supplier_address = NULL, rejection_reason = NULL, 
            total_amount = NULL, updated_at = NOW()
        WHERE id = ?`,
-      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, req.params.id]
+      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, req.params.id]
     );
 
     // Update items if provided

@@ -159,6 +159,7 @@ CREATE TABLE `purchase_orders` (
   `delivery_term` varchar(50) DEFAULT 'COD',
   `payment_term` varchar(50) DEFAULT 'CASH',
   `project` varchar(100) DEFAULT NULL,
+  `order_number` varchar(10) DEFAULT NULL,
   `notes` text DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -194,6 +195,7 @@ CREATE TABLE `purchase_requests` (
   `date_needed` date DEFAULT NULL,
   `project` varchar(100) DEFAULT NULL,
   `project_address` varchar(255) DEFAULT NULL,
+  `order_number` varchar(100) DEFAULT NULL,
   `status` enum('Draft','Pending','For Procurement Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Completed','Rejected','Cancelled') DEFAULT 'For Procurement Review',
   `approved_by` int(11) DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,

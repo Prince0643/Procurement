@@ -8,6 +8,7 @@ CREATE TABLE `purchase_orders` (
   `po_date` DATE NOT NULL,
   `expected_delivery_date` DATE,
   `actual_delivery_date` DATE,
+  `order_number` VARCHAR(10) NULL,
   `status` ENUM('Draft', 'Ordered', 'Delivered', 'Cancelled') DEFAULT 'Draft',
   `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

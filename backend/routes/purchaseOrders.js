@@ -91,7 +91,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create PO (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items } = req.body;
+    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items } = req.body;
     
     // Generate PO number (MTN-YYYY-MM-### format - same as PR)
     const now = new Date();
@@ -116,9 +116,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 
     // Create PO with new fields
     const [result] = await db.query(
-      `INSERT INTO purchase_orders (po_number, purchase_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, status) 
-       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, COALESCE(?, 'COD'), COALESCE(?, 'CASH'), ?, ?)`,
-      [poNumber, purchase_request_id, supplier_id, req.user.id, totalAmount, expected_delivery_date, place_of_delivery || null, project || null, delivery_term, payment_term, notes || null, 'Draft']
+      `INSERT INTO purchase_orders (po_number, purchase_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status) 
+       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, COALESCE(?, 'COD'), COALESCE(?, 'CASH'), ?, ?)`,
+      [poNumber, purchase_request_id, supplier_id, req.user.id, totalAmount, expected_delivery_date, place_of_delivery || null, project || null, order_number || null, delivery_term, payment_term, notes || null, 'Draft']
     );
 
     const poId = result.insertId;
@@ -293,6 +293,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     // Fill project (B8)
     worksheet.getCell('B8').value = po.project || '';
+
+    // Fill order number (G8)
+    worksheet.getCell('G8').value = po.order_number || '';
 
     // Fill place of delivery (B9)
     worksheet.getCell('B9').value = po.place_of_delivery || '';

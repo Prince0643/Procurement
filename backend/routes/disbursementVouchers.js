@@ -102,6 +102,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       purchase_order_id, 
       particulars, 
       project,
+      order_number,
       check_number,
       bank_name,
       payment_date,
@@ -169,9 +170,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     const [result] = await conn.query(
       `INSERT INTO disbursement_vouchers 
        (dv_number, purchase_order_id, purchase_request_id, supplier_id, prepared_by, 
-        amount, dv_date, particulars, project, pr_number, check_number, bank_name, 
+        amount, dv_date, particulars, project, order_number, pr_number, check_number, bank_name, 
         payment_date, received_by, status) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dvNumber, 
         purchase_order_id, 
@@ -181,6 +182,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         po.total_amount,
         particulars || 'Payment for the procurement of materials',
         project || po.pr_project,
+        order_number || po.order_number,
         po.pr_number,
         check_number || null,
         bank_name || null,
@@ -440,6 +442,8 @@ router.get('/:id/export', authenticate, async (req, res) => {
     worksheet.getCell('F3').value = formatDate(dv.dv_date);
     // F4: PR NO. value (F4 is master of merged F4:F5)
     worksheet.getCell('F4').value = dv.pr_number || '';
+    // F6: Order No.
+    worksheet.getCell('F6').value = dv.order_number || '';
     // F7: DV No.
     worksheet.getCell('F7').value = dv.dv_number || '';
 

@@ -44,7 +44,8 @@ import {
   X,
   RefreshCw,
   PauseCircle,
-  Receipt
+  Receipt,
+  Hash
 } from 'lucide-react'
 
 // ============ MOCK DATA ============
@@ -928,6 +929,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
       { id: 'suppliers', label: 'Suppliers', icon: Building2 },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: FileText },
       { id: 'disbursement-vouchers', label: 'Disbursement Vouchers', icon: Receipt },
+      { id: 'order-numbers', label: 'Order Numbers', icon: Hash },
       { id: 'pending-prs', label: 'Pending PRs', icon: Clock },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
@@ -940,6 +942,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
       { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
       { id: 'all-pos', label: 'All Purchase Orders', icon: FileText },
+      { id: 'order-numbers', label: 'Order Numbers', icon: Hash },
       { id: 'reports', label: 'Reports & Analytics', icon: TrendingUp },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
@@ -1334,7 +1337,7 @@ const BrowseItems = () => {
   const [showCreatePR, setShowCreatePR] = useState(false)
   const [showCreatePRPreview, setShowCreatePRPreview] = useState(false)
   const [selectedItems, setSelectedItems] = useState([])
-  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
+  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -1362,26 +1365,37 @@ const BrowseItems = () => {
       console.log('Branches API response:', data)
       
       // Handle the API response format
-      let branchNames = []
+      let branchList = []
       if (Array.isArray(data)) {
         // API returns array directly: [{id, branch_name}, ...]
-        branchNames = data.map(branch => branch.branch_name)
+        branchList = data
       } else if (data && Array.isArray(data.data)) {
         // API returns { data: [...] }
-        branchNames = data.data.map(branch => branch.branch_name)
+        branchList = data.data
       } else if (data && Array.isArray(data.branches)) {
         // API returns { branches: [...] }
-        branchNames = data.branches.map(branch => branch.branch_name)
+        branchList = data.branches
       }
       
-      console.log('Extracted branch names:', branchNames)
-      setBranches(branchNames)
+      console.log('Extracted branches:', branchList)
+      setBranches(branchList)
     } catch (err) {
       console.error('Failed to fetch branches:', err)
       setBranches([])
     } finally {
       setLoadingBranches(false)
     }
+  }
+
+  const handleProjectChange = (projectName) => {
+    const selectedBranch = branches.find(b => b?.branch_name === projectName)
+
+    setPrFormData(prev => ({
+      ...prev,
+      project: projectName,
+      project_address: selectedBranch?.branch_address || '',
+      order_number: selectedBranch?.order_number || ''
+    }))
   }
 
   const fetchItems = async () => {
@@ -1452,6 +1466,7 @@ const BrowseItems = () => {
         date_needed: prFormData.date_needed,
         project: prFormData.project,
         project_address: prFormData.project_address,
+        order_number: prFormData.order_number,
         items: selectedItems.map(item => ({
           item_id: item.id,
           quantity: item.quantity,
@@ -1462,7 +1477,7 @@ const BrowseItems = () => {
       })
 
       setSubmitSuccess(true)
-      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
       setSelectedItems([])
       
       setTimeout(() => {
@@ -1488,6 +1503,7 @@ const BrowseItems = () => {
         date_needed: prFormData.date_needed,
         project: prFormData.project,
         project_address: prFormData.project_address,
+        order_number: prFormData.order_number,
         items: selectedItems.map(item => ({
           item_id: item.id,
           quantity: item.quantity,
@@ -1498,7 +1514,7 @@ const BrowseItems = () => {
       })
 
       setSubmitSuccess(true)
-      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '' })
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
       setSelectedItems([])
       
       setTimeout(() => {
@@ -1715,7 +1731,7 @@ const BrowseItems = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
                   <select
                     value={prFormData.project}
-                    onChange={(e) => setPrFormData({ ...prFormData, project: e.target.value })}
+                    onChange={(e) => handleProjectChange(e.target.value)}
                     disabled={loadingBranches || branches.length === 0}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
                   >
@@ -1723,7 +1739,7 @@ const BrowseItems = () => {
                       {loadingBranches ? 'Loading...' : branches.length === 0 ? 'No projects available' : 'Select project'}
                     </option>
                     {branches.map((branch, index) => (
-                      <option key={index} value={branch}>{branch}</option>
+                      <option key={branch?.id ?? index} value={branch?.branch_name || ''}>{branch?.branch_name || ''}</option>
                     ))}
                   </select>
                   {branches.length === 0 && !loadingBranches && (
@@ -1738,6 +1754,16 @@ const BrowseItems = () => {
                   value={prFormData.project_address}
                   onChange={(e) => setPrFormData({ ...prFormData, project_address: e.target.value })}
                   placeholder="Enter project address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                <input
+                  type="text"
+                  value={prFormData.order_number}
+                  onChange={(e) => setPrFormData({ ...prFormData, order_number: e.target.value })}
+                  placeholder="Order number"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
@@ -1858,6 +1884,10 @@ const BrowseItems = () => {
                   <div className="sm:col-span-3 p-2 sm:p-3 text-gray-900">{prFormData.project || '-'}</div>
                   <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Requested By:</div>
                   <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{user?.first_name || ''} {user?.last_name || ''}</div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Order Number:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{prFormData.order_number || '-'}</div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
                   <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Purpose:</div>
@@ -2402,7 +2432,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
     remarks: '',
     date_needed: '',
     project: '',
-    project_address: ''
+    project_address: '',
+    order_number: ''
   })
   const [editedItems, setEditedItems] = useState([])
   const { user } = useAuth()
@@ -2429,7 +2460,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
     remarks: '',
     date_needed: '',
     project: '',
-    project_address: ''
+    project_address: '',
+    order_number: ''
   })
   const [editDraftItems, setEditDraftItems] = useState([])
 
@@ -2447,7 +2479,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
           remarks: data.remarks || '',
           date_needed: data.date_needed ? data.date_needed.split('T')[0] : '',
           project: data.project || '',
-          project_address: data.project_address || ''
+          project_address: data.project_address || '',
+          order_number: data.order_number || ''
         })
         // Initialize edit draft form data
         setEditDraftFormData({
@@ -2455,7 +2488,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
           remarks: data.remarks || '',
           date_needed: data.date_needed ? data.date_needed.split('T')[0] : '',
           project: data.project || '',
-          project_address: data.project_address || ''
+          project_address: data.project_address || '',
+          order_number: data.order_number || ''
         })
       } catch (err) {
         console.error('Failed to fetch PR details', err)
@@ -2495,6 +2529,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
         date_needed: resubmitFormData.date_needed,
         project: resubmitFormData.project,
         project_address: resubmitFormData.project_address,
+        order_number: resubmitFormData.order_number,
         items: editedItems.map(item => ({
           item_id: item.item_id,
           quantity: item.quantity,
@@ -2551,6 +2586,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
         date_needed: editDraftFormData.date_needed,
         project: editDraftFormData.project,
         project_address: editDraftFormData.project_address,
+        order_number: editDraftFormData.order_number,
         items: editDraftItems.map(item => ({
           item_id: item.item_id,
           quantity: item.quantity,
@@ -2568,7 +2604,8 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
         remarks: editDraftFormData.remarks,
         date_needed: editDraftFormData.date_needed,
         project: editDraftFormData.project,
-        project_address: editDraftFormData.project_address
+        project_address: editDraftFormData.project_address,
+        order_number: editDraftFormData.order_number
       }))
       
       // Close modal after success
@@ -2594,6 +2631,7 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
           <div><span className="font-medium text-gray-700">Date Needed:</span> {pr.date_needed ? formatDate(pr.date_needed) : '-'}</div>
           <div><span className="font-medium text-gray-700">Project:</span> {pr.project || '-'}</div>
           <div><span className="font-medium text-gray-700">Project Address:</span> {pr.project_address || '-'}</div>
+          <div><span className="font-medium text-gray-700">Order Number:</span> {pr.order_number || '-'}</div>
           <div><span className="font-medium text-gray-700">Total Amount:</span> {pr.total_amount ? formatCurrency(pr.total_amount) : '-'}</div>
           <div><span className="font-medium text-gray-700">Status:</span> <StatusBadge status={pr.status} /></div>
         </div>
@@ -2753,7 +2791,12 @@ const PRExpandedDetails = ({ pr: initialPr }) => {
                   <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Requested By:</div>
                   <div className="sm:col-span-1 p-2 sm:p-3 text-gray-900">{pr.requester_first_name} {pr.requester_last_name}</div>
                 </div>
-                {/* Row 5: Project Address */}
+                {/* Row 5: Order Number */}
+                <div className="grid grid-cols-1 sm:grid-cols-6 border-b border-gray-300">
+                  <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Order Number:</div>
+                  <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{pr.order_number || '-'}</div>
+                </div>
+                {/* Row 6: Project Address */}
                 <div className="grid grid-cols-1 sm:grid-cols-6">
                   <div className="sm:col-span-1 bg-gray-100 p-2 sm:p-3 font-medium text-gray-700 border-b sm:border-b-0 sm:border-r border-gray-300">Project Address:</div>
                   <div className="sm:col-span-5 p-2 sm:p-3 text-gray-900">{pr.project_address || '-'}</div>
@@ -3163,6 +3206,7 @@ const PendingPRs = () => {
         expected_delivery_date: poFormData.expected_delivery_date,
         place_of_delivery: poFormData.place_of_delivery,
         project: selectedPR.project,
+        order_number: selectedPR.order_number,
         notes: poFormData.notes,
         items: poItems
       })
@@ -3381,6 +3425,16 @@ const PendingPRs = () => {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                <input
+                  type="text"
+                  value={selectedPR.order_number || ''}
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md bg-gray-50 text-gray-700 focus:outline-none"
+                />
+              </div>
+
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Place of Delivery</label>
                 <input
                   type="text"
@@ -3409,6 +3463,7 @@ const PendingPRs = () => {
                   <p><strong>PR Number:</strong> {selectedPR.pr_number}</p>
                   <p><strong>Project:</strong> {selectedPR.project || '-'}</p>
                   <p><strong>Project Address:</strong> {selectedPR.project_address || '-'}</p>
+                  <p><strong>Order Number:</strong> {selectedPR.order_number || '-'}</p>
                   <p><strong>Purpose:</strong> {selectedPR.purpose}</p>
                   <p><strong>Requested by:</strong> {selectedPR.requester_first_name} {selectedPR.requester_last_name}</p>
                   <p><strong>Created:</strong> {formatDate(selectedPR.created_at)}</p>
@@ -4909,7 +4964,12 @@ const POExpandedDetails = ({ po }) => {
                   <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Project:</div>
                   <div className="col-span-2 p-3 text-sm text-gray-900">{po.project || '-'}</div>
                 </div>
-                {/* Row 4: Expected Delivery and Place of Delivery */}
+                {/* Row 4: Order Number */}
+                <div className="grid grid-cols-6 border-b border-gray-300">
+                  <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Order Number:</div>
+                  <div className="col-span-5 p-3 text-sm text-gray-900">{po.order_number || '-'}</div>
+                </div>
+                {/* Row 5: Expected Delivery and Place of Delivery */}
                 <div className="grid grid-cols-6 border-b border-gray-300">
                   <div className="col-span-1 bg-gray-100 p-3 text-sm font-medium text-gray-700 border-r border-gray-300">Expected Delivery:</div>
                   <div className="col-span-2 p-3 text-sm text-gray-900">{formatDate(po.expected_delivery_date)}</div>
@@ -6286,11 +6346,14 @@ const DisbursementVouchers = () => {
     purchase_order_id: '',
     particulars: 'Payment for the procurement of materials',
     project: '',
+    order_number: '',
     check_number: '',
     bank_name: '',
     payment_date: '',
     received_by: ''
   })
+  const [poSearchTerm, setPoSearchTerm] = useState('')
+  const [showSearchResults, setShowSearchResults] = useState(false)
 
   useEffect(() => {
     fetchVouchers()
@@ -6323,15 +6386,38 @@ const DisbursementVouchers = () => {
     }
   }
 
-  const handlePOSelect = (e) => {
-    const poId = e.target.value
-    const selectedPO = purchaseOrders.find(po => po.id.toString() === poId)
+  const handlePOSelect = (po) => {
     setFormData({ 
       ...formData, 
-      purchase_order_id: poId,
-      project: selectedPO?.project || ''
+      purchase_order_id: po.id.toString(),
+      project: po.project || '',
+      order_number: po.order_number || ''
     })
+    setPoSearchTerm('')
+    setShowSearchResults(false)
   }
+
+  const handleClearPO = () => {
+    setFormData({ 
+      ...formData, 
+      purchase_order_id: '',
+      project: '',
+      order_number: ''
+    })
+    setPoSearchTerm('')
+    setShowSearchResults(false)
+  }
+
+  const filteredPOs = poSearchTerm.trim() 
+    ? purchaseOrders.filter(po => {
+        const searchLower = poSearchTerm.toLowerCase()
+        return (
+          po.po_number?.toLowerCase().includes(searchLower) ||
+          po.supplier_name?.toLowerCase().includes(searchLower) ||
+          po.order_number?.toLowerCase().includes(searchLower)
+        )
+      })
+    : []
 
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -6353,6 +6439,7 @@ const DisbursementVouchers = () => {
         purchase_order_id: formData.purchase_order_id,
         particulars: formData.particulars,
         project: formData.project,
+        order_number: formData.order_number,
         check_number: formData.check_number || undefined,
         bank_name: formData.bank_name || undefined,
         payment_date: formData.payment_date || undefined,
@@ -6365,11 +6452,14 @@ const DisbursementVouchers = () => {
           purchase_order_id: '',
           particulars: 'Payment for the procurement of materials',
           project: '',
+          order_number: '',
           check_number: '',
           bank_name: '',
           payment_date: '',
           received_by: ''
         })
+        setPoSearchTerm('')
+        setShowSearchResults(false)
         setCreateSuccess(false)
         fetchVouchers()
       }, 1500)
@@ -6575,21 +6665,71 @@ const DisbursementVouchers = () => {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Order *</label>
-                <select
-                  name="purchase_order_id"
-                  value={formData.purchase_order_id}
-                  onChange={handlePOSelect}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
-                >
-                  <option value="">Select a Purchase Order</option>
-                  {purchaseOrders.map(po => (
-                    <option key={po.id} value={po.id}>
-                      {po.po_number} - {po.supplier_name} ({formatCurrency(po.total_amount)})
-                    </option>
-                  ))}
-                </select>
-                {purchaseOrders.length === 0 && (
-                  <p className="text-xs text-red-500 mt-1">No approved purchase orders available</p>
+                
+                {formData.purchase_order_id ? (
+                  // Selected PO Display
+                  <div className="border border-gray-300 rounded-md p-3 bg-gray-50">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {purchaseOrders.find(po => po.id.toString() === formData.purchase_order_id)?.po_number}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {purchaseOrders.find(po => po.id.toString() === formData.purchase_order_id)?.supplier_name}
+                          {' '}
+                          ({formatCurrency(purchaseOrders.find(po => po.id.toString() === formData.purchase_order_id)?.total_amount)})
+                          {purchaseOrders.find(po => po.id.toString() === formData.purchase_order_id)?.order_number && (
+                            <span className="ml-1">[Order: {purchaseOrders.find(po => po.id.toString() === formData.purchase_order_id)?.order_number}]</span>
+                          )}
+                        </p>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={handleClearPO}>
+                        Change
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  // Search Interface
+                  <>
+                    <input
+                      type="text"
+                      placeholder="Search PO number, supplier, or order number..."
+                      value={poSearchTerm}
+                      onChange={(e) => {
+                        setPoSearchTerm(e.target.value)
+                        setShowSearchResults(e.target.value.trim().length > 0)
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    />
+                    
+                    {/* Search Results */}
+                    {showSearchResults && (
+                      <div className="mt-1 border border-gray-300 rounded-md max-h-40 overflow-y-auto">
+                        {filteredPOs.length > 0 ? (
+                          filteredPOs.map(po => (
+                            <button
+                              key={po.id}
+                              type="button"
+                              onClick={() => handlePOSelect(po)}
+                              className="w-full text-left px-3 py-2 hover:bg-yellow-50 border-b border-gray-100 last:border-0"
+                            >
+                              <p className="text-sm font-medium text-gray-900">{po.po_number}</p>
+                              <p className="text-xs text-gray-600">
+                                {po.supplier_name} ({formatCurrency(po.total_amount)})
+                                {po.order_number && <span className="ml-1">[Order: {po.order_number}]</span>}
+                              </p>
+                            </button>
+                          ))
+                        ) : (
+                          <p className="px-3 py-2 text-sm text-gray-500">No purchase orders found</p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {purchaseOrders.length === 0 && (
+                      <p className="text-xs text-red-500 mt-1">No approved purchase orders available</p>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -6718,6 +6858,10 @@ const DisbursementVouchers = () => {
                 <div>
                   <p className="text-xs text-gray-500 uppercase">Project</p>
                   <p className="text-sm font-medium">{selectedVoucher.project || '-'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 uppercase">Order Number</p>
+                  <p className="text-sm font-medium">{selectedVoucher.order_number || '-'}</p>
                 </div>
               </div>
 
@@ -7449,6 +7593,395 @@ const EmployeesManagement = () => {
   )
 }
 
+// ============ ORDER NUMBERS ============
+const OrderNumbers = () => {
+  const [orderNumbers, setOrderNumbers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [selectedOrderFilter, setSelectedOrderFilter] = useState('all')
+  const [expandedOrder, setExpandedOrder] = useState(null)
+
+  useEffect(() => {
+    fetchOrderNumbers()
+  }, [])
+
+  const fetchOrderNumbers = async () => {
+    try {
+      setLoading(true)
+      const [prs, pos, dvs] = await Promise.all([
+        purchaseRequestService.getAll(),
+        purchaseOrderService.getAll(),
+        disbursementVoucherService.getAll()
+      ])
+      
+      // Group by order number
+      const orderMap = new Map()
+      
+      // Add PRs
+      prs.forEach(pr => {
+        if (pr.order_number) {
+          if (!orderMap.has(pr.order_number)) {
+            orderMap.set(pr.order_number, {
+              order_number: pr.order_number,
+              purchase_requests: [],
+              purchase_orders: [],
+              disbursement_vouchers: [],
+              project: pr.project,
+              project_address: pr.project_address
+            })
+          }
+          orderMap.get(pr.order_number).purchase_requests.push(pr)
+        }
+      })
+      
+      // Add POs
+      pos.forEach(po => {
+        if (po.order_number) {
+          if (!orderMap.has(po.order_number)) {
+            orderMap.set(po.order_number, {
+              order_number: po.order_number,
+              purchase_requests: [],
+              purchase_orders: [],
+              disbursement_vouchers: [],
+              project: po.project
+            })
+          }
+          orderMap.get(po.order_number).purchase_orders.push(po)
+        }
+      })
+      
+      // Add DVs
+      dvs.forEach(dv => {
+        if (dv.order_number) {
+          if (!orderMap.has(dv.order_number)) {
+            orderMap.set(dv.order_number, {
+              order_number: dv.order_number,
+              purchase_requests: [],
+              purchase_orders: [],
+              disbursement_vouchers: [],
+              project: dv.project
+            })
+          }
+          orderMap.get(dv.order_number).disbursement_vouchers.push(dv)
+        }
+      })
+      
+      setOrderNumbers(Array.from(orderMap.values()))
+    } catch (err) {
+      setError('Failed to fetch order numbers')
+      console.error('Failed to fetch order numbers', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filteredOrders = orderNumbers.filter(order => {
+    const matchesSearch = order.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.project?.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesOrderFilter = selectedOrderFilter === 'all' || order.order_number === selectedOrderFilter
+    return matchesSearch && matchesOrderFilter
+  })
+
+  // Calculate totals based on filtered data (or all if 'all' selected)
+  const displayOrders = selectedOrderFilter === 'all' ? orderNumbers : filteredOrders
+  const grandTotalPOs = displayOrders.reduce((sum, order) => 
+    sum + (order.purchase_orders?.reduce((poSum, po) => poSum + (parseFloat(po.total_amount) || 0), 0) || 0), 0
+  )
+  const grandTotalBills = displayOrders.reduce((sum, order) => 
+    sum + (order.disbursement_vouchers?.reduce((dvSum, dv) => dvSum + (parseFloat(dv.amount) || 0), 0) || 0), 0
+  )
+  const totalPRs = displayOrders.reduce((sum, order) => sum + (order.purchase_requests?.length || 0), 0)
+  const totalPOs = displayOrders.reduce((sum, order) => sum + (order.purchase_orders?.length || 0), 0)
+  const totalBills = displayOrders.reduce((sum, order) => sum + (order.disbursement_vouchers?.length || 0), 0)
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Grand Totals Overview */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card className="p-4 text-center">
+          <p className="text-xs text-gray-500 uppercase mb-1">Total Order Numbers</p>
+          <p className="text-2xl font-bold text-gray-900">{orderNumbers.length}</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <p className="text-xs text-gray-500 uppercase mb-1">Total PRs</p>
+          <p className="text-2xl font-bold text-blue-600">{totalPRs}</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <p className="text-xs text-gray-500 uppercase mb-1">Total POs</p>
+          <p className="text-2xl font-bold text-green-600">{totalPOs}</p>
+          <p className="text-xs text-gray-600 mt-1">{formatCurrency(grandTotalPOs)}</p>
+        </Card>
+        <Card className="p-4 text-center">
+          <p className="text-xs text-gray-500 uppercase mb-1">Total Bills</p>
+          <p className="text-2xl font-bold text-purple-600">{totalBills}</p>
+          <p className="text-xs text-gray-600 mt-1">{formatCurrency(grandTotalBills)}</p>
+        </Card>
+        <Card className="p-4 text-center bg-yellow-50 border-yellow-200">
+          <p className="text-xs text-yellow-700 uppercase mb-1">Grand Total</p>
+          <p className="text-2xl font-bold text-yellow-700">{formatCurrency(grandTotalPOs + grandTotalBills)}</p>
+        </Card>
+      </div>
+
+      {/* Order Number Filter */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
+          <select
+            value={selectedOrderFilter}
+            onChange={(e) => setSelectedOrderFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+          >
+            <option value="all">All Order Numbers</option>
+            {orderNumbers.map(order => (
+              <option key={order.order_number} value={order.order_number}>
+                {order.order_number}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search order number or project..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+        </div>
+        <div className="text-sm text-gray-500">
+          {filteredOrders.length} order number{filteredOrders.length !== 1 ? 's' : ''}
+        </div>
+      </div>
+
+      <Card>
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-gray-200">
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Order Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purchase Requests</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purchase Orders</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Bills (DVs)</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredOrders.map(order => (
+                <React.Fragment key={order.order_number}>
+                  <tr 
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => setExpandedOrder(expandedOrder === order.order_number ? null : order.order_number)}
+                  >
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{order.order_number}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {order.purchase_requests?.length || 0} PR{(order.purchase_requests?.length || 0) !== 1 ? 's' : ''}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                        {order.purchase_orders?.length || 0} PO{(order.purchase_orders?.length || 0) !== 1 ? 's' : ''}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                        {order.disbursement_vouchers?.length || 0} Bill{(order.disbursement_vouchers?.length || 0) !== 1 ? 's' : ''}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <Button variant="ghost" size="sm">
+                        {expandedOrder === order.order_number ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expandedOrder === order.order_number && (
+                    <tr>
+                      <td colSpan="5" className="bg-gray-50 p-4">
+                        <OrderDetails order={order} />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+              {filteredOrders.length === 0 && (
+                <tr>
+                  <td colSpan="5" className="py-8 text-center text-gray-500">
+                    No order numbers found
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Grid View */}
+        <div className="md:hidden p-4">
+          <div className="space-y-3">
+            {filteredOrders.map(order => (
+              <div
+                key={order.order_number}
+                onClick={() => setExpandedOrder(expandedOrder === order.order_number ? null : order.order_number)}
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  expandedOrder === order.order_number 
+                    ? 'border-yellow-500 bg-yellow-50' 
+                    : 'border-gray-200 bg-white hover:border-gray-300'
+                }`}
+              >
+                {/* Header */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <p className="text-xs text-gray-500 font-mono">{order.order_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 leading-tight">{order.project || 'No Project'}</p>
+                  </div>
+                  <Button variant="ghost" size="sm">
+                    {expandedOrder === order.order_number ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                {/* Counts */}
+                <div className="flex gap-2 mb-2 flex-wrap">
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                    {order.purchase_requests?.length || 0} PR{(order.purchase_requests?.length || 0) !== 1 ? 's' : ''}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                    {order.purchase_orders?.length || 0} PO{(order.purchase_orders?.length || 0) !== 1 ? 's' : ''}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                    {order.disbursement_vouchers?.length || 0} Bill{(order.disbursement_vouchers?.length || 0) !== 1 ? 's' : ''}
+                  </span>
+                </div>
+
+                {/* Expanded Details */}
+                {expandedOrder === order.order_number && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <OrderDetails order={order} />
+                  </div>
+                )}
+              </div>
+            ))}
+            {filteredOrders.length === 0 && (
+              <p className="text-center text-gray-500 py-8">No order numbers found</p>
+            )}
+          </div>
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+// Order Details sub-component
+const OrderDetails = ({ order }) => {
+  const getDVStatusColor = (status) => {
+    const colors = {
+      'Draft': 'bg-gray-100 text-gray-800',
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'Paid': 'bg-green-100 text-green-800',
+      'Cancelled': 'bg-red-100 text-red-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  // Calculate totals
+  const poTotal = order.purchase_orders?.reduce((sum, po) => sum + (parseFloat(po.total_amount) || 0), 0) || 0
+  const billTotal = order.disbursement_vouchers?.reduce((sum, dv) => sum + (parseFloat(dv.amount) || 0), 0) || 0
+
+  return (
+    <div className="space-y-4">
+      {/* Overview / Totals */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <h4 className="text-sm font-semibold text-gray-700 mb-3">Order Overview</h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="text-center p-3 bg-green-50 rounded-lg">
+            <p className="text-xs text-gray-600 mb-1">Total Purchase Orders</p>
+            <p className="text-xl font-bold text-green-700">{formatCurrency(poTotal)}</p>
+            <p className="text-xs text-gray-500">{order.purchase_orders?.length || 0} POs</p>
+          </div>
+          <div className="text-center p-3 bg-purple-50 rounded-lg">
+            <p className="text-xs text-gray-600 mb-1">Total Bills (Paid/Pending)</p>
+            <p className="text-xl font-bold text-purple-700">{formatCurrency(billTotal)}</p>
+            <p className="text-xs text-gray-500">{order.disbursement_vouchers?.length || 0} Bills</p>
+          </div>
+        </div>
+      </div>
+      {/* Purchase Requests */}
+      {(order.purchase_requests?.length || 0) > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Purchase Requests</h4>
+          <div className="space-y-2">
+            {order.purchase_requests.map(pr => (
+              <div key={pr.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{pr.pr_number}</p>
+                  <p className="text-xs text-gray-500">{pr.purpose}</p>
+                </div>
+                <StatusBadge status={pr.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Orders */}
+      {(order.purchase_orders?.length || 0) > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Purchase Orders</h4>
+          <div className="space-y-2">
+            {order.purchase_orders.map(po => (
+              <div key={po.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{po.po_number}</p>
+                  <p className="text-xs text-gray-500">{po.supplier_name} • {formatCurrency(po.total_amount)}</p>
+                </div>
+                <StatusBadge status={po.status} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Bills / Disbursement Vouchers */}
+      {(order.disbursement_vouchers?.length || 0) > 0 && (
+        <div>
+          <h4 className="text-sm font-semibold text-gray-700 mb-2">Bills (Disbursement Vouchers)</h4>
+          <div className="space-y-2">
+            {order.disbursement_vouchers.map(dv => (
+              <div key={dv.id} className="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{dv.dv_number}</p>
+                  <p className="text-xs text-gray-500">{dv.supplier_name} • {formatCurrency(dv.amount)}</p>
+                  {dv.check_number && <p className="text-xs text-gray-400">Check: {dv.check_number}</p>}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getDVStatusColor(dv.status)}`}>
+                  {dv.status}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Project Address */}
+      {order.project_address && (
+        <div className="pt-2 border-t border-gray-200">
+          <p className="text-xs text-gray-500">
+            <strong>Project Address:</strong> {order.project_address}
+          </p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============ MAIN APP ============
 function App() {
   const { user, isAuthenticated, loading, token } = useAuth()
@@ -7567,6 +8100,8 @@ function App() {
           return <PurchaseOrders />
         case 'disbursement-vouchers':
           return <DisbursementVouchers />
+        case 'order-numbers':
+          return <OrderNumbers />
         case 'pending-prs':
           return <PendingPRs />
         case 'settings':
@@ -7595,6 +8130,8 @@ function App() {
           return <AllPurchaseRequests />
         case 'all-pos':
           return <PurchaseOrders />
+        case 'order-numbers':
+          return <OrderNumbers />
         case 'reports':
           return <ReportsAnalytics />
         case 'settings':

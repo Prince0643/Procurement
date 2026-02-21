@@ -12,6 +12,7 @@ CREATE TABLE `disbursement_vouchers` (
   `dv_date` date NOT NULL COMMENT 'Date when DV was created',
   `particulars` text DEFAULT NULL COMMENT 'Payment particulars/description',
   `project` varchar(100) DEFAULT NULL,
+  `order_number` varchar(10) DEFAULT NULL,
   `pr_number` varchar(50) DEFAULT NULL COMMENT 'Reference to PR number',
   `check_number` varchar(50) DEFAULT NULL COMMENT 'Check number when payment is processed',
   `bank_name` varchar(100) DEFAULT NULL,
