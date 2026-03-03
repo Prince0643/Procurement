@@ -14,11 +14,16 @@ const router = express.Router();
 // Get all Disbursement Vouchers
 router.get('/', authenticate, async (req, res) => {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
     let query = `
       SELECT dv.*, 
              s.supplier_name,
              po.po_number,
              pr.pr_number,
+             sr.sr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -29,6 +34,7 @@ router.get('/', authenticate, async (req, res) => {
       LEFT JOIN suppliers s ON dv.supplier_id = s.id
       LEFT JOIN purchase_orders po ON dv.purchase_order_id = po.id
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
+      LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -40,11 +46,23 @@ router.get('/', authenticate, async (req, res) => {
       query += ' WHERE pr.requested_by = ?';
       params.push(req.user.id);
     }
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM disbursement_vouchers dv
+      LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
+      ${req.user.role === 'engineer' ? 'WHERE pr.requested_by = ?' : ''}
+    `;
+    const countParams = [];
+    if (req.user.role === 'engineer') {
+      countParams.push(req.user.id);
+    }
     
-    query += ' ORDER BY dv.created_at DESC';
+    query += ' ORDER BY dv.created_at DESC LIMIT ? OFFSET ?';
     
-    const [vouchers] = await db.query(query, params);
-    res.json({ disbursementVouchers: vouchers });
+    const [vouchers] = await db.query(query, [...params, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, countParams);
+    res.json({ disbursementVouchers: vouchers, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Failed to fetch disbursement vouchers', error);
     res.status(500).json({ message: 'Failed to fetch disbursement vouchers' });
@@ -59,6 +77,7 @@ router.get('/:id', authenticate, async (req, res) => {
              s.supplier_name, s.address as supplier_address, s.contact_person, s.phone, s.email,
              po.po_number, po.total_amount as po_total_amount,
              pr.pr_number, pr.project_address,
+             sr.sr_number, sr.purpose as sr_purpose,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -69,6 +88,7 @@ router.get('/:id', authenticate, async (req, res) => {
       LEFT JOIN suppliers s ON dv.supplier_id = s.id
       LEFT JOIN purchase_orders po ON dv.purchase_order_id = po.id
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
+      LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -99,7 +119,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
   let conn;
   try {
     const { 
-      purchase_order_id, 
+      purchase_order_id,
+      service_request_id,
       particulars, 
       project,
       order_number,
@@ -109,39 +130,74 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       received_by 
     } = req.body;
     
-    // Validate required field
-    if (!purchase_order_id) {
-      return res.status(400).json({ message: 'Purchase Order ID is required' });
+    // Validate - need either purchase_order_id or service_request_id
+    if (!purchase_order_id && !service_request_id) {
+      return res.status(400).json({ message: 'Purchase Order ID or Service Request ID is required' });
     }
     
     conn = await db.getConnection();
     await conn.beginTransaction();
     
-    // Get PO details with supplier and PR info
-    const [pos] = await conn.query(`
-      SELECT po.*, pr.pr_number, pr.project as pr_project, s.address as supplier_address
-      FROM purchase_orders po
-      LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
-      LEFT JOIN suppliers s ON po.supplier_id = s.id
-      WHERE po.id = ?
-    `, [purchase_order_id]);
+    let sourceData = null;
+    let dvType = 'po_based';
+    let finalPurchaseOrderId = purchase_order_id || null;
+    let finalServiceRequestId = service_request_id || null;
+    let supplierId = null;
+    let amount = 0;
+    let prNumber = null;
+    let srNumber = null;
     
-    if (pos.length === 0) {
-      await conn.rollback();
-      return res.status(404).json({ message: 'Purchase order not found' });
+    if (purchase_order_id) {
+      // Get PO details with supplier and PR info
+      const [pos] = await conn.query(`
+        SELECT po.*, pr.pr_number, pr.project as pr_project, s.address as supplier_address
+        FROM purchase_orders po
+        LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
+        LEFT JOIN suppliers s ON po.supplier_id = s.id
+        WHERE po.id = ?
+      `, [purchase_order_id]);
+      
+      if (pos.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Purchase order not found' });
+      }
+      
+      sourceData = pos[0];
+      supplierId = sourceData.supplier_id;
+      amount = sourceData.total_amount;
+      prNumber = sourceData.pr_number;
+      dvType = 'po_based';
+      finalServiceRequestId = sourceData.service_request_id || null;
+    } else {
+      // Get Service Request details
+      const [srs] = await conn.query(`
+        SELECT sr.*, s.address as supplier_address
+        FROM service_requests sr
+        LEFT JOIN suppliers s ON sr.supplier_id = s.id
+        WHERE sr.id = ?
+      `, [service_request_id]);
+      
+      if (srs.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Service request not found' });
+      }
+      
+      sourceData = srs[0];
+      supplierId = sourceData.supplier_id;
+      amount = sourceData.amount;
+      srNumber = sourceData.sr_number;
+      dvType = 'sr_based';
     }
     
-    const po = pos[0];
-    
-    // Check if a DV already exists for this PO
+    // Check if a DV already exists for this PO or SR
     const [existingDVs] = await conn.query(
-      'SELECT id FROM disbursement_vouchers WHERE purchase_order_id = ? AND status != ?',
-      [purchase_order_id, 'Cancelled']
+      'SELECT id FROM disbursement_vouchers WHERE (purchase_order_id = ? OR service_request_id = ?) AND status != ?',
+      [finalPurchaseOrderId, finalServiceRequestId, 'Cancelled']
     );
     
     if (existingDVs.length > 0) {
       await conn.rollback();
-      return res.status(400).json({ message: 'A disbursement voucher already exists for this purchase order' });
+      return res.status(400).json({ message: 'A disbursement voucher already exists for this order' });
     }
     
     // Generate DV number (YYYY-MM-### format)
@@ -169,26 +225,29 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // Create DV
     const [result] = await conn.query(
       `INSERT INTO disbursement_vouchers 
-       (dv_number, purchase_order_id, purchase_request_id, supplier_id, prepared_by, 
-        amount, dv_date, particulars, project, order_number, pr_number, check_number, bank_name, 
-        payment_date, received_by, status) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (dv_number, purchase_order_id, service_request_id, purchase_request_id, supplier_id, prepared_by, 
+        amount, dv_date, particulars, project, order_number, pr_number, sr_number, check_number, bank_name, 
+        payment_date, received_by, status, dv_type) 
+       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         dvNumber, 
-        purchase_order_id, 
-        po.purchase_request_id, 
-        po.supplier_id, 
+        finalPurchaseOrderId, 
+        finalServiceRequestId,
+        sourceData.purchase_request_id || null,
+        supplierId, 
         req.user.id,
-        po.total_amount,
-        particulars || 'Payment for the procurement of materials',
-        project || po.pr_project,
-        order_number || po.order_number,
-        po.pr_number,
+        amount,
+        particulars || (dvType === 'sr_based' ? 'Payment for services' : 'Payment for the procurement of materials'),
+        project || sourceData.pr_project || sourceData.project || null,
+        order_number || sourceData.order_number || null,
+        prNumber,
+        srNumber,
         check_number || null,
         bank_name || null,
         payment_date || null,
         received_by || null,
-        'Draft'
+        'Draft',
+        dvType
       ]
     );
 

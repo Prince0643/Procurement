@@ -7,6 +7,10 @@ const router = express.Router();
 // Get all suppliers
 router.get('/', authenticate, async (req, res) => {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
     const [suppliers] = await db.query(`
       SELECT s.*, COUNT(si.item_id) as items_count
       FROM suppliers s
@@ -14,8 +18,14 @@ router.get('/', authenticate, async (req, res) => {
       WHERE s.status = 'Active'
       GROUP BY s.id
       ORDER BY s.supplier_name
-    `);
-    res.json({ suppliers });
+      LIMIT ? OFFSET ?
+    `, [pageSize, offset]);
+
+    const [countRows] = await db.query(
+      "SELECT COUNT(*) as total FROM suppliers WHERE status = 'Active'"
+    );
+
+    res.json({ suppliers, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Failed to fetch suppliers', error);
     res.status(500).json({ message: 'Failed to fetch suppliers' });

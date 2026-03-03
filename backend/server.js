@@ -4,8 +4,11 @@ import dotenv from 'dotenv';
 import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import db from './config/database.js';
 import { initSocket } from './utils/socket.js';
+import sanitizeInput from './middleware/sanitize.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -14,6 +17,7 @@ import authRoutes from './routes/auth.js';
 import itemRoutes from './routes/items.js';
 import prRoutes from './routes/purchaseRequests.js';
 import poRoutes from './routes/purchaseOrders.js';
+import serviceRequestRoutes from './routes/serviceRequests.js';
 import supplierRoutes from './routes/suppliers.js';
 import categoryRoutes from './routes/categories.js';
 import notificationRoutes from './routes/notifications.js';
@@ -40,8 +44,44 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// Security headers
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "/uploads"],
+    },
+  },
+  crossOriginEmbedderPolicy: false,
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// XSS sanitization middleware
+app.use(sanitizeInput);
+
+// Rate limiting
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  message: 'Too many requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5, // 5 login attempts per 15 minutes
+  skipSuccessfulRequests: true,
+});
+
+// Apply rate limiting
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
 
 // Make io available to routes
 app.use((req, res, next) => {
@@ -75,6 +115,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);
 app.use('/api/purchase-requests', prRoutes);
 app.use('/api/purchase-orders', poRoutes);
+app.use('/api/service-requests', serviceRequestRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);

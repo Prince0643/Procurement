@@ -76,11 +76,20 @@ router.get('/',
   requireSuperAdmin,
   async (req, res) => {
     try {
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+      const offset = (page - 1) * pageSize;
+
       const [rows] = await db.query(
-        'SELECT id, employee_no, first_name, middle_initial, last_name, role, department, is_active, created_at FROM employees ORDER BY created_at DESC'
+        'SELECT id, employee_no, first_name, middle_initial, last_name, role, department, is_active, created_at FROM employees ORDER BY created_at DESC LIMIT ? OFFSET ?',
+        [pageSize, offset]
       );
 
-      res.json({ employees: rows });
+      const [countRows] = await db.query(
+        'SELECT COUNT(*) as total FROM employees'
+      );
+
+      res.json({ employees: rows, page, pageSize, total: countRows?.[0]?.total ?? 0 });
     } catch (error) {
       console.error('Get employees error:', error);
       res.status(500).json({ message: 'Server error fetching employees' });

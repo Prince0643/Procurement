@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import LandingPage from './components/LandingPage'
 import { itemService } from './services/items'
 import { purchaseRequestService } from './services/purchaseRequests'
 import { purchaseOrderService } from './services/purchaseOrders'
@@ -11,6 +13,7 @@ import { employeeService } from './services/employees'
 import { socketService } from './services/socket'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Login'
+import ServiceRequestsManagement from './components/service-requests/ServiceRequestsManagement'
 import { authService } from './services/auth'
 import {
   LayoutDashboard,
@@ -129,6 +132,114 @@ const getStatusColor = (status) => {
     'Cancelled': 'bg-red-100 text-red-800',
   }
   return colors[status] || 'bg-gray-100 text-gray-800'
+}
+
+const PricingHistory = () => {
+  const [history, setHistory] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [hasLoaded, setHasLoaded] = useState(false)
+
+  useEffect(() => {
+    setLoading(false)
+  }, [])
+
+  const fetchHistory = async () => {
+    try {
+      setLoading(true)
+      setError('')
+      setHasLoaded(true)
+      const data = await itemService.getPricingHistory()
+      setHistory(Array.isArray(data) ? data : [])
+    } catch (err) {
+      console.error('Failed to fetch pricing history', err)
+      setError('Failed to fetch pricing history')
+      setHistory([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const filtered = history.filter((row) => {
+    const name = String(row.item_name || row.name || '').toLowerCase()
+    const code = String(row.item_code || '').toLowerCase()
+    const term = searchTerm.toLowerCase()
+    return !term || name.includes(term) || code.includes(term)
+  })
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by item name or code..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+        </div>
+        <Button variant="secondary" onClick={fetchHistory} disabled={loading} className="whitespace-nowrap">
+          <RefreshCw className="w-4 h-4 mr-2" />
+          Refresh
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading pricing history...</p>
+        </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <p className="text-red-600">{error}</p>
+        </div>
+      ) : !hasLoaded ? (
+        <div className="text-center py-12">
+          <p className="text-gray-600">Click Refresh to load pricing history</p>
+        </div>
+      ) : (
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Item Code</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Item Name</th>
+                  <th className="text-right py-3 px-4 text-xs font-medium text-gray-500 uppercase">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((row, idx) => {
+                  const code = row.item_code || '-'
+                  const name = row.item_name || row.name || '-'
+                  const priceValue = row.price ?? row.unit_price ?? row.unit_cost ?? null
+                  const priceLabel = Number.isFinite(Number(priceValue)) ? formatCurrency(Number(priceValue)) : (priceValue ?? '-')
+                  const key = row.id ?? row.history_id ?? `${code}-${idx}`
+
+                  return (
+                    <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm text-gray-600 font-mono">{code}</td>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{name}</td>
+                      <td className="py-3 px-4 text-sm text-gray-900 text-right">{priceLabel}</td>
+                    </tr>
+                  )
+                })}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan="3" className="py-10 text-center text-gray-500">No pricing history found</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  )
 }
 
 // ============ COMPONENTS ============
@@ -910,8 +1021,10 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
   const roleNavItems = {
     engineer: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { id: 'items', label: 'Browse Items', icon: Package },
-      { id: 'purchase-requests', label: 'My Purchase Requests', icon: ShoppingCart },
+      { id: 'items', label: 'Items', icon: Package },
+      { id: 'pricing-history', label: 'Pricing History', icon: ClipboardList },
+      { id: 'service-requests', label: 'Service Requests', icon: FileText },
+      { id: 'purchase-requests', label: 'Purchase Requests', icon: ShoppingCart },
       { id: 'history', label: 'Purchase History', icon: ClipboardList },
       { id: 'settings', label: 'Settings', icon: Settings },
     ],
@@ -919,6 +1032,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'approve-prs', label: 'Approve PRs', icon: CheckCircle },
       { id: 'items', label: 'Items', icon: Package },
+      { id: 'pricing-history', label: 'Pricing History', icon: ClipboardList },
       { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
       { id: 'settings', label: 'Settings', icon: Settings },
@@ -926,7 +1040,9 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
     admin: [
       { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { id: 'items', label: 'Items', icon: Package },
+      { id: 'pricing-history', label: 'Pricing History', icon: ClipboardList },
       { id: 'suppliers', label: 'Suppliers', icon: Building2 },
+      { id: 'service-requests', label: 'Service Requests', icon: FileText },
       { id: 'purchase-orders', label: 'Purchase Orders', icon: FileText },
       { id: 'disbursement-vouchers', label: 'Disbursement Vouchers', icon: Receipt },
       { id: 'order-numbers', label: 'Order Numbers', icon: Hash },
@@ -939,6 +1055,7 @@ const Layout = ({ currentRole, children, onNavigate, activeNav: parentActiveNav 
       { id: 'approve-prs', label: 'Approve PRs', icon: CheckCircle },
       { id: 'approve-pos', label: 'Approve POs', icon: FileText },
       { id: 'items', label: 'Items', icon: Package },
+      { id: 'pricing-history', label: 'Pricing History', icon: ClipboardList },
       { id: 'add-item', label: 'Add Item', icon: Plus },
       { id: 'all-prs', label: 'All Purchase Requests', icon: ClipboardList },
       { id: 'all-pos', label: 'All Purchase Orders', icon: FileText },
@@ -1337,7 +1454,8 @@ const BrowseItems = () => {
   const [showCreatePR, setShowCreatePR] = useState(false)
   const [showCreatePRPreview, setShowCreatePRPreview] = useState(false)
   const [selectedItems, setSelectedItems] = useState([])
-  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
+  const [prFormData, setPrFormData] = useState({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '', payment_basis: 'debt', supplier_id: '' })
+  const [suppliers, setSuppliers] = useState([])
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const [submitSuccess, setSubmitSuccess] = useState(false)
@@ -1348,6 +1466,7 @@ const BrowseItems = () => {
   useEffect(() => {
     fetchItems()
     fetchBranches()
+    fetchSuppliers()
   }, [])
 
   const fetchBranches = async () => {
@@ -1384,6 +1503,15 @@ const BrowseItems = () => {
       setBranches([])
     } finally {
       setLoadingBranches(false)
+    }
+  }
+
+  const fetchSuppliers = async () => {
+    try {
+      const data = await supplierService.getAll()
+      setSuppliers(data)
+    } catch (err) {
+      console.error('Failed to fetch suppliers', err)
     }
   }
 
@@ -1467,6 +1595,8 @@ const BrowseItems = () => {
         project: prFormData.project,
         project_address: prFormData.project_address,
         order_number: prFormData.order_number,
+        payment_basis: prFormData.payment_basis,
+        supplier_id: prFormData.supplier_id,
         items: selectedItems.map(item => ({
           item_id: item.id,
           quantity: item.quantity,
@@ -1477,7 +1607,7 @@ const BrowseItems = () => {
       })
 
       setSubmitSuccess(true)
-      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '', payment_basis: 'debt', supplier_id: '' })
       setSelectedItems([])
       
       setTimeout(() => {
@@ -1504,6 +1634,8 @@ const BrowseItems = () => {
         project: prFormData.project,
         project_address: prFormData.project_address,
         order_number: prFormData.order_number,
+        payment_basis: prFormData.payment_basis,
+        supplier_id: prFormData.supplier_id,
         items: selectedItems.map(item => ({
           item_id: item.id,
           quantity: item.quantity,
@@ -1514,7 +1646,7 @@ const BrowseItems = () => {
       })
 
       setSubmitSuccess(true)
-      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '' })
+      setPrFormData({ purpose: '', remarks: '', date_needed: '', project: '', project_address: '', order_number: '', payment_basis: 'debt', supplier_id: '' })
       setSelectedItems([])
       
       setTimeout(() => {
@@ -1766,6 +1898,44 @@ const BrowseItems = () => {
                   placeholder="Order number"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
+              </div>
+
+              {/* Payment Basis Selection */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Basis *</label>
+                <select
+                  value={prFormData.payment_basis}
+                  onChange={(e) => setPrFormData({ ...prFormData, payment_basis: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  <option value="debt">Debt (Purchase Order)</option>
+                  <option value="non_debt">Non-Debt (Payment Request)</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {prFormData.payment_basis === 'debt' 
+                    ? 'Items received first, payment later (Purchase Order)' 
+                    : 'Payment first, items received after (Payment Request)'}
+                </p>
+              </div>
+
+              {/* Supplier Selection (Engineer can select preferred supplier) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Supplier</label>
+                <select
+                  value={prFormData.supplier_id}
+                  onChange={(e) => setPrFormData({ ...prFormData, supplier_id: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  <option value="">Select supplier (optional)</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.supplier_name}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Optional: Select your preferred supplier for this request
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Remarks (Optional)</label>
@@ -2239,6 +2409,7 @@ const AddItem = () => {
 
 const MyPurchaseRequests = () => {
   const [filterStatus, setFilterStatus] = useState('all')
+  const [viewMode, setViewMode] = useState('my') // 'my' or 'all'
   const [prs, setPRs] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -2251,7 +2422,7 @@ const MyPurchaseRequests = () => {
 
   useEffect(() => {
     fetchPRs()
-  }, [])
+  }, [viewMode])
 
   // Listen for real-time updates
   useEffect(() => {
@@ -2271,10 +2442,12 @@ const MyPurchaseRequests = () => {
   const fetchPRs = async () => {
     try {
       setLoading(true)
-      const data = await purchaseRequestService.getAll()
-      // Filter PRs for current user (engineer)
-      const myPRs = data.filter(pr => pr.requested_by === user?.id)
-      setPRs(myPRs)
+      const data = await purchaseRequestService.getAll(viewMode === 'all' ? 'all' : null)
+      // For engineers, if viewing 'my', filter client-side as backup
+      const filteredData = (user?.role === 'engineer' && viewMode === 'my') 
+        ? data.filter(pr => pr.requested_by === user?.id)
+        : data
+      setPRs(filteredData)
     } catch (err) {
       setError('Failed to fetch purchase requests')
     } finally {
@@ -2302,7 +2475,35 @@ const MyPurchaseRequests = () => {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h2 className="text-lg font-semibold text-gray-900">My Purchase Requests</h2>
+        <div className="flex items-center gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">
+            {viewMode === 'all' ? 'All Purchase Requests' : 'My Purchase Requests'}
+          </h2>
+          {user?.role === 'engineer' && (
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setViewMode('my')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'my'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                My PRs
+              </button>
+              <button
+                onClick={() => setViewMode('all')}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === 'all'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                All PRs
+              </button>
+            </div>
+          )}
+        </div>
         <div className="flex flex-wrap gap-2">
           {allStatuses.map(status => (
             <button
@@ -3679,6 +3880,15 @@ const ItemsManagement = () => {
       setCategories(data)
     } catch (err) {
       console.error('Failed to fetch categories', err)
+    }
+  }
+
+  const fetchSuppliers = async () => {
+    try {
+      const data = await supplierService.getAll()
+      setSuppliers(data)
+    } catch (err) {
+      console.error('Failed to fetch suppliers', err)
     }
   }
 
@@ -8054,10 +8264,14 @@ function App() {
           return <EngineerDashboard />
         case 'items':
           return <BrowseItems />
+        case 'pricing-history':
+          return <PricingHistory />
         case 'add-item':
           return <AddItem />
         case 'purchase-requests':
           return <MyPurchaseRequests />
+        case 'service-requests':
+          return <ServiceRequestsManagement />
         case 'history':
           return <MyPurchaseRequests />
         case 'settings':
@@ -8076,6 +8290,8 @@ function App() {
           return <ApprovePRs />
         case 'items':
           return <ItemsManagement />
+        case 'pricing-history':
+          return <PricingHistory />
         case 'add-item':
           return <AddItem />
         case 'all-prs':
@@ -8094,8 +8310,12 @@ function App() {
           return <AdminDashboard />
         case 'items':
           return <ItemsManagement />
+        case 'pricing-history':
+          return <PricingHistory />
         case 'suppliers':
           return <SuppliersManagement />
+        case 'service-requests':
+          return <ServiceRequestsManagement />
         case 'purchase-orders':
           return <PurchaseOrders />
         case 'disbursement-vouchers':
@@ -8124,6 +8344,8 @@ function App() {
           return <ApprovePOs />
         case 'items':
           return <ItemsManagement />
+        case 'pricing-history':
+          return <PricingHistory />
         case 'add-item':
           return <AddItem />
         case 'all-prs':

@@ -1,8 +1,9 @@
 import api from './api';
 
 export const purchaseRequestService = {
-  getAll: async () => {
-    const response = await api.get('/purchase-requests');
+  getAll: async (view) => {
+    const params = view ? { view } : {};
+    const response = await api.get('/purchase-requests', { params });
     return response.data.purchaseRequests;
   },
 

@@ -7,14 +7,24 @@ const router = express.Router();
 // Get all categories
 router.get('/', authenticate, async (req, res) => {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
     const [categories] = await db.query(`
       SELECT c.*, COUNT(i.id) as items_count
       FROM categories c
       LEFT JOIN items i ON c.id = i.category_id AND i.status = 'Active'
       GROUP BY c.id
       ORDER BY c.category_name
-    `);
-    res.json({ categories });
+      LIMIT ? OFFSET ?
+    `, [pageSize, offset]);
+
+    const [countRows] = await db.query(
+      'SELECT COUNT(*) as total FROM categories'
+    );
+
+    res.json({ categories, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Fetch categories error:', error);
     res.status(500).json({ message: 'Failed to fetch categories: ' + error.message });

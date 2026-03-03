@@ -6,6 +6,11 @@ export const itemService = {
     return response.data.items;
   },
 
+  getPricingHistory: async (params = {}) => {
+    const response = await api.get('/items/pricing-history', { params });
+    return response.data.history || response.data.items || response.data;
+  },
+
   getById: async (id) => {
     const response = await api.get(`/items/${id}`);
     return response.data.item;

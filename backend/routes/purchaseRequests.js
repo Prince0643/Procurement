@@ -14,6 +14,10 @@ const router = express.Router();
 // Get all PRs (filtered by user role)
 router.get('/', authenticate, async (req, res) => {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
     let query = `
       SELECT pr.*, 
              e.first_name as requester_first_name, 
@@ -23,17 +27,33 @@ router.get('/', authenticate, async (req, res) => {
     `;
     
     const params = [];
+    const { view } = req.query;
     
-    // Engineers see only their own PRs
+    // Engineers see only their own PRs by default, but can view all with ?view=all
     if (req.user.role === 'engineer') {
-      query += ' WHERE pr.requested_by = ?';
-      params.push(req.user.id);
+      if (view !== 'all') {
+        query += ' WHERE pr.requested_by = ?';
+        params.push(req.user.id);
+      }
     }
     
-    query += ' ORDER BY pr.created_at DESC';
-    
-    const [prs] = await db.query(query, params);
-    res.json({ purchaseRequests: prs });
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM purchase_requests pr
+      ${req.user.role === 'engineer' && view !== 'all' ? 'WHERE pr.requested_by = ?' : ''}
+    `;
+ 
+    const countParams = [];
+    if (req.user.role === 'engineer' && view !== 'all') {
+      countParams.push(req.user.id);
+    }
+ 
+    query += ' ORDER BY pr.created_at DESC LIMIT ? OFFSET ?';
+ 
+    const [prs] = await db.query(query, [...params, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, countParams);
+ 
+    res.json({ purchaseRequests: prs, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Fetch purchase requests error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase requests: ' + error.message });
@@ -49,11 +69,13 @@ router.get('/:id', authenticate, async (req, res) => {
              e.last_name as requester_last_name,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name,
-             s.supplier_name
+             s.supplier_name,
+             engineer_selected.supplier_name as engineer_supplier_name
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN employees approver ON pr.approved_by = approver.id
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
+      LEFT JOIN suppliers engineer_selected ON pr.supplier_id = engineer_selected.id
       WHERE pr.id = ?
     `, [req.params.id]);
 
@@ -104,7 +126,7 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, supplier_id } = req.body;
     const isDraft = save_as_draft === true;
 
     // Only validate required fields if NOT saving as draft
@@ -146,10 +168,11 @@ router.post('/', authenticate, async (req, res) => {
 
     const prNumber = `${initials}-${year}-${month}-${String(counter).padStart(3, '0')}`;
     const status = isDraft ? 'Draft' : 'For Procurement Review';
+    const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
 
     const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null, order_number || null]
+      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null, order_number || null, paymentBasis, supplier_id || null]
     );
 
     const prId = result.insertId;
@@ -195,7 +218,8 @@ router.post('/', authenticate, async (req, res) => {
       message: isDraft ? 'Draft saved successfully' : 'Purchase request created successfully',
       prId,
       pr_number: prNumber,
-      status: status
+      status: status,
+      payment_basis: paymentBasis
     });
   } catch (error) {
     if (conn) {
@@ -216,7 +240,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, supplier_id } = req.body;
 
     // Check if PR exists and is draft
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -242,9 +266,9 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     // Update PR details
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, updated_at = NOW()
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, updated_at = NOW()
        WHERE id = ?`,
-      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, req.params.id]
+      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, payment_basis ?? pr.payment_basis, supplier_id ?? pr.supplier_id, req.params.id]
     );
 
     // Update items if provided
@@ -792,7 +816,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, supplier_id } = req.body;
 
     // Check if PR exists and is rejected
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -819,11 +843,12 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     await conn.query(
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
+           payment_basis = ?, supplier_id = ?,
            status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
-           supplier_id = NULL, supplier_address = NULL, rejection_reason = NULL, 
+           supplier_address = NULL, rejection_reason = NULL, 
            total_amount = NULL, updated_at = NOW()
        WHERE id = ?`,
-      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, req.params.id]
+      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, payment_basis ?? pr.payment_basis, supplier_id ?? pr.supplier_id, req.params.id]
     );
 
     // Update items if provided

@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 12, 2026 at 03:57 AM
+-- Generation Time: Feb 26, 2026 at 01:57 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -47,6 +47,37 @@ INSERT INTO `categories` (`id`, `category_name`, `description`, `status`, `creat
 (4, 'Tools', 'Hand tools and power tools', 'Active', NULL, '2026-02-09 08:25:53'),
 (5, 'Raw Materials', 'Raw materials for production', 'Active', NULL, '2026-02-09 08:25:53'),
 (6, 'test', '', 'Active', NULL, '2026-02-09 08:38:36');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `disbursement_vouchers`
+--
+
+CREATE TABLE `disbursement_vouchers` (
+  `id` int(11) NOT NULL,
+  `dv_number` varchar(50) NOT NULL COMMENT 'Format: YYYY-MM-001 (incremental starting from 001)',
+  `purchase_order_id` int(11) NOT NULL,
+  `purchase_request_id` int(11) NOT NULL,
+  `supplier_id` int(11) NOT NULL,
+  `prepared_by` int(11) NOT NULL COMMENT 'Employee who created the DV',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'Total amount from PO',
+  `dv_date` date NOT NULL COMMENT 'Date when DV was created',
+  `particulars` text DEFAULT NULL COMMENT 'Payment particulars/description',
+  `project` varchar(100) DEFAULT NULL,
+  `pr_number` varchar(50) DEFAULT NULL COMMENT 'Reference to PR number',
+  `check_number` varchar(50) DEFAULT NULL COMMENT 'Check number when payment is processed',
+  `bank_name` varchar(100) DEFAULT NULL,
+  `payment_date` date DEFAULT NULL,
+  `received_by` varchar(255) DEFAULT NULL COMMENT 'Person who received payment',
+  `received_date` date DEFAULT NULL,
+  `status` enum('Draft','Pending','Paid','Cancelled') DEFAULT 'Draft',
+  `certified_by_accounting` int(11) DEFAULT NULL COMMENT 'Employee who certified availability of funds',
+  `certified_by_manager` int(11) DEFAULT NULL COMMENT 'General Manager who approved the DV',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `order_number` varchar(10) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -139,6 +170,39 @@ CREATE TABLE `notifications` (
 -- --------------------------------------------------------
 
 --
+-- Table structure for table `po_attachments`
+--
+
+CREATE TABLE `po_attachments` (
+  `id` int(11) NOT NULL,
+  `purchase_order_id` int(11) NOT NULL,
+  `file_path` varchar(500) NOT NULL COMMENT 'Relative path to file storage',
+  `file_name` varchar(255) NOT NULL COMMENT 'Original file name',
+  `file_size` int(11) DEFAULT NULL COMMENT 'File size in bytes',
+  `mime_type` varchar(100) DEFAULT NULL,
+  `uploaded_by` int(11) NOT NULL,
+  `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `pr_item_rejection_remarks`
+--
+
+CREATE TABLE `pr_item_rejection_remarks` (
+  `id` int(11) NOT NULL,
+  `purchase_request_id` int(11) NOT NULL,
+  `purchase_request_item_id` int(11) NOT NULL,
+  `item_id` int(11) NOT NULL,
+  `remark` text NOT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Table structure for table `purchase_orders`
 --
 
@@ -152,15 +216,15 @@ CREATE TABLE `purchase_orders` (
   `po_date` date NOT NULL,
   `expected_delivery_date` date DEFAULT NULL,
   `actual_delivery_date` date DEFAULT NULL,
-  `status` enum('Draft','Ordered','Delivered','Cancelled') DEFAULT 'Draft',
+  `status` enum('On Hold','Draft','Ordered','Delivered','Cancelled') DEFAULT 'Draft',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `place_of_delivery` varchar(255) DEFAULT NULL,
   `delivery_term` varchar(50) DEFAULT 'COD',
   `payment_term` varchar(50) DEFAULT 'CASH',
   `project` varchar(100) DEFAULT NULL,
-  `order_number` varchar(10) DEFAULT NULL,
-  `notes` text DEFAULT NULL
+  `notes` text DEFAULT NULL,
+  `order_number` varchar(10) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -195,8 +259,7 @@ CREATE TABLE `purchase_requests` (
   `date_needed` date DEFAULT NULL,
   `project` varchar(100) DEFAULT NULL,
   `project_address` varchar(255) DEFAULT NULL,
-  `order_number` varchar(100) DEFAULT NULL,
-  `status` enum('Draft','Pending','For Procurement Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Completed','Rejected','Cancelled') DEFAULT 'For Procurement Review',
+  `status` enum('Draft','Pending','For Procurement Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Completed','Rejected','Cancelled') DEFAULT 'Draft',
   `approved_by` int(11) DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
   `rejection_reason` text DEFAULT NULL,
@@ -204,7 +267,8 @@ CREATE TABLE `purchase_requests` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `supplier_id` int(11) DEFAULT NULL,
-  `supplier_address` varchar(255) DEFAULT NULL
+  `supplier_address` varchar(255) DEFAULT NULL,
+  `order_number` varchar(10) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -297,6 +361,19 @@ ALTER TABLE `categories`
   ADD KEY `created_by` (`created_by`);
 
 --
+-- Indexes for table `disbursement_vouchers`
+--
+ALTER TABLE `disbursement_vouchers`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `dv_number` (`dv_number`),
+  ADD KEY `purchase_order_id` (`purchase_order_id`),
+  ADD KEY `purchase_request_id` (`purchase_request_id`),
+  ADD KEY `supplier_id` (`supplier_id`),
+  ADD KEY `prepared_by` (`prepared_by`),
+  ADD KEY `certified_by_accounting` (`certified_by_accounting`),
+  ADD KEY `certified_by_manager` (`certified_by_manager`);
+
+--
 -- Indexes for table `employees`
 --
 ALTER TABLE `employees`
@@ -319,6 +396,24 @@ ALTER TABLE `items`
 ALTER TABLE `notifications`
   ADD PRIMARY KEY (`id`),
   ADD KEY `recipient_id` (`recipient_id`);
+
+--
+-- Indexes for table `po_attachments`
+--
+ALTER TABLE `po_attachments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `purchase_order_id` (`purchase_order_id`),
+  ADD KEY `uploaded_by` (`uploaded_by`);
+
+--
+-- Indexes for table `pr_item_rejection_remarks`
+--
+ALTER TABLE `pr_item_rejection_remarks`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `purchase_request_id` (`purchase_request_id`),
+  ADD KEY `purchase_request_item_id` (`purchase_request_item_id`),
+  ADD KEY `item_id` (`item_id`),
+  ADD KEY `created_by` (`created_by`);
 
 --
 -- Indexes for table `purchase_orders`
@@ -385,6 +480,12 @@ ALTER TABLE `categories`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
 
 --
+-- AUTO_INCREMENT for table `disbursement_vouchers`
+--
+ALTER TABLE `disbursement_vouchers`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+
+--
 -- AUTO_INCREMENT for table `employees`
 --
 ALTER TABLE `employees`
@@ -400,31 +501,43 @@ ALTER TABLE `items`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=52;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=156;
+
+--
+-- AUTO_INCREMENT for table `po_attachments`
+--
+ALTER TABLE `po_attachments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=4;
+
+--
+-- AUTO_INCREMENT for table `pr_item_rejection_remarks`
+--
+ALTER TABLE `pr_item_rejection_remarks`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
 
 --
 -- AUTO_INCREMENT for table `purchase_orders`
 --
 ALTER TABLE `purchase_orders`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
 -- AUTO_INCREMENT for table `purchase_order_items`
 --
 ALTER TABLE `purchase_order_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
 -- AUTO_INCREMENT for table `purchase_requests`
 --
 ALTER TABLE `purchase_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
 
 --
 -- AUTO_INCREMENT for table `purchase_request_items`
 --
 ALTER TABLE `purchase_request_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=65;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=125;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
@@ -449,6 +562,17 @@ ALTER TABLE `categories`
   ADD CONSTRAINT `categories_ibfk_1` FOREIGN KEY (`created_by`) REFERENCES `employees` (`id`);
 
 --
+-- Constraints for table `disbursement_vouchers`
+--
+ALTER TABLE `disbursement_vouchers`
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_1` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_2` FOREIGN KEY (`purchase_request_id`) REFERENCES `purchase_requests` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_3` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`),
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_4` FOREIGN KEY (`prepared_by`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_5` FOREIGN KEY (`certified_by_accounting`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_6` FOREIGN KEY (`certified_by_manager`) REFERENCES `employees` (`id`);
+
+--
 -- Constraints for table `items`
 --
 ALTER TABLE `items`
@@ -460,6 +584,22 @@ ALTER TABLE `items`
 --
 ALTER TABLE `notifications`
   ADD CONSTRAINT `notifications_ibfk_1` FOREIGN KEY (`recipient_id`) REFERENCES `employees` (`id`);
+
+--
+-- Constraints for table `po_attachments`
+--
+ALTER TABLE `po_attachments`
+  ADD CONSTRAINT `po_attachments_ibfk_1` FOREIGN KEY (`purchase_order_id`) REFERENCES `purchase_orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `po_attachments_ibfk_2` FOREIGN KEY (`uploaded_by`) REFERENCES `employees` (`id`);
+
+--
+-- Constraints for table `pr_item_rejection_remarks`
+--
+ALTER TABLE `pr_item_rejection_remarks`
+  ADD CONSTRAINT `pr_item_rejection_remarks_ibfk_1` FOREIGN KEY (`purchase_request_id`) REFERENCES `purchase_requests` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `pr_item_rejection_remarks_ibfk_2` FOREIGN KEY (`purchase_request_item_id`) REFERENCES `purchase_request_items` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `pr_item_rejection_remarks_ibfk_3` FOREIGN KEY (`item_id`) REFERENCES `items` (`id`),
+  ADD CONSTRAINT `pr_item_rejection_remarks_ibfk_4` FOREIGN KEY (`created_by`) REFERENCES `employees` (`id`);
 
 --
 -- Constraints for table `purchase_orders`

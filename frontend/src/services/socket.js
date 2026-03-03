@@ -21,7 +21,7 @@ class SocketService {
     this.socket.on('connect', () => {
       console.log('Socket connected:', this.socket.id);
       
-      // Join user-specific room
+      // Join user-specific roomzx
       if (userId) {
         this.socket.emit('join', userId);
       }

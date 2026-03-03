@@ -44,18 +44,12 @@ router.post('/login', [
 
     // Check password
     let isMatch = false;
-    if (password === 'password123') {
-      isMatch = true;
-    } else if (typeof user.password === 'string') {
-      // Prefer bcrypt hashes, but allow legacy plaintext passwords that may already exist in DB
+    if (typeof user.password === 'string') {
+      // Use bcrypt for password comparison
       try {
         isMatch = await bcrypt.compare(password, user.password);
       } catch (e) {
         isMatch = false;
-      }
-
-      if (!isMatch) {
-        isMatch = password === user.password;
       }
     }
 
@@ -199,17 +193,12 @@ router.post('/change-password',
       const user = rows[0];
 
       let isMatch = false;
-      if (current_password === 'password123') {
-        isMatch = true;
-      } else if (typeof user.password === 'string') {
+      if (typeof user.password === 'string') {
+        // Use bcrypt for password comparison
         try {
           isMatch = await bcrypt.compare(current_password, user.password);
         } catch (e) {
           isMatch = false;
-        }
-
-        if (!isMatch) {
-          isMatch = current_password === user.password;
         }
       }
 

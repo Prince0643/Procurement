@@ -16,6 +16,10 @@ const router = express.Router();
 // Get all POs
 router.get('/', authenticate, async (req, res) => {
   try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
     let query = `
       SELECT po.*, 
              s.supplier_name as supplier_name,
@@ -34,11 +38,24 @@ router.get('/', authenticate, async (req, res) => {
       query += ' WHERE pr.requested_by = ?';
       params.push(req.user.id);
     }
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM purchase_orders po
+      LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
+      ${req.user.role === 'engineer' ? 'WHERE pr.requested_by = ?' : ''}
+    `;
+    const countParams = [];
+    if (req.user.role === 'engineer') {
+      countParams.push(req.user.id);
+    }
     
-    query += ' ORDER BY po.created_at DESC';
+    query += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
     
-    const [pos] = await db.query(query, params);
-    res.json({ purchaseOrders: pos });
+    const [pos] = await db.query(query, [...params, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, countParams);
+
+    res.json({ purchaseOrders: pos, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Failed to fetch purchase orders', error);
     res.status(500).json({ message: 'Failed to fetch purchase orders' });
@@ -91,7 +108,50 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create PO (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items } = req.body;
+    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items, service_request_id } = req.body;
+    
+    // Check if creating from PR or Service Request
+    let prDetails = null;
+    let srDetails = null;
+    let poType = 'purchase_order'; // default
+    let finalSupplierId = supplier_id;
+    
+    if (purchase_request_id) {
+      // Get PR details including payment_basis
+      const [prs] = await db.query(
+        'SELECT pr_number, payment_basis, supplier_id as pr_supplier_id FROM purchase_requests WHERE id = ?',
+        [purchase_request_id]
+      );
+      if (prs.length === 0) {
+        return res.status(404).json({ message: 'Purchase request not found' });
+      }
+      prDetails = prs[0];
+      // Set po_type based on payment_basis
+      poType = prDetails.payment_basis === 'non_debt' ? 'payment_order' : 'purchase_order';
+      // Use supplier from PR if engineer selected one
+      if (!finalSupplierId && prDetails.pr_supplier_id) {
+        finalSupplierId = prDetails.pr_supplier_id;
+      }
+    } else if (service_request_id) {
+      // Service Requests always create Payment Orders
+      const [srs] = await db.query(
+        'SELECT sr_number, supplier_id as sr_supplier_id FROM service_requests WHERE id = ?',
+        [service_request_id]
+      );
+      if (srs.length === 0) {
+        return res.status(404).json({ message: 'Service request not found' });
+      }
+      srDetails = srs[0];
+      poType = 'payment_order';
+      if (!finalSupplierId && srDetails.sr_supplier_id) {
+        finalSupplierId = srDetails.sr_supplier_id;
+      }
+    }
+    
+    // Validate supplier is provided
+    if (!finalSupplierId) {
+      return res.status(400).json({ message: 'Supplier is required' });
+    }
     
     // Generate PO number (MTN-YYYY-MM-### format - same as PR)
     const now = new Date();
@@ -114,11 +174,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // Calculate total amount
     const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 
-    // Create PO with new fields
+    // Create PO with po_type and service_request_id support
     const [result] = await db.query(
-      `INSERT INTO purchase_orders (po_number, purchase_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status) 
-       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, COALESCE(?, 'COD'), COALESCE(?, 'CASH'), ?, ?)`,
-      [poNumber, purchase_request_id, supplier_id, req.user.id, totalAmount, expected_delivery_date, place_of_delivery || null, project || null, order_number || null, delivery_term, payment_term, notes || null, 'Draft']
+      `INSERT INTO purchase_orders (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type) 
+       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, order_number || null, delivery_term || 'COD', payment_term || 'CASH', notes || null, 'Draft', poType]
     );
 
     const poId = result.insertId;
@@ -131,11 +191,18 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       );
     }
 
-    // Update PR status to 'PO Created' so admin knows a PO was created for this PR
-    await db.query(
-      "UPDATE purchase_requests SET status = 'PO Created' WHERE id = ?",
-      [purchase_request_id]
-    );
+    // Update PR status to 'PO Created' or Service Request status
+    if (purchase_request_id) {
+      await db.query(
+        "UPDATE purchase_requests SET status = 'PO Created' WHERE id = ?",
+        [purchase_request_id]
+      );
+    } else if (service_request_id) {
+      await db.query(
+        "UPDATE service_requests SET status = 'PO Created' WHERE id = ?",
+        [service_request_id]
+      );
+    }
 
     // Notify Super Admins that a new PO needs approval
     const superAdmins = await getSuperAdmins();
@@ -151,9 +218,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     }
 
     res.status(201).json({ 
-      message: 'Purchase order created successfully', 
+      message: `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} created successfully`, 
       poId,
-      poNumber
+      poNumber,
+      po_type: poType
     });
   } catch (error) {
     console.error('Failed to create purchase order', error);
@@ -523,8 +591,15 @@ router.delete('/:id/attachments/:attachmentId', authenticate, async (req, res) =
 
     // Delete file from filesystem
     try {
-      const relativePath = String(attachment.file_path || '').replace(/^\/+/, '');
-      const filePath = path.resolve(__dirname, '..', relativePath);
+      const uploadsDir = path.resolve(__dirname, '../uploads/receipts');
+      const fileName = path.basename(attachment.file_path || '');
+      const filePath = path.resolve(uploadsDir, fileName);
+
+      // Verify file is within uploads directory
+      if (!filePath.startsWith(uploadsDir)) {
+        return res.status(400).json({ message: 'Invalid file path' });
+      }
+
       await fs.unlink(filePath);
     } catch (err) {
       console.log('File may not exist on disk:', err.message);
