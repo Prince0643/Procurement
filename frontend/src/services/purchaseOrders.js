@@ -1,9 +1,27 @@
 import api from './api.js';
 
+// In-flight request tracking to prevent duplicate simultaneous requests
+const inFlightRequests = new Map();
+
+const dedupeRequest = async (key, requestFn) => {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key);
+  }
+  
+  const promise = requestFn().finally(() => {
+    inFlightRequests.delete(key);
+  });
+  
+  inFlightRequests.set(key, promise);
+  return promise;
+};
+
 export const purchaseOrderService = {
   getAll: async () => {
-    const response = await api.get('/purchase-orders');
-    return response.data.purchaseOrders;
+    return dedupeRequest('purchaseOrders-getAll', async () => {
+      const response = await api.get('/purchase-orders');
+      return response.data.purchaseOrders;
+    });
   },
 
   getById: async (id) => {

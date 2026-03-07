@@ -1,10 +1,29 @@
 import api from './api';
 
+// In-flight request tracking to prevent duplicate simultaneous requests
+const inFlightRequests = new Map();
+
+const dedupeRequest = async (key, requestFn) => {
+  if (inFlightRequests.has(key)) {
+    return inFlightRequests.get(key);
+  }
+  
+  const promise = requestFn().finally(() => {
+    inFlightRequests.delete(key);
+  });
+  
+  inFlightRequests.set(key, promise);
+  return promise;
+};
+
 export const purchaseRequestService = {
   getAll: async (view) => {
-    const params = view ? { view } : {};
-    const response = await api.get('/purchase-requests', { params });
-    return response.data.purchaseRequests;
+    const key = `getAll-${view || 'default'}`;
+    return dedupeRequest(key, async () => {
+      const params = view ? { view } : {};
+      const response = await api.get('/purchase-requests', { params });
+      return response.data.purchaseRequests;
+    });
   },
 
   getById: async (id) => {
@@ -30,6 +49,11 @@ export const purchaseRequestService = {
   // Legacy endpoint
   approve: async (id, status, remarks) => {
     const response = await api.put(`/purchase-requests/${id}/approve`, { status, remarks });
+    return response.data;
+  },
+
+  updateStatus: async (id, status) => {
+    const response = await api.put(`/purchase-requests/${id}/status`, { status });
     return response.data;
   },
 

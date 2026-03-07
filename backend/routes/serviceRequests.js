@@ -1,7 +1,10 @@
 import express from 'express';
-import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getSuperAdmins, getAdmins } from '../utils/notifications.js';
+import { createNotification, getProcurementOfficers, getSuperAdmins, getAdmins } from '../utils/notifications.js';
+import ExcelJS from 'exceljs';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 const router = express.Router();
 
@@ -59,6 +62,24 @@ router.get('/', authenticate, async (req, res) => {
     query += ' ORDER BY sr.created_at DESC';
     
     const [srs] = await db.query(query, params);
+    
+    // Add items for service requests that have quantity (payment_order type)
+    for (const sr of srs) {
+      if (sr.sr_type === 'payment_order' && sr.quantity) {
+        // For payment orders, create a virtual item for display
+        sr.items = [{
+          id: `sr-${sr.id}`,
+          description: sr.purpose,
+          quantity: sr.quantity,
+          unit: sr.unit,
+          unit_price: sr.amount / sr.quantity,
+          total_price: sr.amount
+        }];
+      } else {
+        sr.items = [];
+      }
+    }
+    
     res.json({ serviceRequests: srs });
   } catch (error) {
     console.error('Fetch service requests error:', error);
@@ -113,8 +134,8 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount is required' });
     }
 
-    // Validate quantity required for payment_request type
-    const finalSrType = sr_type || 'payment_request';
+    // Validate quantity required for payment_request type (payment_request = amount + qty)
+    const finalSrType = sr_type || 'payment_order';
     if (finalSrType === 'payment_request' && (!quantity || quantity <= 0)) {
       return res.status(400).json({ message: 'Valid quantity is required for Payment Request type' });
     }
@@ -180,8 +201,8 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Only draft service requests can be updated' });
     }
 
-    // Validate quantity required for payment_request type
-    const finalSrType = sr_type ?? sr.sr_type ?? 'payment_request';
+    // Validate quantity required for payment_request type (payment_request = amount + qty)
+    const finalSrType = sr_type ?? sr.sr_type ?? 'payment_order';
     if (finalSrType === 'payment_request' && amount && (!quantity || quantity <= 0)) {
       return res.status(400).json({ message: 'Valid quantity is required for Payment Request type' });
     }
@@ -264,26 +285,26 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     await conn.beginTransaction();
 
     await conn.query(
-      "UPDATE service_requests SET status = 'Pending', updated_at = NOW() WHERE id = ?",
+      "UPDATE service_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
       [req.params.id]
     );
 
     await conn.commit();
 
-    // Notify admins for approval
-    const admins = await getAdmins();
-    for (const adminId of admins) {
+    // Notify procurement officers for review
+    const procurementOfficers = await getProcurementOfficers();
+    for (const officerId of procurementOfficers) {
       await createNotification(
-        adminId,
+        officerId,
         'New Service Request',
-        `Service Request ${sr.sr_number} has been submitted and requires your approval`,
+        `Service Request ${sr.sr_number} has been submitted and requires your review`,
         'PR Created',
         sr.id,
         'service_request'
       );
     }
 
-    res.json({ message: 'Service request submitted successfully', status: 'Pending' });
+    res.json({ message: 'Service request submitted successfully', status: 'For Procurement Review' });
   } catch (error) {
     if (conn) {
       try {
@@ -299,33 +320,43 @@ router.put('/:id/submit', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject Service Request (admin/super admin)
-router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
+// Approve/Reject by Procurement (to Super Admin Final Approval)
+router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
   let conn;
   try {
-    const { status, rejection_reason } = req.body; // status: 'approved' | 'rejected'
-
-    const [srs] = await db.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
-    if (srs.length === 0) {
-      return res.status(404).json({ message: 'Service request not found' });
-    }
-
-    const sr = srs[0];
-
-    // Only Pending SRs can be approved/rejected
-    if (sr.status !== 'Pending' && sr.status !== 'For Approval') {
-      return res.status(400).json({ message: 'Service request not ready for approval' });
-    }
-
+    const { status, rejection_reason, supplier_id, supplier_address } = req.body;
+    
     conn = await db.getConnection();
     await conn.beginTransaction();
-
+    
+    const [srs] = await conn.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
+    if (srs.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+    
+    const sr = srs[0];
+    
+    if (sr.status !== 'For Procurement Review') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Service request not ready for Procurement review' });
+    }
+    
     let newStatus;
+    
     if (status === 'approved') {
-      newStatus = 'Approved';
+      newStatus = 'For Super Admin Final Approval';
+      
+      // Validate supplier_id is provided for approval
+      if (!supplier_id) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'Supplier is required for approval' });
+      }
+      
+      // Update SR with supplier info
       await conn.query(
-        'UPDATE service_requests SET status = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?',
-        [newStatus, req.user.id, req.params.id]
+        'UPDATE service_requests SET status = ?, supplier_id = ?, updated_at = NOW() WHERE id = ?',
+        [newStatus, supplier_id, req.params.id]
       );
     } else {
       newStatus = 'Rejected';
@@ -334,24 +365,114 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         [newStatus, rejection_reason || null, req.params.id]
       );
     }
+    
+    await conn.commit();
 
+    // Get PR details for notification
+    const srData = srs[0];
+
+    if (status === 'approved') {
+      // Procurement approved - notify Super Admin for final approval
+      const superAdmins = await getSuperAdmins();
+      for (const adminId of superAdmins) {
+        await createNotification(
+          adminId,
+          'SR Pending Final Approval',
+          `Service Request ${srData.sr_number} has been reviewed by Procurement and requires your final approval`,
+          'PR Approved',
+          req.params.id,
+          'service_request'
+        );
+      }
+    } else {
+      // Rejected - notify engineer
+      await createNotification(
+        srData.requested_by,
+        'Service Request Rejected by Procurement',
+        `Your Service Request ${srData.sr_number} has been rejected by Procurement${rejection_reason ? ': ' + rejection_reason : ''}`,
+        'PR Rejected',
+        req.params.id,
+        'service_request'
+      );
+    }
+
+    res.json({ message: `Service request ${status} by Procurement successfully`, status: newStatus });
+  } catch (error) {
+    if (conn) await conn.rollback();
+    console.error('Procurement approval error:', error);
+    res.status(500).json({ message: 'Failed to update service request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Approve/Reject by Super Admin (Final Approval)
+router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (req, res) => {
+  let conn;
+  try {
+    const { status, rejection_reason, remarks } = req.body;
+    
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    
+    const [srs] = await conn.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
+    if (srs.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+    
+    const sr = srs[0];
+    
+    if (sr.status !== 'For Super Admin Final Approval') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Service request not ready for Super Admin final approval' });
+    }
+    
+    let newStatus;
+    if (status === 'approved') {
+      newStatus = 'Approved';
+      await conn.query(
+        'UPDATE service_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ?, updated_at = NOW() WHERE id = ?',
+        [newStatus, req.user.id, remarks || null, req.params.id]
+      );
+    } else {
+      newStatus = 'Rejected';
+      await conn.query(
+        'UPDATE service_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+        [newStatus, rejection_reason || null, req.params.id]
+      );
+    }
+    
     await conn.commit();
 
     // Notify engineer
     if (status === 'approved') {
       await createNotification(
         sr.requested_by,
-        'Service Request Approved',
-        `Your Service Request ${sr.sr_number} has been approved and is ready for PO creation`,
+        'Service Request Fully Approved',
+        `Your Service Request ${sr.sr_number} has been fully approved and is ready for PO creation`,
         'PR Approved',
         sr.id,
         'service_request'
       );
+      
+      // Also notify admins who can create POs
+      const admins = await getAdmins();
+      for (const adminId of admins) {
+        await createNotification(
+          adminId,
+          'SR Ready for PO Creation',
+          `Service Request ${sr.sr_number} has been approved and is ready for PO creation`,
+          'PR Approved',
+          sr.id,
+          'service_request'
+        );
+      }
     } else {
       await createNotification(
         sr.requested_by,
         'Service Request Rejected',
-        `Your Service Request ${sr.sr_number} has been rejected${rejection_reason ? ': ' + rejection_reason : ''}`,
+        `Your Service Request ${sr.sr_number} has been rejected by Super Admin${rejection_reason ? ': ' + rejection_reason : ''}`,
         'PR Rejected',
         sr.id,
         'service_request'
@@ -360,14 +481,8 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
     res.json({ message: `Service request ${status} successfully`, status: newStatus });
   } catch (error) {
-    if (conn) {
-      try {
-        await conn.rollback();
-      } catch {
-        // ignore
-      }
-    }
-    console.error('Approve service request error:', error);
+    if (conn) await conn.rollback();
+    console.error('Super Admin approval error:', error);
     res.status(500).json({ message: 'Failed to approve service request: ' + error.message });
   } finally {
     if (conn) conn.release();
@@ -400,6 +515,100 @@ router.delete('/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Delete service request error:', error);
     res.status(500).json({ message: 'Failed to delete service request: ' + error.message });
+  }
+});
+
+// Export Service Request to Excel
+router.get('/:id/export', authenticate, async (req, res) => {
+  try {
+    // Fetch service request with supplier details
+    const [srs] = await db.query(`
+      SELECT sr.*, 
+             e.first_name as requester_first_name, 
+             e.last_name as requester_last_name,
+             s.supplier_name, s.contact_person, s.phone, s.email, s.address as supplier_address,
+             approver.first_name as approver_first_name,
+             approver.last_name as approver_last_name
+      FROM service_requests sr
+      JOIN employees e ON sr.requested_by = e.id
+      LEFT JOIN suppliers s ON sr.supplier_id = s.id
+      LEFT JOIN employees approver ON sr.approved_by = approver.id
+      WHERE sr.id = ?
+    `, [req.params.id]);
+
+    if (srs.length === 0) {
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+
+    const sr = srs[0];
+
+    // Create Excel workbook from template
+    const workbook = new ExcelJS.Workbook();
+    const templatePath = fileURLToPath(new URL('../../Service Request.xlsx', import.meta.url));
+
+    let worksheet;
+    try {
+      await workbook.xlsx.readFile(templatePath);
+      worksheet = workbook.worksheets?.[0] || workbook.getWorksheet('SERVICE REQUEST') || workbook.getWorksheet(1);
+    } catch (templateError) {
+      worksheet = workbook.addWorksheet('Service Request');
+    }
+
+    // Helper function to set cell value
+    const setCellValue = (address, value) => {
+      const cell = worksheet.getCell(address);
+      cell.value = value;
+      return cell;
+    };
+
+    // Fill in header fields based on template layout
+    // Left side
+    setCellValue('C6', sr.supplier_name || '');
+    setCellValue('C7', sr.project || '');
+    setCellValue('C8', sr.project_address || '');
+    setCellValue('C9', sr.order_number || '');
+
+    // Right side
+    setCellValue('H6', new Date(sr.created_at).toLocaleDateString());
+    setCellValue('H7', sr.date_needed ? new Date(sr.date_needed).toLocaleDateString() : '');
+    setCellValue('H8', sr.payment_term || '');
+
+    // SR Number in header (cell G5)
+    setCellValue('G5', sr.sr_number || '');
+
+    // Items table - Service Request has quantity, unit, description, amount
+    let currentRow = 11;
+    let totalAmount = 0;
+
+    const quantity = parseFloat(sr.quantity) || 0;
+    const amount = parseFloat(sr.amount) || 0;
+    totalAmount = amount;
+
+    // Fill in the service line item
+    setCellValue(`A${currentRow}`, quantity);
+    setCellValue(`B${currentRow}`, sr.unit || 'hours');
+    setCellValue(`D${currentRow}`, sr.purpose || sr.description || '');
+    setCellValue(`H${currentRow}`, amount);
+
+    // Grand Total
+    setCellValue('G21', totalAmount);
+
+    // Prepared by, Reviewed by, Approved by - row 26
+    const preparedByName = `${sr.requester_first_name || ''} ${sr.requester_last_name || ''}`.trim().toUpperCase();
+    worksheet.getCell('A26').value = preparedByName;
+    worksheet.getCell('D26').value = 'JUNELL B. TADINA'; // Reviewed by
+    worksheet.getCell('F26').value = 'MARC JUSTIN E. ARZADON'; // Approved by
+
+    // Generate Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Service_Request_${sr.sr_number || req.params.id}.xlsx`);
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Failed to export service request', error);
+    res.status(500).json({ message: 'Failed to export service request: ' + error.message });
   }
 });
 

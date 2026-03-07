@@ -12,8 +12,11 @@ import {
   ChevronUp,
   Trash2,
   Edit2,
-  Send
+  Send,
+  Eye,
+  Download
 } from 'lucide-react';
+import SRPreviewModal from './SRPreviewModal';
 import { serviceRequestService } from '../../services/serviceRequests';
 import { supplierService } from '../../services/suppliers';
 import { useAuth } from '../../contexts/AuthContext';
@@ -61,8 +64,8 @@ const Button = ({
 const StatusBadge = ({ status }) => {
   const styles = {
     'Draft': 'bg-gray-100 text-gray-800',
-    'Pending': 'bg-yellow-100 text-yellow-800',
-    'For Approval': 'bg-blue-100 text-blue-800',
+    'For Procurement Review': 'bg-yellow-100 text-yellow-800',
+    'For Super Admin Final Approval': 'bg-blue-100 text-blue-800',
     'Approved': 'bg-green-100 text-green-800',
     'Rejected': 'bg-red-100 text-red-800',
     'Cancelled': 'bg-gray-100 text-gray-500',
@@ -117,8 +120,21 @@ const ServiceRequestsManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedSR, setSelectedSR] = useState(null);
+  
+  // Preview modal state
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewSR, setPreviewSR] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  
   const [suppliers, setSuppliers] = useState([]);
   const [expandedSRId, setExpandedSRId] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
+  // Add supplier selection state for procurement approval
+  const [showSupplierModal, setShowSupplierModal] = useState(false);
+  const [selectedSRForApproval, setSelectedSRForApproval] = useState(null);
+  const [approvalSupplierId, setApprovalSupplierId] = useState('');
+  const [approvalRemarks, setApprovalRemarks] = useState('');
   const { user } = useAuth();
 
   // Form state
@@ -142,7 +158,56 @@ const ServiceRequestsManagement = () => {
   useEffect(() => {
     fetchServiceRequests();
     fetchSuppliers();
+    fetchBranches();
   }, []);
+
+  const fetchBranches = async () => {
+    try {
+      setLoadingBranches(true)
+      const response = await fetch('https://jajr.xandree.com/get_branches_api.php', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const data = await response.json()
+      console.log('Branches API response:', data)
+      
+      // Handle the API response format
+      let branchList = []
+      if (Array.isArray(data)) {
+        // API returns array directly: [{id, branch_name}, ...]
+        branchList = data
+      } else if (data && Array.isArray(data.data)) {
+        // API returns { data: [...] }
+        branchList = data.data
+      } else if (data && Array.isArray(data.branches)) {
+        // API returns { branches: [...] }
+        branchList = data.branches
+      }
+      
+      console.log('Extracted branches:', branchList)
+      setBranches(branchList)
+    } catch (err) {
+      console.error('Failed to fetch branches:', err)
+      setBranches([])
+    } finally {
+      setLoadingBranches(false)
+    }
+  }
+
+  const handleProjectChange = (projectName) => {
+    const selectedBranch = branches.find(b => b?.branch_name === projectName)
+
+    setFormData(prev => ({
+      ...prev,
+      project: projectName,
+      project_address: selectedBranch?.address || selectedBranch?.branch_address || '',
+      order_number: selectedBranch?.order_number || ''
+    }))
+  }
 
   const fetchServiceRequests = async () => {
     try {
@@ -218,7 +283,34 @@ const ServiceRequestsManagement = () => {
     }
   };
 
-  const handleApprove = async (sr, status) => {
+  // Procurement approval handler
+  const handleProcurementApproveClick = (sr) => {
+    setSelectedSRForApproval(sr);
+    setApprovalSupplierId(sr.supplier_id || '');
+    setApprovalRemarks('');
+    setShowSupplierModal(true);
+  };
+
+  const handleProcurementApprove = async (status, rejectionReason = null) => {
+    try {
+      await serviceRequestService.procurementApprove(
+        selectedSRForApproval.id,
+        status,
+        approvalSupplierId,
+        rejectionReason
+      );
+      setShowSupplierModal(false);
+      setSelectedSRForApproval(null);
+      setApprovalSupplierId('');
+      setApprovalRemarks('');
+      fetchServiceRequests();
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to approve service request');
+    }
+  };
+
+  // Super Admin approval handler
+  const handleSuperAdminApprove = async (sr, status) => {
     const rejectionReason = status === 'rejected' 
       ? prompt('Enter rejection reason:') 
       : null;
@@ -226,9 +318,8 @@ const ServiceRequestsManagement = () => {
     if (status === 'rejected' && !rejectionReason) return;
 
     try {
-      await serviceRequestService.approve(sr.id, status, rejectionReason);
+      await serviceRequestService.superAdminApprove(sr.id, status, rejectionReason);
       fetchServiceRequests();
-      if (showDetailModal) setShowDetailModal(false);
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to approve service request');
     }
@@ -249,14 +340,51 @@ const ServiceRequestsManagement = () => {
     setExpandedSRId(expandedSRId === srId ? null : srId);
   };
 
+  const openPreview = async (sr) => {
+    try {
+      setPreviewLoading(true);
+      setShowPreviewModal(true);
+      // Fetch full service request details
+      const fullSR = await serviceRequestService.getById(sr.id);
+      setPreviewSR(fullSR);
+    } catch (err) {
+      alert('Failed to load service request details');
+      setShowPreviewModal(false);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setShowPreviewModal(false);
+    setPreviewSR(null);
+  };
+
+  const handleExport = async (id, srNumber) => {
+    try {
+      const blob = await serviceRequestService.exportToExcel(id);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Service_Request_${srNumber || id}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Failed to export service request');
+    }
+  };
+
   const filteredSRs = serviceRequests.filter(sr =>
     sr.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sr.sr_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     sr.service_type?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const canCreate = ['engineer', 'admin', 'super_admin'].includes(user?.role);
-  const canApprove = ['admin', 'super_admin'].includes(user?.role);
+  const canCreate = ['engineer', 'admin'].includes(user?.role);
+  const canProcurementApprove = ['procurement', 'admin', 'super_admin'].includes(user?.role);
+  const canSuperAdminApprove = ['super_admin'].includes(user?.role);
 
   if (loading) {
     return (
@@ -327,6 +455,32 @@ const ServiceRequestsManagement = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 ml-4">
+                  {/* Preview button - visible to all roles */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPreview(sr);
+                    }}
+                    title="Preview"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+
+                  {/* Export button - visible to all roles */}
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleExport(sr.id, sr.sr_number);
+                    }}
+                    title="Export to Excel"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                  
                   {/* Engineer actions */}
                   {user?.role === 'engineer' && sr.status === 'Draft' && sr.requested_by === user?.id && (
                     <>
@@ -339,20 +493,47 @@ const ServiceRequestsManagement = () => {
                     </>
                   )}
                   
-                  {/* Admin approval actions */}
-                  {canApprove && (sr.status === 'Pending' || sr.status === 'For Approval') && (
+                  {/* Procurement approval actions */}
+                  {canProcurementApprove && sr.status === 'For Procurement Review' && (
                     <>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => handleApprove(sr, 'approved')}
+                        onClick={() => handleProcurementApproveClick(sr)}
+                        title="Review and Approve"
+                      >
+                        <CheckCircle className="w-4 h-4 text-yellow-600" />
+                      </Button>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => {
+                          const reason = prompt('Enter rejection reason:');
+                          if (reason) handleProcurementApprove('rejected', reason);
+                        }}
+                        title="Reject"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+                  
+                  {/* Super Admin final approval actions */}
+                  {canSuperAdminApprove && sr.status === 'For Super Admin Final Approval' && (
+                    <>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleSuperAdminApprove(sr, 'approved')}
+                        title="Final Approve"
                       >
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        onClick={() => handleApprove(sr, 'rejected')}
+                        onClick={() => handleSuperAdminApprove(sr, 'rejected')}
+                        title="Reject"
                       >
                         <XCircle className="w-4 h-4 text-red-600" />
                       </Button>
@@ -404,6 +585,13 @@ const ServiceRequestsManagement = () => {
           )}
         </div>
       </Card>
+
+      {/* Preview Modal */}
+      <SRPreviewModal
+        sr={previewSR}
+        loading={previewLoading}
+        onClose={closePreview}
+      />
 
       {/* Create Modal */}
       {showCreateModal && (
@@ -521,14 +709,41 @@ const ServiceRequestsManagement = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
-                <input
-                  type="text"
-                  value={formData.project}
-                  onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
+                  <select
+                    value={formData.project}
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                    disabled={loadingBranches || branches.length === 0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">
+                      {loadingBranches ? 'Loading...' : branches.length === 0 ? 'No projects available' : 'Select project'}
+                    </option>
+                    {branches.map((branch, index) => (
+                      <option key={branch?.id ?? index} value={branch?.branch_name || ''}>{branch?.branch_name || ''}</option>
+                    ))}
+                  </select>
+                  {branches.length === 0 && !loadingBranches && (
+                    <p className="text-xs text-red-500 mt-1">Failed to load projects. Please refresh the page.</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Supplier</label>
+                  <select
+                    value={formData.supplier_id}
+                    onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">Select supplier (optional)</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.supplier_name || supplier.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -537,24 +752,9 @@ const ServiceRequestsManagement = () => {
                   type="text"
                   value={formData.project_address}
                   onChange={(e) => setFormData({ ...formData, project_address: e.target.value })}
+                  placeholder="Enter project address"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Preferred Supplier</label>
-                <select
-                  value={formData.supplier_id}
-                  onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
-                >
-                  <option value="">Select supplier (optional)</option>
-                  {suppliers.map((supplier) => (
-                    <option key={supplier.id} value={supplier.id}>
-                      {supplier.supplier_name || supplier.name}
-                    </option>
-                  ))}
-                </select>
               </div>
 
               <div>
@@ -563,6 +763,7 @@ const ServiceRequestsManagement = () => {
                   type="text"
                   value={formData.order_number}
                   onChange={(e) => setFormData({ ...formData, order_number: e.target.value })}
+                  placeholder="Order number"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
@@ -583,6 +784,56 @@ const ServiceRequestsManagement = () => {
               </Button>
               <Button onClick={handleCreate} disabled={submitting}>
                 {submitting ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Procurement Approval Modal - Supplier Selection */}
+      {showSupplierModal && selectedSRForApproval && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-lg">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Procurement Review - {selectedSRForApproval.sr_number}</h2>
+              <p className="text-sm text-gray-500 mt-1">Select supplier and confirm approval</p>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
+                <select
+                  value={approvalSupplierId}
+                  onChange={(e) => setApprovalSupplierId(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                >
+                  <option value="">Select supplier</option>
+                  {suppliers.map((supplier) => (
+                    <option key={supplier.id} value={supplier.id}>
+                      {supplier.supplier_name || supplier.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks (optional)</label>
+                <textarea
+                  value={approvalRemarks}
+                  onChange={(e) => setApprovalRemarks(e.target.value)}
+                  rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="Any remarks for final approval..."
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowSupplierModal(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={() => handleProcurementApprove('approved')} 
+                disabled={!approvalSupplierId}
+              >
+                Approve to Super Admin
               </Button>
             </div>
           </Card>

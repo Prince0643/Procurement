@@ -18,12 +18,17 @@ import itemRoutes from './routes/items.js';
 import prRoutes from './routes/purchaseRequests.js';
 import poRoutes from './routes/purchaseOrders.js';
 import serviceRequestRoutes from './routes/serviceRequests.js';
+import cashRequestRoutes from './routes/cashRequests.js';
+import reimbursementRoutes from './routes/reimbursements.js';
 import supplierRoutes from './routes/suppliers.js';
 import categoryRoutes from './routes/categories.js';
 import notificationRoutes from './routes/notifications.js';
 import reportRoutes from './routes/reports.js';
 import employeeRoutes from './routes/employees.js';
 import disbursementVoucherRoutes from './routes/disbursementVouchers.js';
+import paymentRequestRoutes from './routes/paymentRequests.js';
+import paymentOrdersRoutes from './routes/paymentOrders.js';
+import pricingHistoryRoutes from './routes/pricingHistory.js';
 
 dotenv.config();
 
@@ -37,7 +42,7 @@ const io = initSocket(httpServer);
 // Middleware
 const corsOptions = {
   origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
 };
@@ -116,14 +121,17 @@ app.use('/api/items', itemRoutes);
 app.use('/api/purchase-requests', prRoutes);
 app.use('/api/purchase-orders', poRoutes);
 app.use('/api/service-requests', serviceRequestRoutes);
+app.use('/api/cash-requests', cashRequestRoutes);
+app.use('/api/reimbursements', reimbursementRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/employees', employeeRoutes);
 app.use('/api/disbursement-vouchers', disbursementVoucherRoutes);
-
-// Error handling middleware
+app.use('/api/payment-requests', paymentRequestRoutes);
+app.use('/api/payment-orders', paymentOrdersRoutes);
+app.use('/api/pricing-history', pricingHistoryRoutes);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 

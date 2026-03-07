@@ -1,11 +1,12 @@
 import { io } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'https://procurement-api.xandree.com';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://procurement-api.xandree.com';
 
 class SocketService {
   constructor() {
     this.socket = null;
     this.listeners = new Map();
+    this.fetchingRef = false;
   }
 
   connect(token, userId, role) {
@@ -15,7 +16,12 @@ class SocketService {
 
     this.socket = io(SOCKET_URL, {
       auth: { token },
-      transports: ['websocket', 'polling']
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
     });
 
     this.socket.on('connect', () => {

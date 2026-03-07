@@ -1,0 +1,549 @@
+import express from 'express';
+import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import db from '../config/database.js';
+import { createNotification, getSuperAdmins } from '../utils/notifications.js';
+ import ExcelJS from 'exceljs';
+ import { fileURLToPath } from 'url';
+
+const router = express.Router();
+
+// Get all Payment Requests
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
+    let query = `
+      SELECT pr.*, 
+             p.pr_number as original_pr_number,
+             e.first_name as prepared_by_first_name,
+             e.last_name as prepared_by_last_name
+      FROM payment_requests pr
+      LEFT JOIN purchase_requests p ON pr.purchase_request_id = p.id
+      LEFT JOIN employees e ON pr.requested_by = e.id
+    `;
+    
+    const params = [];
+    
+    if (req.user.role === 'engineer') {
+      query += ' WHERE pr.requested_by = ?';
+      params.push(req.user.id);
+    }
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM payment_requests pr
+      ${req.user.role === 'engineer' ? 'WHERE pr.requested_by = ?' : ''}
+    `;
+    const countParams = [];
+    if (req.user.role === 'engineer') {
+      countParams.push(req.user.id);
+    }
+    
+    query += ' ORDER BY pr.created_at DESC LIMIT ? OFFSET ?';
+    
+    const [paymentRequests] = await db.query(query, [...params, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, countParams);
+
+    res.json({ paymentRequests, page, pageSize, total: countRows?.[0]?.total ?? 0 });
+  } catch (error) {
+    console.error('Failed to fetch payment requests', error);
+    res.status(500).json({ message: 'Failed to fetch payment requests' });
+  }
+});
+
+// Get single Payment Request with items
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const [paymentRequests] = await db.query(`
+      SELECT pr.*, 
+             p.pr_number as original_pr_number,
+             e.first_name as requested_by_first_name,
+             e.last_name as requested_by_last_name,
+             e2.first_name as approved_by_first_name,
+             e2.last_name as approved_by_last_name
+      FROM payment_requests pr
+      LEFT JOIN purchase_requests p ON pr.purchase_request_id = p.id
+      LEFT JOIN employees e ON pr.requested_by = e.id
+      LEFT JOIN employees e2 ON pr.approved_by = e2.id
+      WHERE pr.id = ?
+    `, [req.params.id]);
+
+    if (paymentRequests.length === 0) {
+      return res.status(404).json({ message: 'Payment request not found' });
+    }
+
+    const [items] = await db.query(`
+      SELECT pri.*, i.item_name as item_name, i.unit
+      FROM payment_request_items pri
+      LEFT JOIN items i ON pri.item_id = i.id
+      WHERE pri.payment_request_id = ?
+    `, [req.params.id]);
+
+    res.json({ paymentRequest: { ...paymentRequests[0], items } });
+  } catch (error) {
+    console.error('Failed to fetch payment request', error);
+    res.status(500).json({ message: 'Failed to fetch payment request' });
+  }
+});
+
+// Create Payment Request (admin only)
+router.post('/', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { purchase_request_id, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, remarks, items } = req.body;
+    
+    // Validate that at least one source is provided
+    if (!purchase_request_id && !service_request_id) {
+      return res.status(400).json({ message: 'Either Purchase Request ID or Service Request ID is required' });
+    }
+    
+    // Validate that both are not provided at the same time
+    if (purchase_request_id && service_request_id) {
+      return res.status(400).json({ message: 'Cannot provide both Purchase Request ID and Service Request ID' });
+    }
+    
+    let sourcePurpose = purpose || '';
+    let sourceRequestedBy = null;
+    
+    // If PR source, validate PR
+    if (purchase_request_id) {
+      const [prs] = await db.query(
+        'SELECT pr_number, payment_basis, requested_by, purpose FROM purchase_requests WHERE id = ?',
+        [purchase_request_id]
+      );
+      if (prs.length === 0) {
+        return res.status(404).json({ message: 'Purchase request not found' });
+      }
+      const prDetails = prs[0];
+      
+      // Only allow non_debt PRs to become payment requests
+      if (prDetails.payment_basis !== 'non_debt') {
+        return res.status(400).json({ message: 'Only PRs without account can create payment requests' });
+      }
+      sourcePurpose = prDetails.purpose || sourcePurpose;
+      sourceRequestedBy = prDetails.requested_by;
+    }
+    
+    // If SR source, validate SR
+    if (service_request_id) {
+      const [srs] = await db.query(
+        'SELECT sr_number, requested_by, purpose, status, service_type FROM service_requests WHERE id = ?',
+        [service_request_id]
+      );
+      if (srs.length === 0) {
+        return res.status(404).json({ message: 'Service request not found' });
+      }
+      const srDetails = srs[0];
+      
+      // Only allow approved SRs with service_type = 'Service' to become payment requests
+      if (srDetails.status !== 'Approved') {
+        return res.status(400).json({ message: 'Only approved Service Requests can create payment requests' });
+      }
+      if (srDetails.service_type !== 'Service') {
+        return res.status(400).json({ message: 'Only Service Requests with service_type = Service can create payment requests' });
+      }
+      sourcePurpose = srDetails.purpose || sourcePurpose;
+      sourceRequestedBy = srDetails.requested_by;
+    }
+    
+    // Generate Payment Request number (MTN-YYYY-MM-### format)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    
+    const initials = 'MTN';
+    
+    const [countResult] = await db.query(
+      "SELECT COUNT(*) as count FROM payment_requests WHERE pr_number LIKE ?",
+      [`${initials}-${year}-${month}-%`]
+    );
+    const sequence = String(countResult[0].count + 1).padStart(3, '0');
+    const prNumber = `${initials}-${year}-${month}-${sequence}`;
+
+    // Calculate total amount if not provided
+    const totalAmount = amount || items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+
+    // Start transaction
+    const connection = await db.getConnection();
+    await connection.beginTransaction();
+
+    try {
+      // Get status from request body, default to 'Pending'
+      const paymentStatus = req.body.status || 'Pending';
+      
+      // Validate status is valid
+      const validStatuses = ['Draft', 'Pending', 'For Approval', 'Approved', 'Rejected', 'On Hold', 'Cancelled'];
+      if (!validStatuses.includes(paymentStatus)) {
+        await connection.rollback();
+        connection.release();
+        return res.status(400).json({ message: 'Invalid status value' });
+      }
+
+      // Create payment request
+      const [paymentResult] = await connection.query(
+        `INSERT INTO payment_requests 
+         (pr_number, purchase_request_id, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, requested_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          prNumber,
+          purchase_request_id || null,
+          service_request_id || null,
+          payee_name || null,
+          payee_address || null,
+          purpose || sourcePurpose,
+          project || null,
+          project_address || null,
+          order_number || null,
+          totalAmount,
+          paymentStatus,
+          req.user.id
+        ]
+      );
+
+      const paymentRequestId = paymentResult.insertId;
+
+      // Add payment request items if provided
+      if (items && items.length > 0) {
+        for (const item of items) {
+          await connection.query(
+            `INSERT INTO payment_request_items 
+             (payment_request_id, item_id, quantity, unit_price)
+             VALUES (?, ?, ?, ?)`,
+            [
+              paymentRequestId,
+              item.item_id,
+              item.quantity,
+              item.unit_price || 0
+            ]
+          );
+        }
+      }
+
+      // Update purchase request status to 'Payment Request Created' if not draft
+      if (paymentStatus !== 'Draft' && purchase_request_id) {
+        await connection.query(
+          'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['Payment Request Created', purchase_request_id]
+        );
+      }
+
+      // Update service request status to 'Payment Request Created' if not draft
+      if (paymentStatus !== 'Draft' && service_request_id) {
+        await connection.query(
+          'UPDATE service_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['Payment Request Created', service_request_id]
+        );
+      }
+
+      await connection.commit();
+      connection.release();
+
+      res.status(201).json({ 
+        id: paymentRequestId,
+        message: `Payment request created successfully with status: ${paymentStatus}`,
+        status: paymentStatus
+      });
+    } catch (error) {
+      await connection.rollback();
+      connection.release();
+      throw error;
+    }
+  } catch (error) {
+    console.error('Failed to create payment request', error);
+    res.status(500).json({ message: 'Failed to create payment request: ' + error.message });
+  }
+});
+
+// Approve/Reject Payment Request (super admin only)
+router.put('/:id/approve', authenticate, requireSuperAdmin, async (req, res) => {
+  try {
+    const { status, rejection_reason } = req.body;
+    console.log('DEBUG: Approve endpoint called');
+    console.log('DEBUG: Request body:', req.body);
+    console.log('DEBUG: Payment request ID:', req.params.id);
+    console.log('DEBUG: User:', req.user);
+    
+    const normalizedStatus = status?.toLowerCase() === 'approved' ? 'Approved' : status?.toLowerCase() === 'rejected' ? 'Rejected' : status;
+    console.log('DEBUG: Original status:', status);
+    console.log('DEBUG: Normalized status:', normalizedStatus);
+
+    const [paymentRequests] = await db.query('SELECT * FROM payment_requests WHERE id = ?', [req.params.id]);
+    console.log('DEBUG: Found payment requests:', paymentRequests.length);
+    
+    if (paymentRequests.length === 0) {
+      console.log('DEBUG: Payment request not found');
+      return res.status(404).json({ message: 'Payment request not found' });
+    }
+
+    const currentStatus = paymentRequests[0].status;
+    console.log('DEBUG: Current payment request status:', currentStatus);
+    console.log('DEBUG: Required statuses: Draft, Pending, For Approval, On Hold');
+    
+    if (currentStatus !== 'Draft' && currentStatus !== 'Pending' && currentStatus !== 'For Approval' && currentStatus !== 'On Hold') {
+      console.log('DEBUG: Status check failed - returning 400');
+      return res.status(400).json({ message: 'Payment request not ready for approval' });
+    }
+
+    console.log('DEBUG: Status check passed');
+    
+    if (normalizedStatus !== 'Approved' && normalizedStatus !== 'Rejected') {
+      console.log('DEBUG: Invalid normalized status - returning 400');
+      return res.status(400).json({ message: 'Invalid status. Allowed values: Approved, Rejected' });
+    }
+
+    console.log('DEBUG: Normalized status check passed');
+
+    const updateData = {
+      status: normalizedStatus,
+      approved_by: req.user.id,
+      approved_at: new Date(),
+      rejection_reason: normalizedStatus === 'Rejected' ? rejection_reason : null
+    };
+
+    await db.query(
+      'UPDATE payment_requests SET status = ?, approved_by = ?, approved_at = ?, rejection_reason = ? WHERE id = ?',
+      [updateData.status, updateData.approved_by, updateData.approved_at, updateData.rejection_reason, req.params.id]
+    );
+
+    // If approved, update the related PR to Completed
+    if (normalizedStatus === 'Approved') {
+      await db.query(
+        "UPDATE purchase_requests SET status = 'Completed' WHERE id = ?",
+        [paymentRequests[0].purchase_request_id]
+      );
+      
+      // Notify requester
+      await createNotification(
+        paymentRequests[0].requested_by,
+        'Payment Request Approved',
+        `Your Payment Request ${paymentRequests[0].pr_number} has been approved`,
+        'Payment Request Approved',
+        req.params.id,
+        'payment_request'
+      );
+    } else if (normalizedStatus === 'Rejected') {
+      // Update PR status back to 'For Purchase'
+      await db.query(
+        "UPDATE purchase_requests SET status = 'For Purchase' WHERE id = ?",
+        [paymentRequests[0].purchase_request_id]
+      );
+      
+      // Notify requester
+      await createNotification(
+        paymentRequests[0].requested_by,
+        'Payment Request Rejected',
+        `Your Payment Request ${paymentRequests[0].pr_number} has been rejected. Reason: ${rejection_reason || 'No reason provided'}`,
+        'Payment Request Rejected',
+        req.params.id,
+        'payment_request'
+      );
+    }
+
+    res.json({ message: `Payment request ${normalizedStatus.toLowerCase()} successfully`, status: normalizedStatus });
+  } catch (error) {
+    console.error('Failed to approve payment request', error);
+    res.status(500).json({ message: 'Failed to approve payment request' });
+  }
+});
+
+// Update Payment Request status (admin only)
+router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    // Get current payment request to check its status and get PR id
+    const [paymentRequests] = await db.query(
+      'SELECT purchase_request_id, status FROM payment_requests WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (paymentRequests.length === 0) {
+      return res.status(404).json({ message: 'Payment request not found' });
+    }
+    
+    const currentStatus = paymentRequests[0].status;
+    const purchaseRequestId = paymentRequests[0].purchase_request_id;
+    
+    await db.query(
+      'UPDATE payment_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+      [status, req.params.id]
+    );
+    
+    // If changing from Draft to Pending, also update PR status to 'Payment Request Created'
+    if (currentStatus === 'Draft' && status === 'Pending' && purchaseRequestId) {
+      await db.query(
+        'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['Payment Request Created', purchaseRequestId]
+      );
+    }
+
+    res.json({ message: 'Payment request status updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update payment request status' });
+  }
+});
+
+// Export Payment Request to Excel
+router.get('/:id/export', authenticate, async (req, res) => {
+  try {
+    // Fetch payment request with PR details (if any)
+    const [paymentRequests] = await db.query(
+      `SELECT pr.*, prr.pr_number as pr_pr_number, e.first_name, e.last_name 
+       FROM payment_requests pr
+       LEFT JOIN purchase_requests prr ON pr.purchase_request_id = prr.id
+       LEFT JOIN employees e ON pr.requested_by = e.id
+       WHERE pr.id = ?`,
+      [req.params.id]
+    );
+
+    if (paymentRequests.length === 0) {
+      return res.status(404).json({ message: 'Payment request not found' });
+    }
+
+    const paymentRequest = paymentRequests[0];
+
+    // If payment request is from Service Request, fetch SR details
+    let srNumber = null;
+    let srDetails = null;
+    if (paymentRequest.service_request_id) {
+      const [srs] = await db.query(
+        'SELECT sr_number, description, quantity, unit, amount FROM service_requests WHERE id = ?',
+        [paymentRequest.service_request_id]
+      );
+      if (srs.length > 0) {
+        srNumber = srs[0].sr_number;
+        srDetails = srs[0];
+      }
+    }
+
+    // Use PR number if available, otherwise use SR number
+    const sourceNumber = paymentRequest.pr_pr_number || srNumber || '';
+
+    // Fetch payment request items
+    const [items] = await db.query(
+      `SELECT pri.*, i.item_name, i.unit as item_unit
+       FROM payment_request_items pri
+       JOIN items i ON pri.item_id = i.id
+       WHERE pri.payment_request_id = ?`,
+      [req.params.id]
+    );
+
+    // Create Excel workbook from template (preserves formatting)
+    const workbook = new ExcelJS.Workbook();
+    const templatePath = fileURLToPath(new URL('../../Payment-Request.xlsx', import.meta.url));
+
+    let worksheet;
+    try {
+      await workbook.xlsx.readFile(templatePath);
+      worksheet = workbook.worksheets?.[0] || workbook.getWorksheet('PAYMENT REQUEST') || workbook.getWorksheet(1);
+    } catch (templateError) {
+      worksheet = workbook.addWorksheet('Payment Request');
+    }
+
+    // Fill in header fields (cell mapping based on provided template)
+    // Left side
+    worksheet.getCell('C6').value = paymentRequest.payee_name || '';
+    worksheet.getCell('C7').value = paymentRequest.project || '';
+    worksheet.getCell('C8').value = paymentRequest.project_address || '';
+    worksheet.getCell('C9').value = paymentRequest.order_number || '';
+
+    // Right side
+    worksheet.getCell('H6').value = new Date(paymentRequest.created_at).toLocaleDateString();
+    worksheet.getCell('H7').value = sourceNumber;
+
+    // Items table
+    let currentRow = 12;
+    let totalAmount = 0;
+
+    const setCellValue = (address, value) => {
+      const cell = worksheet.getCell(address);
+      const target = cell?.isMerged ? cell.master : cell;
+      target.value = value;
+      return target;
+    };
+
+    if (items && items.length > 0) {
+      items.forEach((item) => {
+        const quantity = parseFloat(item.quantity) || 0;
+        const unitPrice = parseFloat(item.unit_price) || 0;
+        const amount = quantity * unitPrice;
+        totalAmount += amount;
+
+        // Template columns (based on template layout):
+        // QTY: A, UNIT: B, DESCRIPTION: D, UNIT COST: F, AMOUNT: H
+        // Use merged-cell-safe setter so values show even when cells are merged.
+        setCellValue(`A${currentRow}`, quantity);
+        setCellValue(`B${currentRow}`, item.item_unit || 'pcs');
+        setCellValue(`D${currentRow}`, item.item_name || '');
+        setCellValue(`F${currentRow}`, unitPrice);
+        setCellValue(`H${currentRow}`, amount);
+
+        currentRow++;
+      });
+    } else if (srDetails) {
+      // For Service Request-sourced payment requests, show SR details as a line item
+      const quantity = parseFloat(srDetails.quantity) || 0;
+      const unitPrice = parseFloat(srDetails.amount) / (quantity || 1);
+      const amount = parseFloat(srDetails.amount) || 0;
+      totalAmount = amount;
+
+      setCellValue(`A${currentRow}`, quantity);
+      setCellValue(`B${currentRow}`, srDetails.unit || 'hours');
+      setCellValue(`D${currentRow}`, srDetails.description || '');
+      setCellValue(`F${currentRow}`, unitPrice);
+      setCellValue(`H${currentRow}`, amount);
+    }
+
+    // Total - use calculated total from items, or payment request amount if no items
+    const finalTotal = totalAmount > 0 ? totalAmount : (parseFloat(paymentRequest.amount) || 0);
+    const totalCell = setCellValue('G21', finalTotal);
+    totalCell.numFmt = '#,##0.00';
+
+    // Prepared by
+    const preparedByName = `${paymentRequest.first_name || ''} ${paymentRequest.last_name || ''}`.trim().toUpperCase();
+    setCellValue('A25', preparedByName);
+
+    // Generate Excel file
+    const buffer = await workbook.xlsx.writeBuffer();
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=Payment_Request_${sourceNumber || req.params.id}.xlsx`);
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Failed to export payment request', error);
+    res.status(500).json({ message: 'Failed to export payment request' });
+  }
+});
+
+// Delete Payment Request (admin only)
+router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const [paymentRequests] = await db.query('SELECT purchase_request_id FROM payment_requests WHERE id = ?', [req.params.id]);
+    if (paymentRequests.length === 0) {
+      return res.status(404).json({ message: 'Payment request not found' });
+    }
+
+    // Delete items first (cascade should handle this, but being explicit)
+    await db.query('DELETE FROM payment_request_items WHERE payment_request_id = ?', [req.params.id]);
+    
+    // Delete payment request
+    await db.query('DELETE FROM payment_requests WHERE id = ?', [req.params.id]);
+
+    // Revert PR status back to 'For Purchase'
+    if (paymentRequests[0].purchase_request_id) {
+      await db.query(
+        "UPDATE purchase_requests SET status = 'For Purchase' WHERE id = ?",
+        [paymentRequests[0].purchase_request_id]
+      );
+    }
+
+    res.json({ message: 'Payment request deleted successfully' });
+  } catch (error) {
+    console.error('Failed to delete payment request', error);
+    res.status(500).json({ message: 'Failed to delete payment request' });
+  }
+});
+
+export default router;

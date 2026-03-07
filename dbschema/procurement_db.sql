@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Feb 26, 2026 at 01:57 AM
+-- Generation Time: Mar 04, 2026 at 04:37 AM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.0.30
 
@@ -20,6 +20,50 @@ SET time_zone = "+00:00";
 --
 -- Database: `procurement_db`
 --
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `cash_requests`
+--
+
+CREATE TABLE `cash_requests` (
+  `id` int(11) NOT NULL,
+  `cr_number` varchar(50) NOT NULL COMMENT 'Format: CR-Initials-YYYY-MM-XXX',
+  `requested_by` int(11) NOT NULL,
+  `receiver` varchar(255) NOT NULL,
+  `address` varchar(255) DEFAULT NULL,
+  `purpose` text DEFAULT NULL,
+  `project` varchar(100) DEFAULT NULL,
+  `project_address` varchar(255) DEFAULT NULL,
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `date_needed` date DEFAULT NULL,
+  `status` enum('Draft','Pending','For Approval','Approved','Rejected','Cancelled','DV Created','Paid') DEFAULT 'Draft',
+  `remarks` text DEFAULT NULL,
+  `rejection_reason` text DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `order_number` varchar(10) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `cash_request_items`
+--
+
+CREATE TABLE `cash_request_items` (
+  `id` int(11) NOT NULL,
+  `cash_request_id` int(11) NOT NULL,
+  `quantity` decimal(10,2) NOT NULL DEFAULT 0.00,
+  `unit` varchar(20) NOT NULL DEFAULT 'pcs',
+  `description` varchar(255) NOT NULL,
+  `unit_cost` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'Calculated: quantity * unit_cost',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
 
@@ -57,15 +101,19 @@ INSERT INTO `categories` (`id`, `category_name`, `description`, `status`, `creat
 CREATE TABLE `disbursement_vouchers` (
   `id` int(11) NOT NULL,
   `dv_number` varchar(50) NOT NULL COMMENT 'Format: YYYY-MM-001 (incremental starting from 001)',
-  `purchase_order_id` int(11) NOT NULL,
-  `purchase_request_id` int(11) NOT NULL,
-  `supplier_id` int(11) NOT NULL,
+  `purchase_order_id` int(11) DEFAULT NULL,
+  `purchase_request_id` int(11) DEFAULT NULL,
+  `service_request_id` int(11) DEFAULT NULL,
+  `cash_request_id` int(11) DEFAULT NULL,
+  `supplier_id` int(11) DEFAULT NULL,
   `prepared_by` int(11) NOT NULL COMMENT 'Employee who created the DV',
   `amount` decimal(12,2) NOT NULL DEFAULT 0.00 COMMENT 'Total amount from PO',
   `dv_date` date NOT NULL COMMENT 'Date when DV was created',
   `particulars` text DEFAULT NULL COMMENT 'Payment particulars/description',
   `project` varchar(100) DEFAULT NULL,
   `pr_number` varchar(50) DEFAULT NULL COMMENT 'Reference to PR number',
+  `sr_number` varchar(50) DEFAULT NULL,
+  `cr_number` varchar(50) DEFAULT NULL,
   `check_number` varchar(50) DEFAULT NULL COMMENT 'Check number when payment is processed',
   `bank_name` varchar(100) DEFAULT NULL,
   `payment_date` date DEFAULT NULL,
@@ -76,7 +124,8 @@ CREATE TABLE `disbursement_vouchers` (
   `certified_by_manager` int(11) DEFAULT NULL COMMENT 'General Manager who approved the DV',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `order_number` varchar(10) DEFAULT NULL
+  `order_number` varchar(10) DEFAULT NULL,
+  `dv_type` enum('po_based','sr_based','cash_based') DEFAULT 'po_based' COMMENT 'Source of DV: PO, Service Request, or Cash Request'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -167,6 +216,30 @@ CREATE TABLE `notifications` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+--
+-- Dumping data for table `notifications`
+--
+
+INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `related_id`, `related_type`, `is_read`, `created_at`) VALUES
+(156, 6, 'New PR Created', 'Purchase Request MTN-2026-02-001 has been created and is ready for your review', 'PR Created', 19, 'purchase_request', 0, '2026-02-26 01:16:47'),
+(157, 8, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-001 has been reviewed by Procurement and requires your final approval', 'PR Approved', 19, 'purchase_request', 0, '2026-02-26 01:19:54'),
+(158, 10, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-001 has been reviewed by Procurement and requires your final approval', 'PR Approved', 19, 'purchase_request', 0, '2026-02-26 01:19:54'),
+(159, 5, 'PR Values Modified by Procurement', 'Procurement modified values in your PR MTN-2026-02-001: undefined: unit price from ₱34.00 to ₱34, unit from \"null\" to \"pcs\"; undefined: unit price from ₱34.00 to ₱34, unit from \"null\" to \"pcs\"; undefined: unit price from ₱34.00 to ₱34, unit from \"null\" to \"reams\"', '', 19, 'purchase_request', 1, '2026-02-26 01:19:54'),
+(160, 6, 'New PR Created', 'Purchase Request MTN-2026-02-002 has been created and is ready for your review', 'PR Created', 20, 'purchase_request', 1, '2026-02-27 05:35:16'),
+(161, 8, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-002 has been reviewed by Procurement and requires your final approval', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:43'),
+(162, 10, 'PR Pending Final Approval', 'Purchase Request MTN-2026-02-002 has been reviewed by Procurement and requires your final approval', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:43'),
+(163, 5, 'PR Values Modified by Procurement', 'Procurement modified values in your PR MTN-2026-02-002: undefined: unit price from ₱34.00 to ₱34, unit from \"null\" to \"reams\"; undefined: unit price from ₱34.00 to ₱34, unit from \"null\" to \"pcs\"', '', 20, 'purchase_request', 0, '2026-03-04 03:07:43'),
+(164, 5, 'PR Fully Approved', 'Your Purchase Request MTN-2026-02-002 has been fully approved and is ready for purchase', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:50'),
+(165, 7, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-002 has been approved and is ready for PO creation', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:50'),
+(166, 14, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-002 has been approved and is ready for PO creation', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:50'),
+(167, 15, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-002 has been approved and is ready for PO creation', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:50'),
+(168, 16, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-002 has been approved and is ready for PO creation', 'PR Approved', 20, 'purchase_request', 0, '2026-03-04 03:07:50'),
+(169, 5, 'PR Fully Approved', 'Your Purchase Request MTN-2026-02-001 has been fully approved and is ready for purchase', 'PR Approved', 19, 'purchase_request', 0, '2026-03-04 03:07:52'),
+(170, 7, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-001 has been approved and is ready for PO creation', 'PR Approved', 19, 'purchase_request', 0, '2026-03-04 03:07:52'),
+(171, 14, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-001 has been approved and is ready for PO creation', 'PR Approved', 19, 'purchase_request', 0, '2026-03-04 03:07:52'),
+(172, 15, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-001 has been approved and is ready for PO creation', 'PR Approved', 19, 'purchase_request', 0, '2026-03-04 03:07:52'),
+(173, 16, 'PR Ready for PO Creation', 'Purchase Request MTN-2026-02-001 has been approved and is ready for PO creation', 'PR Approved', 19, 'purchase_request', 0, '2026-03-04 03:07:52');
+
 -- --------------------------------------------------------
 
 --
@@ -210,13 +283,14 @@ CREATE TABLE `purchase_orders` (
   `id` int(11) NOT NULL,
   `po_number` varchar(50) NOT NULL,
   `purchase_request_id` int(11) NOT NULL,
+  `service_request_id` int(11) DEFAULT NULL,
   `supplier_id` int(11) NOT NULL,
   `prepared_by` int(11) NOT NULL,
   `total_amount` decimal(10,2) DEFAULT 0.00,
   `po_date` date NOT NULL,
   `expected_delivery_date` date DEFAULT NULL,
   `actual_delivery_date` date DEFAULT NULL,
-  `status` enum('On Hold','Draft','Ordered','Delivered','Cancelled') DEFAULT 'Draft',
+  `status` enum('Draft','Pending Approval','Approved','On Hold','Ordered','Delivered','Paid','Cancelled') DEFAULT 'Draft',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `place_of_delivery` varchar(255) DEFAULT NULL,
@@ -224,7 +298,8 @@ CREATE TABLE `purchase_orders` (
   `payment_term` varchar(50) DEFAULT 'CASH',
   `project` varchar(100) DEFAULT NULL,
   `notes` text DEFAULT NULL,
-  `order_number` varchar(10) DEFAULT NULL
+  `order_number` varchar(10) DEFAULT NULL,
+  `po_type` enum('purchase_order','payment_order') DEFAULT 'purchase_order' COMMENT 'Type of PO: purchase_order (debt) or payment_order (non-debt/prepaid)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -268,8 +343,17 @@ CREATE TABLE `purchase_requests` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `supplier_id` int(11) DEFAULT NULL,
   `supplier_address` varchar(255) DEFAULT NULL,
-  `order_number` varchar(10) DEFAULT NULL
+  `order_number` varchar(10) DEFAULT NULL,
+  `payment_basis` enum('debt','non_debt') DEFAULT 'debt' COMMENT 'Determines if PR leads to Purchase Order (debt) or Payment Order (non_debt)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `purchase_requests`
+--
+
+INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`, `order_number`, `payment_basis`) VALUES
+(19, 'MTN-2026-02-001', 5, 'test', NULL, '2026-02-28', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-03-04 03:07:52', NULL, 102.00, '2026-02-26 01:16:47', '2026-03-04 03:07:52', 2, '456 Business Ave, Quezon City', '393859493', 'non_debt'),
+(20, 'MTN-2026-02-002', 5, 'needed for site', NULL, '2026-02-28', 'BCDA - Fire Station', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-03-04 03:07:50', NULL, 68.00, '2026-02-27 05:35:16', '2026-03-04 03:07:50', 2, '456 Business Ave, Quezon City', '393859493', 'non_debt');
 
 -- --------------------------------------------------------
 
@@ -290,6 +374,91 @@ CREATE TABLE `purchase_request_items` (
   `received_by` int(11) DEFAULT NULL,
   `received_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `purchase_request_items`
+--
+
+INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `unit`, `remarks`, `status`, `received_by`, `received_at`, `created_at`) VALUES
+(125, 19, 6, 1, 34.00, 34.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-02-26 01:16:47'),
+(126, 19, 4, 1, 34.00, 34.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-02-26 01:16:47'),
+(127, 19, 2, 1, 34.00, 34.00, 'reams', NULL, 'Pending', NULL, NULL, '2026-02-26 01:16:47'),
+(128, 20, 2, 1, 34.00, 34.00, 'reams', NULL, 'Pending', NULL, NULL, '2026-02-27 05:35:16'),
+(129, 20, 6, 1, 34.00, 34.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-02-27 05:35:16');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reimbursements`
+--
+
+CREATE TABLE `reimbursements` (
+  `id` int(11) NOT NULL,
+  `rmb_number` varchar(50) NOT NULL,
+  `requested_by` int(11) NOT NULL,
+  `payee` varchar(255) NOT NULL,
+  `purpose` text DEFAULT NULL,
+  `project` varchar(100) DEFAULT NULL,
+  `project_address` varchar(255) DEFAULT NULL,
+  `order_number` varchar(10) DEFAULT NULL,
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `date_needed` date DEFAULT NULL,
+  `status` enum('Draft','Pending','For Approval','Approved','Rejected','Cancelled','Paid') DEFAULT 'Draft',
+  `remarks` text DEFAULT NULL,
+  `rejection_reason` text DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `reimbursement_attachments`
+--
+
+CREATE TABLE `reimbursement_attachments` (
+  `id` int(11) NOT NULL,
+  `reimbursement_id` int(11) NOT NULL,
+  `file_path` varchar(500) NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_size` int(11) DEFAULT NULL,
+  `mime_type` varchar(100) DEFAULT NULL,
+  `uploaded_by` int(11) NOT NULL,
+  `uploaded_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `service_requests`
+--
+
+CREATE TABLE `service_requests` (
+  `id` int(11) NOT NULL,
+  `sr_number` varchar(50) NOT NULL COMMENT 'Format: SRV-YYYY-MM-XXX',
+  `requested_by` int(11) NOT NULL,
+  `purpose` text NOT NULL,
+  `description` text DEFAULT NULL COMMENT 'Detailed service description',
+  `service_type` enum('Rent','Job Order','Contractor','Service','Others') NOT NULL DEFAULT 'Service',
+  `project` varchar(100) DEFAULT NULL,
+  `project_address` varchar(255) DEFAULT NULL,
+  `supplier_id` int(11) DEFAULT NULL COMMENT 'Selected supplier/contractor',
+  `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
+  `date_needed` date DEFAULT NULL,
+  `status` enum('Draft','For Procurement Review','For Super Admin Final Approval','Approved','Rejected','Cancelled','PO Created','Paid') DEFAULT 'Draft',
+  `remarks` text DEFAULT NULL,
+  `rejection_reason` text DEFAULT NULL,
+  `approved_by` int(11) DEFAULT NULL,
+  `approved_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `order_number` varchar(10) DEFAULT NULL,
+  `sr_type` enum('payment_request','payment_order') DEFAULT 'payment_order' COMMENT 'Type: payment_request (amount+qty) vs payment_order (amount only)',
+  `quantity` decimal(10,2) DEFAULT NULL COMMENT 'Quantity for payment_request type',
+  `unit` varchar(20) DEFAULT NULL COMMENT 'Unit of measurement (e.g., pcs, hours, days)'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -353,6 +522,23 @@ INSERT INTO `supplier_items` (`id`, `supplier_id`, `item_id`, `price`, `lead_tim
 --
 
 --
+-- Indexes for table `cash_requests`
+--
+ALTER TABLE `cash_requests`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `cr_number` (`cr_number`),
+  ADD KEY `requested_by` (`requested_by`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `status` (`status`);
+
+--
+-- Indexes for table `cash_request_items`
+--
+ALTER TABLE `cash_request_items`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `cash_request_id` (`cash_request_id`);
+
+--
 -- Indexes for table `categories`
 --
 ALTER TABLE `categories`
@@ -371,7 +557,10 @@ ALTER TABLE `disbursement_vouchers`
   ADD KEY `supplier_id` (`supplier_id`),
   ADD KEY `prepared_by` (`prepared_by`),
   ADD KEY `certified_by_accounting` (`certified_by_accounting`),
-  ADD KEY `certified_by_manager` (`certified_by_manager`);
+  ADD KEY `certified_by_manager` (`certified_by_manager`),
+  ADD KEY `service_request_id` (`service_request_id`),
+  ADD KEY `dv_type` (`dv_type`),
+  ADD KEY `cash_request_id` (`cash_request_id`);
 
 --
 -- Indexes for table `employees`
@@ -423,7 +612,9 @@ ALTER TABLE `purchase_orders`
   ADD UNIQUE KEY `po_number` (`po_number`),
   ADD KEY `purchase_request_id` (`purchase_request_id`),
   ADD KEY `supplier_id` (`supplier_id`),
-  ADD KEY `prepared_by` (`prepared_by`);
+  ADD KEY `prepared_by` (`prepared_by`),
+  ADD KEY `po_type` (`po_type`),
+  ADD KEY `service_request_id` (`service_request_id`);
 
 --
 -- Indexes for table `purchase_order_items`
@@ -442,7 +633,8 @@ ALTER TABLE `purchase_requests`
   ADD UNIQUE KEY `pr_number` (`pr_number`),
   ADD KEY `requested_by` (`requested_by`),
   ADD KEY `approved_by` (`approved_by`),
-  ADD KEY `supplier_id` (`supplier_id`);
+  ADD KEY `supplier_id` (`supplier_id`),
+  ADD KEY `payment_basis` (`payment_basis`);
 
 --
 -- Indexes for table `purchase_request_items`
@@ -452,6 +644,36 @@ ALTER TABLE `purchase_request_items`
   ADD KEY `purchase_request_id` (`purchase_request_id`),
   ADD KEY `item_id` (`item_id`),
   ADD KEY `received_by` (`received_by`);
+
+--
+-- Indexes for table `reimbursements`
+--
+ALTER TABLE `reimbursements`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `rmb_number` (`rmb_number`),
+  ADD KEY `requested_by` (`requested_by`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `status` (`status`);
+
+--
+-- Indexes for table `reimbursement_attachments`
+--
+ALTER TABLE `reimbursement_attachments`
+  ADD PRIMARY KEY (`id`),
+  ADD KEY `reimbursement_id` (`reimbursement_id`),
+  ADD KEY `uploaded_by` (`uploaded_by`);
+
+--
+-- Indexes for table `service_requests`
+--
+ALTER TABLE `service_requests`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `sr_number` (`sr_number`),
+  ADD KEY `requested_by` (`requested_by`),
+  ADD KEY `supplier_id` (`supplier_id`),
+  ADD KEY `approved_by` (`approved_by`),
+  ADD KEY `status` (`status`),
+  ADD KEY `service_type` (`service_type`);
 
 --
 -- Indexes for table `suppliers`
@@ -472,6 +694,18 @@ ALTER TABLE `supplier_items`
 --
 -- AUTO_INCREMENT for dumped tables
 --
+
+--
+-- AUTO_INCREMENT for table `cash_requests`
+--
+ALTER TABLE `cash_requests`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `cash_request_items`
+--
+ALTER TABLE `cash_request_items`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `categories`
@@ -501,7 +735,7 @@ ALTER TABLE `items`
 -- AUTO_INCREMENT for table `notifications`
 --
 ALTER TABLE `notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=156;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=174;
 
 --
 -- AUTO_INCREMENT for table `po_attachments`
@@ -531,13 +765,31 @@ ALTER TABLE `purchase_order_items`
 -- AUTO_INCREMENT for table `purchase_requests`
 --
 ALTER TABLE `purchase_requests`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=19;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
 
 --
 -- AUTO_INCREMENT for table `purchase_request_items`
 --
 ALTER TABLE `purchase_request_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=125;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=130;
+
+--
+-- AUTO_INCREMENT for table `reimbursements`
+--
+ALTER TABLE `reimbursements`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `reimbursement_attachments`
+--
+ALTER TABLE `reimbursement_attachments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- AUTO_INCREMENT for table `service_requests`
+--
+ALTER TABLE `service_requests`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
 
 --
 -- AUTO_INCREMENT for table `suppliers`
@@ -556,6 +808,19 @@ ALTER TABLE `supplier_items`
 --
 
 --
+-- Constraints for table `cash_requests`
+--
+ALTER TABLE `cash_requests`
+  ADD CONSTRAINT `cash_requests_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `cash_requests_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `employees` (`id`);
+
+--
+-- Constraints for table `cash_request_items`
+--
+ALTER TABLE `cash_request_items`
+  ADD CONSTRAINT `cash_request_items_ibfk_1` FOREIGN KEY (`cash_request_id`) REFERENCES `cash_requests` (`id`) ON DELETE CASCADE;
+
+--
 -- Constraints for table `categories`
 --
 ALTER TABLE `categories`
@@ -570,7 +835,9 @@ ALTER TABLE `disbursement_vouchers`
   ADD CONSTRAINT `disbursement_vouchers_ibfk_3` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`),
   ADD CONSTRAINT `disbursement_vouchers_ibfk_4` FOREIGN KEY (`prepared_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `disbursement_vouchers_ibfk_5` FOREIGN KEY (`certified_by_accounting`) REFERENCES `employees` (`id`),
-  ADD CONSTRAINT `disbursement_vouchers_ibfk_6` FOREIGN KEY (`certified_by_manager`) REFERENCES `employees` (`id`);
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_6` FOREIGN KEY (`certified_by_manager`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_7` FOREIGN KEY (`service_request_id`) REFERENCES `service_requests` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `disbursement_vouchers_ibfk_8` FOREIGN KEY (`cash_request_id`) REFERENCES `cash_requests` (`id`) ON DELETE CASCADE;
 
 --
 -- Constraints for table `items`
@@ -607,7 +874,8 @@ ALTER TABLE `pr_item_rejection_remarks`
 ALTER TABLE `purchase_orders`
   ADD CONSTRAINT `purchase_orders_ibfk_1` FOREIGN KEY (`purchase_request_id`) REFERENCES `purchase_requests` (`id`),
   ADD CONSTRAINT `purchase_orders_ibfk_2` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`),
-  ADD CONSTRAINT `purchase_orders_ibfk_3` FOREIGN KEY (`prepared_by`) REFERENCES `employees` (`id`);
+  ADD CONSTRAINT `purchase_orders_ibfk_3` FOREIGN KEY (`prepared_by`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `purchase_orders_ibfk_4` FOREIGN KEY (`service_request_id`) REFERENCES `service_requests` (`id`);
 
 --
 -- Constraints for table `purchase_order_items`
@@ -624,6 +892,28 @@ ALTER TABLE `purchase_requests`
   ADD CONSTRAINT `purchase_requests_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `purchase_requests_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `purchase_requests_ibfk_3` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`);
+
+--
+-- Constraints for table `reimbursements`
+--
+ALTER TABLE `reimbursements`
+  ADD CONSTRAINT `reimbursements_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `reimbursements_ibfk_2` FOREIGN KEY (`approved_by`) REFERENCES `employees` (`id`);
+
+--
+-- Constraints for table `reimbursement_attachments`
+--
+ALTER TABLE `reimbursement_attachments`
+  ADD CONSTRAINT `reimbursement_attachments_ibfk_1` FOREIGN KEY (`reimbursement_id`) REFERENCES `reimbursements` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `reimbursement_attachments_ibfk_2` FOREIGN KEY (`uploaded_by`) REFERENCES `employees` (`id`);
+
+--
+-- Constraints for table `service_requests`
+--
+ALTER TABLE `service_requests`
+  ADD CONSTRAINT `service_requests_ibfk_1` FOREIGN KEY (`requested_by`) REFERENCES `employees` (`id`),
+  ADD CONSTRAINT `service_requests_ibfk_2` FOREIGN KEY (`supplier_id`) REFERENCES `suppliers` (`id`),
+  ADD CONSTRAINT `service_requests_ibfk_3` FOREIGN KEY (`approved_by`) REFERENCES `employees` (`id`);
 
 --
 -- Constraints for table `supplier_items`

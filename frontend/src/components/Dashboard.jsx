@@ -1,0 +1,354 @@
+import React, { useState, useEffect } from 'react'
+import { purchaseRequestService } from '../services/purchaseRequests'
+import { purchaseOrderService } from '../services/purchaseOrders'
+import { serviceRequestService } from '../services/serviceRequests'
+import { cashRequestService } from '../services/cashRequests'
+import pricingHistoryService from '../services/pricingHistory'
+import { FileText, Clock, CheckCircle, ShoppingCart, AlertCircle, CreditCard, TrendingUp } from 'lucide-react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+
+// UI Components
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
+    {children}
+  </div>
+)
+
+const StatCard = ({ title, value, icon: Icon, color, subtitle }) => (
+  <Card className="p-4">
+    <div className="flex items-start justify-between">
+      <div>
+        <p className="text-sm text-gray-500">{title}</p>
+        <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        {subtitle && <p className="text-xs text-gray-400 mt-1">{subtitle}</p>}
+      </div>
+      <div className={`p-2 rounded-lg ${color}`}>
+        <Icon className="w-5 h-5 text-white" />
+      </div>
+    </div>
+  </Card>
+)
+
+const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-PH', {
+    style: 'currency',
+    currency: 'PHP'
+  }).format(amount || 0)
+}
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-'
+  return new Date(dateString).toLocaleDateString('en-PH', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  })
+}
+
+const Dashboard = () => {
+  const [stats, setStats] = useState({
+    totalPRs: 0,
+    pendingPRs: 0,
+    approvedPRs: 0,
+    totalPOs: 0,
+    totalSRs: 0,
+    pendingSRs: 0,
+    totalCRs: 0,
+    pendingCRs: 0
+  })
+  const [recentActivity, setRecentActivity] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [pricingTrends, setPricingTrends] = useState([])
+  const [topItems, setTopItems] = useState([])
+  const [selectedItem, setSelectedItem] = useState('')
+
+  useEffect(() => {
+    fetchDashboardData()
+    fetchPricingTrends()
+  }, [])
+
+  useEffect(() => {
+    fetchPricingTrends()
+  }, [selectedItem])
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true)
+      
+      // Fetch all data
+      const [prs, pos, srs, crs] = await Promise.all([
+        purchaseRequestService.getAll('all'),
+        purchaseOrderService.getAll(),
+        serviceRequestService.getAll(),
+        cashRequestService.getAll()
+      ])
+
+      // Calculate stats
+      const pendingPRs = prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Approval').length
+      const approvedPRs = prs.filter(pr => pr.status === 'Approved' || pr.status === 'PO Created').length
+      const pendingSRs = srs.filter(sr => sr.status === 'For Procurement Review').length
+      const pendingCRs = crs.filter(cr => cr.status === 'Pending' || cr.status === 'For Admin Approval').length
+
+      setStats({
+        totalPRs: prs.length,
+        pendingPRs,
+        approvedPRs,
+        totalPOs: pos.length,
+        totalSRs: srs.length,
+        pendingSRs,
+        totalCRs: crs.length,
+        pendingCRs
+      })
+
+      // Create recent activity list (combine and sort by date)
+      const activity = [
+        ...prs.slice(0, 5).map(pr => ({
+          type: 'PR',
+          number: pr.pr_number,
+          status: pr.status,
+          date: pr.created_at,
+          description: `Purchase Request ${pr.pr_number} - ${pr.status}`
+        })),
+        ...pos.slice(0, 5).map(po => ({
+          type: 'PO',
+          number: po.po_number,
+          status: po.status,
+          date: po.created_at,
+          description: `Purchase Order ${po.po_number} created`
+        })),
+        ...srs.slice(0, 5).map(sr => ({
+          type: 'SR',
+          number: sr.sr_number,
+          status: sr.status,
+          date: sr.created_at,
+          description: `Service Request ${sr.sr_number} - ${sr.status}`
+        })),
+        ...crs.slice(0, 5).map(cr => ({
+          type: 'CR',
+          number: cr.cr_number,
+          status: cr.status,
+          date: cr.created_at,
+          description: `Cash Request ${cr.cr_number} - ${cr.status}`
+        }))
+      ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10)
+
+      setRecentActivity(activity)
+    } catch (err) {
+      console.error('Failed to fetch dashboard data', err)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchPricingTrends = async () => {
+    try {
+      const response = await pricingHistoryService.getMonthlyTrends(selectedItem || undefined)
+      setPricingTrends(response.trends || [])
+      if (response.topItems && response.topItems.length > 0 && !selectedItem) {
+        setTopItems(response.topItems)
+      }
+    } catch (err) {
+      console.error('Failed to fetch pricing trends', err)
+    }
+  }
+
+  const getStatusColor = (status) => {
+    const colors = {
+      'Draft': 'bg-gray-100 text-gray-800',
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'For Approval': 'bg-blue-100 text-blue-800',
+      'Approved': 'bg-green-100 text-green-800',
+      'Rejected': 'bg-red-100 text-red-800',
+      'For Procurement Review': 'bg-orange-100 text-orange-800'
+    }
+    return colors[status] || 'bg-gray-100 text-gray-800'
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-gray-900">Dashboard</h2>
+        <p className="text-sm text-gray-500">Overview of procurement activities</p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard
+          title="Total Purchase Requests"
+          value={stats.totalPRs}
+          icon={FileText}
+          color="bg-blue-500"
+          subtitle={`${stats.pendingPRs} pending approval`}
+        />
+        <StatCard
+          title="Pending Approvals"
+          value={stats.pendingPRs + stats.pendingSRs}
+          icon={Clock}
+          color="bg-yellow-500"
+          subtitle={`${stats.pendingPRs} PRs, ${stats.pendingSRs} SRs`}
+        />
+        <StatCard
+          title="Approved Requests"
+          value={stats.approvedPRs}
+          icon={CheckCircle}
+          color="bg-green-500"
+        />
+        <StatCard
+          title="Purchase Orders"
+          value={stats.totalPOs}
+          icon={ShoppingCart}
+          color="bg-purple-500"
+        />
+        <StatCard
+          title="Service Requests"
+          value={stats.totalSRs}
+          icon={AlertCircle}
+          color="bg-orange-500"
+          subtitle={`${stats.pendingSRs} pending review`}
+        />
+        <StatCard
+          title="Cash Requests"
+          value={stats.totalCRs}
+          icon={CreditCard}
+          color="bg-teal-500"
+          subtitle={`${stats.pendingCRs} pending approval`}
+        />
+      </div>
+
+      {/* Pricing Trends Chart */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Item Pricing Trends</h3>
+            <p className="text-xs text-gray-500">Monthly average pricing over the last 12 months</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-gray-400" />
+            <select
+              value={selectedItem}
+              onChange={(e) => setSelectedItem(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value="">All Items (Combined)</option>
+              {topItems.map(item => (
+                <option key={item.id} value={item.id}>
+                  {item.item_code} - {item.item_name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        
+        {pricingTrends.length > 0 ? (
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={pricingTrends}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis 
+                  dataKey="month_label" 
+                  tick={{ fontSize: 12 }}
+                  stroke="#9ca3af"
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  stroke="#9ca3af"
+                  tickFormatter={(value) => `₱${value}`}
+                />
+                <Tooltip 
+                  formatter={(value, name) => [`₱${parseFloat(value).toFixed(2)}`, name]}
+                  labelStyle={{ color: '#374151' }}
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px'
+                  }}
+                />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="avg_price" 
+                  name="Average Price" 
+                  stroke="#f59e0b" 
+                  strokeWidth={2}
+                  dot={{ fill: '#f59e0b', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="min_price" 
+                  name="Min Price" 
+                  stroke="#10b981" 
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="max_price" 
+                  name="Max Price" 
+                  stroke="#ef4444" 
+                  strokeWidth={2}
+                  strokeDasharray="5 5"
+                  dot={false}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-64 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <TrendingUp className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p>No pricing data available</p>
+              <p className="text-xs text-gray-400 mt-1">Add pricing history records to see trends</p>
+            </div>
+          </div>
+        )}
+      </Card>
+
+      {/* Recent Activity */}
+      <Card className="p-4">
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
+        <div className="space-y-3">
+          {recentActivity.length > 0 ? (
+            recentActivity.map((item, index) => (
+              <div key={index} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                <div className="flex items-center gap-3">
+                  <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                    item.type === 'PR' ? 'bg-blue-100 text-blue-700' :
+                    item.type === 'PO' ? 'bg-purple-100 text-purple-700' :
+                    item.type === 'CR' ? 'bg-teal-100 text-teal-700' :
+                    'bg-orange-100 text-orange-700'
+                  }`}>
+                    {item.type}
+                  </span>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{item.number}</p>
+                    <p className="text-xs text-gray-500">{item.description}</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(item.status)}`}>
+                    {item.status}
+                  </span>
+                  <p className="text-xs text-gray-400 mt-1">{formatDate(item.date)}</p>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-center text-gray-500 py-8">No recent activity</p>
+          )}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
+export default Dashboard

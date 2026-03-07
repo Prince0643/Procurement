@@ -1,0 +1,490 @@
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Plus,
+  Search,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  Send,
+  CheckCircle,
+  XCircle,
+  Upload
+} from 'lucide-react';
+import { reimbursementService } from '../../services/reimbursements';
+import { useAuth } from '../../contexts/AuthContext';
+
+const Card = ({ children, className = '' }) => (
+  <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>{children}</div>
+);
+
+const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled = false, className = '' }) => {
+  const base = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+  const variants = {
+    primary: 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500 disabled:bg-yellow-300',
+    secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500 disabled:bg-gray-50',
+    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:bg-red-300',
+    ghost: 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500'
+  };
+  const sizes = {
+    sm: 'px-3 py-1.5 text-sm',
+    md: 'px-4 py-2 text-sm'
+  };
+
+  return (
+    <button onClick={onClick} disabled={disabled} className={`${base} ${variants[variant]} ${sizes[size]} ${className}`}>
+      {children}
+    </button>
+  );
+};
+
+const StatusBadge = ({ status }) => {
+  const styles = {
+    Draft: 'bg-gray-100 text-gray-800',
+    Pending: 'bg-yellow-100 text-yellow-800',
+    'For Approval': 'bg-blue-100 text-blue-800',
+    Approved: 'bg-green-100 text-green-800',
+    Rejected: 'bg-red-100 text-red-800',
+    Cancelled: 'bg-gray-100 text-gray-500',
+    Paid: 'bg-green-100 text-green-800'
+  };
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
+      {status}
+    </span>
+  );
+};
+
+const ReimbursementsManagement = () => {
+  const { user } = useAuth();
+
+  const [reimbursements, setReimbursements] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const [expandedId, setExpandedId] = useState(null);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const [formData, setFormData] = useState({
+    payee: '',
+    purpose: '',
+    project: '',
+    project_address: '',
+    order_number: '',
+    amount: '',
+    date_needed: '',
+    remarks: ''
+  });
+
+  const [uploadingForId, setUploadingForId] = useState(null);
+
+  const canCreate = ['engineer', 'admin', 'super_admin'].includes(user?.role);
+  const canApprove = ['admin', 'super_admin'].includes(user?.role);
+
+  const fetchReimbursements = async () => {
+    try {
+      setLoading(true);
+      const data = await reimbursementService.getAll();
+      setReimbursements(data);
+      setError('');
+    } catch (e) {
+      console.error(e);
+      setError('Failed to fetch reimbursements');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchReimbursements();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase();
+    if (!q) return reimbursements;
+    return reimbursements.filter(r =>
+      String(r.rmb_number || '').toLowerCase().includes(q) ||
+      String(r.payee || '').toLowerCase().includes(q) ||
+      String(r.purpose || '').toLowerCase().includes(q)
+    );
+  }, [reimbursements, searchTerm]);
+
+  const toggleExpand = async (id) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+
+  const handleCreate = async () => {
+    if (!formData.payee.trim()) {
+      alert('Payee is required');
+      return;
+    }
+    const amt = parseFloat(formData.amount);
+    if (!amt || isNaN(amt) || amt <= 0) {
+      alert('Valid amount is required');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await reimbursementService.create({
+        ...formData,
+        amount: amt
+      });
+      setShowCreateModal(false);
+      setFormData({
+        payee: '',
+        purpose: '',
+        project: '',
+        project_address: '',
+        order_number: '',
+        amount: '',
+        date_needed: '',
+        remarks: ''
+      });
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to create reimbursement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async (r) => {
+    if (!confirm('Submit this reimbursement request?')) return;
+    try {
+      await reimbursementService.submit(r.id);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to submit');
+    }
+  };
+
+  const handleApprove = async (r, status) => {
+    const rejectionReason = status === 'rejected' ? prompt('Enter rejection reason:') : null;
+    if (status === 'rejected' && !rejectionReason) return;
+
+    try {
+      await reimbursementService.approve(r.id, status, rejectionReason);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to approve/reject');
+    }
+  };
+
+  const handleDelete = async (r) => {
+    if (!confirm('Delete this reimbursement request?')) return;
+    try {
+      await reimbursementService.delete(r.id);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to delete');
+    }
+  };
+
+  const handleUpload = async (reimbursementId, files) => {
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploadingForId(reimbursementId);
+      await reimbursementService.uploadAttachments(reimbursementId, files);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to upload');
+    } finally {
+      setUploadingForId(null);
+    }
+  };
+
+  const handleDeleteAttachment = async (reimbursementId, attachmentId) => {
+    if (!confirm('Delete this attachment?')) return;
+    try {
+      await reimbursementService.deleteAttachment(reimbursementId, attachmentId);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to delete attachment');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Reimbursements</h1>
+          <p className="text-gray-500 mt-1">Standalone reimbursement requests with liquidation attachments</p>
+        </div>
+        {canCreate && (
+          <Button onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            New Reimbursement
+          </Button>
+        )}
+      </div>
+
+      <Card className="p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search reimbursements..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+          />
+        </div>
+      </Card>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-700">{error}</p>
+        </div>
+      )}
+
+      <Card>
+        <div className="divide-y divide-gray-200">
+          {filtered.map((r) => (
+            <div key={r.id} className="p-4 hover:bg-gray-50">
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-medium text-gray-900">{r.rmb_number}</p>
+                    <StatusBadge status={r.status} />
+                  </div>
+                  <p className="text-sm text-gray-900 mt-1 truncate">{r.purpose || r.payee}</p>
+                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                    <span>Payee: {r.payee}</span>
+                    <span>Amount: ₱{parseFloat(r.amount || 0).toLocaleString()}</span>
+                    {r.project && <span>Project: {r.project}</span>}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 ml-4">
+                  {user?.role === 'engineer' && r.status === 'Draft' && r.requested_by === user?.id && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => handleSubmit(r)}>
+                        <Send className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(r)}>
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+
+                  {canApprove && (r.status === 'Pending' || r.status === 'For Approval') && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'approved')}>
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'rejected')}>
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+
+                  <Button variant="ghost" size="sm" onClick={() => toggleExpand(r.id)}>
+                    {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              {expandedId === r.id && (
+                <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-gray-500">Project Address:</span>
+                      <span className="ml-2 text-gray-900">{r.project_address || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Order Number:</span>
+                      <span className="ml-2 text-gray-900">{r.order_number || '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Date Needed:</span>
+                      <span className="ml-2 text-gray-900">{r.date_needed ? new Date(r.date_needed).toLocaleDateString() : '-'}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-500">Remarks:</span>
+                      <span className="ml-2 text-gray-900">{r.remarks || '-'}</span>
+                    </div>
+                    {r.rejection_reason && (
+                      <div className="col-span-2">
+                        <span className="text-red-500">Rejection Reason:</span>
+                        <span className="ml-2 text-red-700">{r.rejection_reason}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-medium text-gray-900">Liquidation Attachments</p>
+                      <label className="inline-flex items-center cursor-pointer">
+                        <input
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => handleUpload(r.id, Array.from(e.target.files || []))}
+                          disabled={uploadingForId === r.id}
+                        />
+                        <span className="inline-flex items-center text-sm text-gray-700 hover:text-gray-900">
+                          <Upload className="w-4 h-4 mr-1" />
+                          {uploadingForId === r.id ? 'Uploading...' : 'Upload'}
+                        </span>
+                      </label>
+                    </div>
+
+                    {Array.isArray(r.attachments) && r.attachments.length > 0 ? (
+                      <div className="space-y-2">
+                        {r.attachments.map((a) => (
+                          <div key={a.id} className="flex items-center justify-between p-2 border border-gray-200 rounded">
+                            <a
+                              href={a.file_path}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-sm text-blue-600 hover:underline truncate"
+                              title={a.file_name}
+                            >
+                              {a.file_name}
+                            </a>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteAttachment(r.id, a.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500">No attachments yet</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {filtered.length === 0 && (
+            <div className="p-8 text-center text-gray-500">No reimbursements found</div>
+          )}
+        </div>
+      </Card>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900">Create Reimbursement</h2>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payee *</label>
+                <input
+                  type="text"
+                  value={formData.payee}
+                  onChange={(e) => setFormData({ ...formData, payee: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Purpose</label>
+                <input
+                  type="text"
+                  value={formData.purpose}
+                  onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date Needed</label>
+                  <input
+                    type="date"
+                    value={formData.date_needed}
+                    onChange={(e) => setFormData({ ...formData, date_needed: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
+                  <input
+                    type="text"
+                    value={formData.project}
+                    onChange={(e) => setFormData({ ...formData, project: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
+                  <input
+                    type="text"
+                    value={formData.order_number}
+                    onChange={(e) => setFormData({ ...formData, order_number: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Project Address</label>
+                <input
+                  type="text"
+                  value={formData.project_address}
+                  onChange={(e) => setFormData({ ...formData, project_address: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                <textarea
+                  rows={2}
+                  value={formData.remarks}
+                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+              <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={submitting}>
+                Cancel
+              </Button>
+              <Button onClick={handleCreate} disabled={submitting}>
+                {submitting ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ReimbursementsManagement;

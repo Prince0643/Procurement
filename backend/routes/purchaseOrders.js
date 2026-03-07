@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireSuperAdmin, requireAdminOnly } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import db from '../config/database.js';
 import { createNotification, getSuperAdmins } from '../utils/notifications.js';
@@ -67,7 +67,7 @@ router.get('/:id', authenticate, async (req, res) => {
   try {
     const [pos] = await db.query(`
       SELECT po.*, 
-             s.supplier_name as supplier_name, s.contact_person, s.phone, s.email,
+             s.supplier_name as supplier_name, s.address as supplier_address, s.contact_person, s.phone, s.email,
              pr.pr_number, pr.remarks as pr_remarks,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name
@@ -106,9 +106,12 @@ router.get('/:id', authenticate, async (req, res) => {
 });
 
 // Create PO (admin only)
-router.post('/', authenticate, requireAdmin, async (req, res) => {
+router.post('/', authenticate, requireAdminOnly, async (req, res) => {
   try {
-    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items, service_request_id } = req.body;
+    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items, service_request_id, save_as_draft } = req.body;
+    
+    // Determine status based on save_as_draft flag
+    const status = save_as_draft ? 'Draft' : 'Pending Approval';
     
     // Check if creating from PR or Service Request
     let prDetails = null;
@@ -126,8 +129,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         return res.status(404).json({ message: 'Purchase request not found' });
       }
       prDetails = prs[0];
-      // Set po_type based on payment_basis
-      poType = prDetails.payment_basis === 'non_debt' ? 'payment_order' : 'purchase_order';
+      
+      // Reject non_debt PRs - they must use payment-requests endpoint
+      if (prDetails.payment_basis === 'non_debt') {
+        return res.status(400).json({ 
+          message: 'PRs without account must use /api/payment-requests endpoint',
+          redirectTo: '/api/payment-requests'
+        });
+      }
+      
       // Use supplier from PR if engineer selected one
       if (!finalSupplierId && prDetails.pr_supplier_id) {
         finalSupplierId = prDetails.pr_supplier_id;
@@ -177,8 +187,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // Create PO with po_type and service_request_id support
     const [result] = await db.query(
       `INSERT INTO purchase_orders (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type) 
-       VALUES (?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, order_number || null, delivery_term || 'COD', payment_term || 'CASH', notes || null, 'Draft', poType]
+       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, order_number || null, delivery_term || 'COD', payment_term || 'CASH', notes || null, status, poType]
     );
 
     const poId = result.insertId;
@@ -204,24 +214,31 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       );
     }
 
-    // Notify Super Admins that a new PO needs approval
-    const superAdmins = await getSuperAdmins();
-    for (const adminId of superAdmins) {
-      await createNotification(
-        adminId,
-        'New PO Pending Approval',
-        `Purchase Order ${poNumber} has been created and requires your approval`,
-        'PO Created',
-        poId,
-        'purchase_order'
-      );
+    // Notify Super Admins that a new PO needs approval (only if not a draft)
+    if (!save_as_draft) {
+      const superAdmins = await getSuperAdmins();
+      for (const adminId of superAdmins) {
+        await createNotification(
+          adminId,
+          'New PO Pending Approval',
+          `Purchase Order ${poNumber} has been created and requires your approval`,
+          'PO Created',
+          poId,
+          'purchase_order'
+        );
+      }
     }
 
+    const message = save_as_draft 
+      ? `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} saved as draft` 
+      : `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} created successfully and is pending approval`;
+
     res.status(201).json({ 
-      message: `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} created successfully`, 
+      message, 
       poId,
       poNumber,
-      po_type: poType
+      po_type: poType,
+      status
     });
   } catch (error) {
     console.error('Failed to create purchase order', error);
@@ -240,7 +257,7 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
     }
 
     const currentStatus = pos[0].status;
-    if (currentStatus !== 'Draft' && currentStatus !== 'On Hold') {
+    if (currentStatus !== 'Draft' && currentStatus !== 'On Hold' && currentStatus !== 'Pending Approval') {
       return res.status(400).json({ message: 'Purchase order not ready for Super Admin approval' });
     }
 
@@ -248,7 +265,7 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       return res.status(400).json({ message: 'Invalid status. Allowed values: approved, hold' });
     }
 
-    const newStatus = status === 'approved' ? 'Ordered' : 'On Hold';
+    const newStatus = status === 'approved' ? 'Approved' : 'On Hold';
 
     await db.query(
       'UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?',

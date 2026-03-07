@@ -24,6 +24,7 @@ router.get('/', authenticate, async (req, res) => {
              po.po_number,
              pr.pr_number,
              sr.sr_number,
+             cr.cr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -35,6 +36,7 @@ router.get('/', authenticate, async (req, res) => {
       LEFT JOIN purchase_orders po ON dv.purchase_order_id = po.id
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
       LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
+      LEFT JOIN cash_requests cr ON dv.cash_request_id = cr.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -78,6 +80,7 @@ router.get('/:id', authenticate, async (req, res) => {
              po.po_number, po.total_amount as po_total_amount,
              pr.pr_number, pr.project_address,
              sr.sr_number, sr.purpose as sr_purpose,
+             cr.cr_number, cr.receiver as cr_receiver, cr.purpose as cr_purpose,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -89,6 +92,7 @@ router.get('/:id', authenticate, async (req, res) => {
       LEFT JOIN purchase_orders po ON dv.purchase_order_id = po.id
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
       LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
+      LEFT JOIN cash_requests cr ON dv.cash_request_id = cr.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -121,18 +125,22 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     const { 
       purchase_order_id,
       service_request_id,
+      cash_request_id,
+      payment_request_id,
+      payment_order_id,
       particulars, 
       project,
       order_number,
       check_number,
       bank_name,
       payment_date,
-      received_by 
+      received_by,
+      save_as_draft 
     } = req.body;
     
-    // Validate - need either purchase_order_id or service_request_id
-    if (!purchase_order_id && !service_request_id) {
-      return res.status(400).json({ message: 'Purchase Order ID or Service Request ID is required' });
+    // Validate - need one of: purchase_order_id, service_request_id, cash_request_id, payment_request_id, or payment_order_id
+    if (!purchase_order_id && !service_request_id && !cash_request_id && !payment_request_id && !payment_order_id) {
+      return res.status(400).json({ message: 'Purchase Order ID, Service Request ID, Cash Request ID, Payment Request ID, or Payment Order ID is required' });
     }
     
     conn = await db.getConnection();
@@ -142,10 +150,15 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     let dvType = 'po_based';
     let finalPurchaseOrderId = purchase_order_id || null;
     let finalServiceRequestId = service_request_id || null;
+    let finalCashRequestId = cash_request_id || null;
+    let finalPaymentRequestId = payment_request_id || null;
+    let finalPaymentOrderId = payment_order_id || null;
     let supplierId = null;
     let amount = 0;
     let prNumber = null;
     let srNumber = null;
+    let crNumber = null;
+    let poNumber = null;
     
     if (purchase_order_id) {
       // Get PO details with supplier and PR info
@@ -164,11 +177,20 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       
       sourceData = pos[0];
       supplierId = sourceData.supplier_id;
-      amount = sourceData.total_amount;
+      
+      // Recalculate total from PO items to ensure accuracy
+      const [poItems] = await conn.query(
+        'SELECT quantity, unit_price FROM purchase_order_items WHERE purchase_order_id = ?',
+        [purchase_order_id]
+      );
+      console.log('PO Items for DV creation:', poItems);
+      amount = poItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+      console.log('Calculated DV amount:', amount, 'from', poItems.length, 'items');
+      
       prNumber = sourceData.pr_number;
       dvType = 'po_based';
       finalServiceRequestId = sourceData.service_request_id || null;
-    } else {
+    } else if (service_request_id) {
       // Get Service Request details
       const [srs] = await conn.query(`
         SELECT sr.*, s.address as supplier_address
@@ -187,12 +209,81 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       amount = sourceData.amount;
       srNumber = sourceData.sr_number;
       dvType = 'sr_based';
+    } else if (cash_request_id) {
+      // Get Cash Request details
+      const [crs] = await conn.query(`
+        SELECT cr.*
+        FROM cash_requests cr
+        WHERE cr.id = ?
+      `, [cash_request_id]);
+      
+      if (crs.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Cash request not found' });
+      }
+      
+      sourceData = crs[0];
+      amount = sourceData.amount;
+      supplierId = sourceData.supplier_id;
+      crNumber = sourceData.cr_number;
+      dvType = 'cash_based';
+    } else if (payment_request_id) {
+      // Handle Payment Request
+      const [prs] = await conn.query(
+        `SELECT pr.*
+         FROM payment_requests pr
+         WHERE pr.id = ? AND pr.status = 'Approved'`,
+        [payment_request_id]
+      );
+      
+      if (prs.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Payment request not found or not approved' });
+      }
+      
+      sourceData = prs[0];
+      amount = sourceData.amount;
+      supplierId = null; // Payment requests use payee_name, not supplier_id
+      prNumber = sourceData.pr_number;
+      dvType = 'pr_based';
+    } else if (payment_order_id) {
+      // Handle Payment Order
+      const [pos] = await conn.query(
+        `SELECT po.*, sr.sr_number, sr.amount as sr_amount, sr.supplier_id as sr_supplier_id,
+                cr.cr_number, cr.amount as cr_amount, cr.supplier_id as cr_supplier_id
+         FROM payment_orders po
+         LEFT JOIN service_requests sr ON po.service_request_id = sr.id
+         LEFT JOIN cash_requests cr ON po.cash_request_id = cr.id
+         WHERE po.id = ? AND po.status = 'Approved'`,
+        [payment_order_id]
+      );
+      
+      if (pos.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Payment order not found or not approved' });
+      }
+      
+      sourceData = pos[0];
+      // Use SR or CR data depending on which is linked
+      if (sourceData.service_request_id) {
+        amount = sourceData.sr_amount;
+        supplierId = sourceData.sr_supplier_id;
+        srNumber = sourceData.sr_number;
+        finalServiceRequestId = sourceData.service_request_id;
+      } else if (sourceData.cash_request_id) {
+        amount = sourceData.cr_amount;
+        supplierId = sourceData.cr_supplier_id;
+        crNumber = sourceData.cr_number;
+        finalCashRequestId = sourceData.cash_request_id;
+      }
+      poNumber = sourceData.po_number;
+      dvType = 'payment_order_based';
     }
     
-    // Check if a DV already exists for this PO or SR
+    // Check if a DV already exists for this PO, SR, CR, PR, or Payment Order
     const [existingDVs] = await conn.query(
-      'SELECT id FROM disbursement_vouchers WHERE (purchase_order_id = ? OR service_request_id = ?) AND status != ?',
-      [finalPurchaseOrderId, finalServiceRequestId, 'Cancelled']
+      'SELECT id FROM disbursement_vouchers WHERE (purchase_order_id = ? OR service_request_id = ? OR cash_request_id = ? OR payment_request_id = ? OR payment_order_id = ?) AND status != ?',
+      [finalPurchaseOrderId, finalServiceRequestId, finalCashRequestId, finalPaymentRequestId, finalPaymentOrderId, 'Cancelled']
     );
     
     if (existingDVs.length > 0) {
@@ -222,41 +313,67 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     
     const dvNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
     
+    console.log('DV INSERT - amount:', amount, 'dvNumber:', dvNumber);
+    
     // Create DV
     const [result] = await conn.query(
       `INSERT INTO disbursement_vouchers 
-       (dv_number, purchase_order_id, service_request_id, purchase_request_id, supplier_id, prepared_by, 
-        amount, dv_date, particulars, project, order_number, pr_number, sr_number, check_number, bank_name, 
-        payment_date, received_by, status, dv_type) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (dv_number, purchase_order_id, purchase_request_id, service_request_id, cash_request_id, payment_request_id, payment_order_id,
+        supplier_id, prepared_by, amount, dv_date, particulars, project, 
+        pr_number, sr_number, cr_number, po_number, check_number, bank_name, payment_date, 
+        received_by, received_date, status, certified_by_accounting, certified_by_manager,
+        order_number, dv_type) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, NULL, ?, ?)`,
       [
         dvNumber, 
         finalPurchaseOrderId, 
-        finalServiceRequestId,
         sourceData.purchase_request_id || null,
+        finalServiceRequestId,
+        finalCashRequestId,
+        finalPaymentRequestId,
+        finalPaymentOrderId,
         supplierId, 
         req.user.id,
         amount,
-        particulars || (dvType === 'sr_based' ? 'Payment for services' : 'Payment for the procurement of materials'),
+        particulars || (dvType === 'sr_based' ? 'Payment for services' : dvType === 'cash_based' ? 'Cash disbursement' : dvType === 'payment_order_based' ? 'Payment order disbursement' : 'Payment for the procurement of materials'),
         project || sourceData.pr_project || sourceData.project || null,
-        order_number || sourceData.order_number || null,
         prNumber,
         srNumber,
+        crNumber,
+        poNumber,
         check_number || null,
         bank_name || null,
         payment_date || null,
         received_by || null,
-        'Draft',
+        save_as_draft ? 'Draft' : 'Pending',
+        order_number || sourceData.order_number || null,
         dvType
       ]
     );
 
     await conn.commit();
+    
+    // If DV was created from a Payment Request, update the PR status
+    if (finalPaymentRequestId && !save_as_draft) {
+      await db.query(
+        'UPDATE payment_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['DV Created', finalPaymentRequestId]
+      );
+    }
+
+    // If DV was created from a Payment Order, update the PO status
+    if (finalPaymentOrderId && !save_as_draft) {
+      await db.query(
+        'UPDATE payment_orders SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['DV Created', finalPaymentOrderId]
+      );
+    }
 
     res.status(201).json({ 
-      message: 'Disbursement voucher created successfully', 
+      message: save_as_draft ? 'Disbursement voucher saved as draft' : 'Disbursement voucher created successfully', 
       dvId: result.insertId,
-      dvNumber
+      dvNumber,
+      status: save_as_draft ? 'Draft' : 'Pending'
     });
   } catch (error) {
     if (conn) {
@@ -366,11 +483,11 @@ router.put('/:id/certify-manager', authenticate, requireSuperAdmin, async (req, 
     }
     
     await db.query(
-      'UPDATE disbursement_vouchers SET certified_by_manager = ?, updated_at = NOW() WHERE id = ?',
-      [req.user.id, req.params.id]
+      'UPDATE disbursement_vouchers SET certified_by_manager = ?, status = ?, updated_at = NOW() WHERE id = ?',
+      [req.user.id, 'Approved', req.params.id]
     );
 
-    res.json({ message: 'Disbursement voucher certified by manager' });
+    res.json({ message: 'Disbursement voucher approved by manager', status: 'Approved' });
   } catch (error) {
     console.error('Failed to certify disbursement voucher', error);
     res.status(500).json({ message: 'Failed to certify disbursement voucher' });

@@ -21,9 +21,12 @@ router.get('/', authenticate, async (req, res) => {
     let query = `
       SELECT pr.*, 
              e.first_name as requester_first_name, 
-             e.last_name as requester_last_name
+             e.last_name as requester_last_name,
+             s.supplier_name,
+             s.supplier_name as payee_name
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
+      LEFT JOIN suppliers s ON pr.supplier_id = s.id
     `;
     
     const params = [];
@@ -795,6 +798,10 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Fill total (F31)
     worksheet.getCell('F31').value = pr.total_amount || 0;
     
+    // Fill requester name (A33) - "Prepared by"
+    const requesterName = `${pr.requester_first_name || ''} ${pr.requester_last_name || ''}`.trim();
+    worksheet.getCell('A33').value = requesterName || '';
+    
     // Generate filename
     const filename = `PR-${pr.pr_number}-${Date.now()}.xlsx`;
     
@@ -918,6 +925,22 @@ router.put('/:id/approve', authenticate, async (req, res) => {
     res.json({ message: `Purchase request ${status} successfully` });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update purchase request' });
+  }
+});
+
+// Update PR status
+router.put('/:id/status', authenticate, async (req, res) => {
+  try {
+    const { status } = req.body;
+    
+    await db.query(
+      'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+      [status, req.params.id]
+    );
+
+    res.json({ message: `Purchase request status updated to ${status} successfully`, status });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to update purchase request status' });
   }
 });
 
