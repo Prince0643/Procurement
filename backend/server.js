@@ -36,6 +36,9 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
 
+// Trust proxy for accurate rate limiting behind Nginx
+app.set('trust proxy', 1);
+
 // Initialize Socket.IO
 const io = initSocket(httpServer);
 
