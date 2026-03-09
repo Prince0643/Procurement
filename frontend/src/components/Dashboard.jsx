@@ -61,6 +61,8 @@ const Dashboard = () => {
   const [pricingTrends, setPricingTrends] = useState([])
   const [topItems, setTopItems] = useState([])
   const [selectedItem, setSelectedItem] = useState('')
+  const [selectedYear, setSelectedYear] = useState('')
+  const [availableYears, setAvailableYears] = useState([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -69,7 +71,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchPricingTrends()
-  }, [selectedItem])
+  }, [selectedItem, selectedYear])
 
   const fetchDashboardData = async () => {
     try {
@@ -142,10 +144,17 @@ const Dashboard = () => {
 
   const fetchPricingTrends = async () => {
     try {
-      const response = await pricingHistoryService.getMonthlyTrends(selectedItem || undefined)
+      const response = await pricingHistoryService.getMonthlyTrends(
+        selectedItem || undefined, 
+        12, 
+        selectedYear || undefined
+      )
       setPricingTrends(response.trends || [])
       if (response.topItems && response.topItems.length > 0 && !selectedItem) {
         setTopItems(response.topItems)
+      }
+      if (response.availableYears) {
+        setAvailableYears(response.availableYears)
       }
     } catch (err) {
       console.error('Failed to fetch pricing trends', err)
@@ -228,10 +237,22 @@ const Dashboard = () => {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Item Pricing Trends</h3>
-            <p className="text-xs text-gray-500">Monthly average pricing over the last 12 months</p>
+            <p className="text-xs text-gray-500">
+              {selectedYear ? `Monthly average pricing for ${selectedYear}` : 'Monthly average pricing over the last 12 months'}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-gray-400" />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value="">Last 12 Months</option>
+              {availableYears.map(year => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
             <select
               value={selectedItem}
               onChange={(e) => setSelectedItem(e.target.value)}
@@ -249,7 +270,7 @@ const Dashboard = () => {
         
         {pricingTrends.length > 0 ? (
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
               <LineChart data={pricingTrends}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 

@@ -1,7 +1,7 @@
 import api from './api';
 
 const pricingHistoryService = {
-  // Get all pricing history records with optional filters
+  // Get all pricing history records with optional filters and pagination
   getAll: async (filters = {}) => {
     const params = new URLSearchParams();
     if (filters.item_id) params.append('item_id', filters.item_id);
@@ -9,6 +9,8 @@ const pricingHistoryService = {
     if (filters.start_date) params.append('start_date', filters.start_date);
     if (filters.end_date) params.append('end_date', filters.end_date);
     if (filters.search) params.append('search', filters.search);
+    if (filters.page) params.append('page', filters.page);
+    if (filters.limit) params.append('limit', filters.limit);
     
     const queryString = params.toString();
     const response = await api.get(`/pricing-history${queryString ? `?${queryString}` : ''}`);
@@ -28,10 +30,14 @@ const pricingHistoryService = {
   },
 
   // Get monthly pricing trends for dashboard chart
-  getMonthlyTrends: async (itemId, months = 12) => {
+  getMonthlyTrends: async (itemId, months = 12, year = null) => {
     const params = new URLSearchParams();
     if (itemId) params.append('item_id', itemId);
-    if (months) params.append('months', months);
+    if (year) {
+      params.append('year', year);
+    } else if (months) {
+      params.append('months', months);
+    }
     
     const queryString = params.toString();
     const response = await api.get(`/pricing-history/trends/monthly${queryString ? `?${queryString}` : ''}`);

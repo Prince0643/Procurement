@@ -97,42 +97,99 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create Payment Order (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, remarks } = req.body;
+    const { service_request_id, cash_request_id, reimbursement_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, remarks } = req.body;
     
-    if (!service_request_id) {
-      return res.status(400).json({ message: 'Service Request ID is required' });
+    // Validate that at least one source is provided
+    const sourceCount = [service_request_id, cash_request_id, reimbursement_id].filter(Boolean).length;
+    if (sourceCount === 0) {
+      return res.status(400).json({ message: 'Either Service Request ID, Cash Request ID, or Reimbursement ID is required' });
     }
     
-    // Validate Service Request
-    const [srs] = await db.query(
-      'SELECT sr_number, requested_by, purpose, status, sr_type FROM service_requests WHERE id = ?',
-      [service_request_id]
-    );
-    if (srs.length === 0) {
-      return res.status(404).json({ message: 'Service request not found' });
+    // Validate that only one source is provided
+    if (sourceCount > 1) {
+      return res.status(400).json({ message: 'Cannot provide multiple sources. Only one of Service Request, Cash Request, or Reimbursement is allowed' });
     }
-    const srDetails = srs[0];
     
-    // Only allow approved SRs with sr_type = 'payment_order' (payment order type)
-    if (srDetails.status !== 'Approved') {
-      return res.status(400).json({ message: 'Only approved Service Requests can create payment orders' });
+    let sourcePurpose = '';
+    let sourceRequestedBy = null;
+    
+    // If SR source, validate SR
+    if (service_request_id) {
+      const [srs] = await db.query(
+        'SELECT sr_number, requested_by, purpose, status, sr_type FROM service_requests WHERE id = ?',
+        [service_request_id]
+      );
+      if (srs.length === 0) {
+        return res.status(404).json({ message: 'Service request not found' });
+      }
+      const srDetails = srs[0];
+      
+      // Only allow approved SRs with sr_type = 'payment_order' (payment order type)
+      if (srDetails.status !== 'Approved') {
+        return res.status(400).json({ message: 'Only approved Service Requests can create payment orders' });
+      }
+      if (srDetails.sr_type !== 'payment_order') {
+        return res.status(400).json({ message: 'Only Service Requests with sr_type = payment_order can create Payment Orders' });
+      }
+      sourcePurpose = srDetails.purpose || '';
+      sourceRequestedBy = srDetails.requested_by;
     }
-    if (srDetails.sr_type !== 'payment_order') {
-      return res.status(400).json({ message: 'Only Service Requests with sr_type = payment_order can create Payment Orders' });
+    
+    // If CR source, validate CR
+    if (cash_request_id) {
+      const [crs] = await db.query(
+        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name FROM cash_requests WHERE id = ?',
+        [cash_request_id]
+      );
+      if (crs.length === 0) {
+        return res.status(404).json({ message: 'Cash request not found' });
+      }
+      const crDetails = crs[0];
+      
+      // Only allow approved CRs with cr_type = 'payment_order' to become payment orders
+      if (crDetails.status !== 'Approved') {
+        return res.status(400).json({ message: 'Only approved Cash Requests can create payment orders' });
+      }
+      if (crDetails.cr_type !== 'payment_order') {
+        return res.status(400).json({ message: 'Only Cash Requests with cr_type = payment_order can create Payment Orders' });
+      }
+      sourcePurpose = crDetails.purpose || '';
+      sourceRequestedBy = crDetails.requested_by;
+    }
+    
+    // If Reimbursement source, validate Reimbursement
+    if (reimbursement_id) {
+      const [reimbursements] = await db.query(
+        'SELECT id, rmb_number, requested_by, purpose, status, amount, payee, project, project_address, order_number FROM reimbursements WHERE id = ?',
+        [reimbursement_id]
+      );
+      if (reimbursements.length === 0) {
+        return res.status(404).json({ message: 'Reimbursement not found' });
+      }
+      const rmbDetails = reimbursements[0];
+      
+      // Only allow reimbursements with status = 'For Purchase' to become payment orders
+      if (rmbDetails.status !== 'For Purchase') {
+        return res.status(400).json({ message: 'Only reimbursements with status For Purchase can create Payment Orders' });
+      }
+      sourcePurpose = rmbDetails.purpose || '';
+      sourceRequestedBy = rmbDetails.requested_by;
     }
     
     const poNumber = await generatePONumber();
     
     const [result] = await db.query(
       `INSERT INTO payment_orders 
-       (po_number, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, remarks, requested_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (po_number, service_request_id, cash_request_id, reimbursement_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, remarks, requested_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
-        service_request_id,
+        service_request_id || null,
+        cash_request_id || null,
+        reimbursement_id || null,
         payee_name || null,
         payee_address || null,
-        purpose || srDetails.purpose,
+        purpose || sourcePurpose,
         project || null,
         project_address || null,
         order_number || null,
@@ -144,10 +201,28 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     );
     
     // Update Service Request status to 'Payment Order Created'
-    await db.query(
-      'UPDATE service_requests SET status = ?, updated_at = NOW() WHERE id = ?',
-      ['Payment Order Created', service_request_id]
-    );
+    if (service_request_id) {
+      await db.query(
+        'UPDATE service_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['Payment Order Created', service_request_id]
+      );
+    }
+    
+    // Update Cash Request status to 'Payment Order Created'
+    if (cash_request_id) {
+      await db.query(
+        'UPDATE cash_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['Payment Order Created', cash_request_id]
+      );
+    }
+    
+    // Update Reimbursement status to 'Payment Order Created'
+    if (reimbursement_id) {
+      await db.query(
+        'UPDATE reimbursements SET status = ?, updated_at = NOW() WHERE id = ?',
+        ['Payment Order Created', reimbursement_id]
+      );
+    }
     
     res.status(201).json({ 
       id: result.insertId, 

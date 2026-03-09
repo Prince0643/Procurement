@@ -97,8 +97,13 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from uploads folder
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Serve static files from uploads folder with CORS headers
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  next();
+}, express.static(path.join(__dirname, 'uploads')));
 
 // Test database connection
 app.get('/api/health', async (req, res) => {

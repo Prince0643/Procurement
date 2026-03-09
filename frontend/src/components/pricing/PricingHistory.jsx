@@ -89,6 +89,12 @@ const PricingHistory = () => {
   const [items, setItems] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
     item_id: '',
@@ -117,13 +123,18 @@ const PricingHistory = () => {
     try {
       setLoading(true);
       const [recordsRes, itemsRes, suppliersRes] = await Promise.all([
-        pricingHistoryService.getAll(),
+        pricingHistoryService.getAll({ page: pagination.page, limit: pagination.limit }),
         itemService.getAll(),
         supplierService.getAll()
       ]);
       setRecords(recordsRes.pricingHistory || []);
-      setItems(itemsRes.items || []);
-      setSuppliers(suppliersRes.suppliers || []);
+      setPagination(prev => ({
+        ...prev,
+        total: recordsRes.pagination?.total || 0,
+        totalPages: recordsRes.pagination?.totalPages || 1
+      }));
+      setItems(itemsRes || []);
+      setSuppliers(suppliersRes || []);
     } catch (err) {
       console.error('Failed to fetch data:', err);
     } finally {
@@ -134,7 +145,10 @@ const PricingHistory = () => {
   const handleSearch = async () => {
     try {
       setLoading(true);
-      const filtersToApply = {};
+      const filtersToApply = {
+        page: 1, // Reset to first page on search
+        limit: pagination.limit
+      };
       if (filters.item_id) filtersToApply.item_id = filters.item_id;
       if (filters.supplier_id) filtersToApply.supplier_id = filters.supplier_id;
       if (filters.start_date) filtersToApply.start_date = filters.start_date;
@@ -143,6 +157,12 @@ const PricingHistory = () => {
       
       const response = await pricingHistoryService.getAll(filtersToApply);
       setRecords(response.pricingHistory || []);
+      setPagination(prev => ({
+        ...prev,
+        page: 1,
+        total: response.pagination?.total || 0,
+        totalPages: response.pagination?.totalPages || 1
+      }));
     } catch (err) {
       console.error('Failed to search:', err);
     } finally {
@@ -232,6 +252,17 @@ const PricingHistory = () => {
     setShowModal(false);
     setEditingRecord(null);
   };
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > pagination.totalPages) return;
+    setPagination(prev => ({ ...prev, page: newPage }));
+  };
+
+  // Fetch data when page changes
+  useEffect(() => {
+    fetchData();
+  }, [pagination.page]);
 
   // Calculate statistics
   const stats = React.useMemo(() => {
@@ -485,6 +516,36 @@ const PricingHistory = () => {
             </tbody>
           </table>
         </div>
+        
+        {/* Pagination */}
+        {pagination.totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200">
+            <div className="text-sm text-gray-500">
+              Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} records
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handlePageChange(pagination.page - 1)}
+                disabled={pagination.page === 1}
+              >
+                Previous
+              </Button>
+              <span className="text-sm text-gray-600">
+                Page {pagination.page} of {pagination.totalPages}
+              </span>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => handlePageChange(pagination.page + 1)}
+                disabled={pagination.page === pagination.totalPages}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {/* Create/Edit Modal */}

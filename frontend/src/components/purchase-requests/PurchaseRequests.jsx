@@ -120,6 +120,8 @@ const PurchaseRequests = () => {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
+  const [expandedPRDetails, setExpandedPRDetails] = useState({})
+  const [loadingExpanded, setLoadingExpanded] = useState(null)
   const { user } = useAuth()
 
   const [showPreviewModal, setShowPreviewModal] = useState(false)
@@ -147,6 +149,8 @@ const PurchaseRequests = () => {
   
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingPR, setEditingPR] = useState(null)
   const [suppliers, setSuppliers] = useState([])
   const [loadingForm, setLoadingForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -394,6 +398,83 @@ const PurchaseRequests = () => {
     setPreviewPR(null)
   }
 
+  const openEditModal = async (pr) => {
+    setEditingPR(pr)
+    setShowEditModal(true)
+    setLoadingForm(true)
+    try {
+      const suppliersData = await supplierService.getAll()
+      setSuppliers(suppliersData)
+      
+      // Load PR details
+      const fullPr = await purchaseRequestService.getById(pr.id)
+      
+      // Populate form with PR data
+      setPurpose(fullPr.purpose || '')
+      setProject(fullPr.project || '')
+      setProjectAddress(fullPr.project_address || '')
+      setDateNeeded(fullPr.date_needed ? fullPr.date_needed.split('T')[0] : '')
+      setOrderNumber(fullPr.order_number || '')
+      setSelectedSupplier(String(fullPr.supplier_id || ''))
+      setPaymentBasis(fullPr.payment_basis || 'debt')
+      setRemarks(fullPr.remarks || '')
+      setItems((fullPr.items || []).map(item => ({
+        item_id: String(item.item_id || item.id || ''),
+        quantity: item.quantity || 1,
+        unit_price: item.unit_price || 0
+      })))
+    } catch (err) {
+      alert('Failed to load PR for editing')
+      closeEditModal()
+    } finally {
+      setLoadingForm(false)
+    }
+  }
+
+  const closeEditModal = () => {
+    setShowEditModal(false)
+    setEditingPR(null)
+    resetForm()
+  }
+
+  const handleUpdate = async (e) => {
+    e.preventDefault()
+    if (!purpose) { alert('Purpose is required'); return }
+    if (items.length === 0) { alert('At least one item is required'); return }
+
+    try {
+      setSubmitting(true)
+      const prData = {
+        purpose,
+        project: project || null,
+        project_address: projectAddress || null,
+        date_needed: dateNeeded || null,
+        order_number: orderNumber || null,
+        supplier_id: selectedSupplier || null,
+        payment_basis: paymentBasis,
+        remarks: remarks || null,
+        items: items.map(item => ({
+          item_id: parseInt(item.item_id),
+          quantity: parseFloat(item.quantity),
+          unit_price: parseFloat(item.unit_price)
+        }))
+      }
+      // Use resubmit for rejected PRs, updateDraft for draft PRs
+      if (editingPR.status === 'Rejected') {
+        await purchaseRequestService.resubmit(editingPR.id, prData)
+      } else {
+        await purchaseRequestService.updateDraft(editingPR.id, prData)
+      }
+      await fetchPurchaseRequests()
+      closeEditModal()
+      alert('Purchase Request updated successfully!')
+    } catch (err) {
+      alert('Failed to update PR: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const openCreateModal = async () => {
     setShowCreateModal(true)
     setLoadingForm(true)
@@ -475,6 +556,18 @@ const PurchaseRequests = () => {
     }
   }
 
+  const handleMarkAsReceived = async (pr) => {
+    if (!confirm('Mark this purchase request as received?')) return
+    
+    try {
+      await purchaseRequestService.markAsReceived(pr.id)
+      await fetchPurchaseRequests()
+      alert('Purchase request marked as received!')
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to mark as received')
+    }
+  }
+
   const handleExport = async (id, prNumber) => {
     try {
       const blob = await purchaseRequestService.exportToExcel(id)
@@ -534,7 +627,23 @@ const PurchaseRequests = () => {
             <tbody>
               {purchaseRequests.map(pr => (
                 <React.Fragment key={pr.id}>
-                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}>
+                  <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={async () => {
+                    const isExpanding = expandedId !== pr.id
+                    setExpandedId(isExpanding ? pr.id : null)
+                    
+                    // Load full details if expanding a rejected PR that doesn't have items loaded
+                    if (isExpanding && pr.status === 'Rejected' && !expandedPRDetails[pr.id]?.items) {
+                      setLoadingExpanded(pr.id)
+                      try {
+                        const fullPr = await purchaseRequestService.getById(pr.id)
+                        setExpandedPRDetails(prev => ({ ...prev, [pr.id]: fullPr }))
+                      } catch (err) {
+                        console.error('Failed to load PR details', err)
+                      } finally {
+                        setLoadingExpanded(null)
+                      }
+                    }
+                  }}>
                     <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.requester_first_name} {pr.requester_last_name}</td>
@@ -571,46 +680,6 @@ const PurchaseRequests = () => {
                             </Button>
                           </>
                         )}
-                        {(user?.role === 'admin' || user?.role === 'super_admin') && pr.status === 'For Super Admin Final Approval' && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openSuperAdminModal(pr, 'approved')
-                              }}
-                              title="Approve"
-                              disabled={superAdminSubmitting}
-                            >
-                              <CheckCircle className="w-4 h-4 text-green-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openSuperAdminModal(pr, 'hold')
-                              }}
-                              title="Hold"
-                              disabled={superAdminSubmitting}
-                            >
-                              <Pause className="w-4 h-4 text-yellow-600" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openSuperAdminModal(pr, 'rejected')
-                              }}
-                              title="Reject"
-                              disabled={superAdminSubmitting}
-                            >
-                              <XCircle className="w-4 h-4 text-red-600" />
-                            </Button>
-                          </>
-                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -633,9 +702,30 @@ const PurchaseRequests = () => {
                         >
                           <FileSpreadsheet className="w-4 h-4" />
                         </Button>
-                        {pr.status === 'Draft' && user?.role === 'engineer' && (
+                        {pr.status === 'Completed' && user?.role === 'engineer' && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleMarkAsReceived(pr)
+                            }}
+                            title="Mark as Received"
+                          >
+                            <CheckCircle className="w-4 h-4 text-blue-600" />
+                          </Button>
+                        )}
+                        {(pr.status === 'Draft' || pr.status === 'Rejected') && user?.role === 'engineer' && (
                           <>
-                            <Button variant="ghost" size="sm" title="Edit">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              title="Edit"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openEditModal(pr)
+                              }}
+                            >
                               <Edit className="w-4 h-4" />
                             </Button>
                             <Button variant="ghost" size="sm" title="Delete">
@@ -662,6 +752,13 @@ const PurchaseRequests = () => {
                               <p className="text-xs text-gray-500 uppercase">Purpose</p>
                               <p className="text-sm text-gray-900">{pr.purpose || '-'}</p>
                             </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Payment Type</p>
+                              <p className="text-sm text-gray-900">
+                                {pr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
+                                 pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
+                              </p>
+                            </div>
                           </div>
                           {pr.remarks && (
                             <div>
@@ -673,6 +770,28 @@ const PurchaseRequests = () => {
                             <div>
                               <p className="text-xs text-red-500 uppercase">Rejection Reason</p>
                               <p className="text-sm text-red-700">{pr.rejection_reason}</p>
+                            </div>
+                          )}
+                          {/* Per-item rejection remarks */}
+                          {(expandedPRDetails[pr.id]?.items || pr.items)?.some(item => item.rejection_remarks?.length > 0) && (
+                            <div className="col-span-2">
+                              <p className="text-xs text-red-500 uppercase mb-2">Item Rejection Remarks</p>
+                              <div className="space-y-1">
+                                {((expandedPRDetails[pr.id]?.items || pr.items) || []).filter(item => item.rejection_remarks?.length > 0).map(item => (
+                                  <div key={item.id} className="bg-red-50 p-2 rounded border border-red-100">
+                                    <p className="text-sm font-medium text-red-800">{item.item_name || item.item_code}</p>
+                                    {item.rejection_remarks.map((remark, idx) => (
+                                      <p key={idx} className="text-sm text-red-600">• {remark.remark}</p>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          {loadingExpanded === pr.id && (
+                            <div className="col-span-2 text-center py-2">
+                              <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin inline-block"></div>
+                              <span className="text-xs text-gray-500 ml-2">Loading details...</span>
                             </div>
                           )}
                         </div>
@@ -771,6 +890,10 @@ const PurchaseRequests = () => {
                   <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
                     <p className="text-xs text-gray-500">Category: {pr.category || '-'}</p>
                     <p className="text-xs text-gray-500">Purpose: {pr.purpose || '-'}</p>
+                    <p className="text-xs text-gray-500">
+                      Payment Type: {pr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
+                                    pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
+                    </p>
                     {pr.remarks && <p className="text-xs text-gray-500">Remarks: {pr.remarks}</p>}
                   </div>
                 )}
@@ -862,6 +985,92 @@ const PurchaseRequests = () => {
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeCreateModal}>Cancel</Button>
                   <Button type="submit" disabled={submitting}>{submitting ? 'Creating...' : 'Create Purchase Request'}</Button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit PR Modal */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Purchase Request</h3>
+              <button onClick={closeEditModal} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {loadingForm ? (
+              <div className="p-8 text-center">
+                <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="mt-2 text-sm text-gray-500">Loading...</p>
+              </div>
+            ) : (
+              <form onSubmit={handleUpdate} className="p-6">
+                <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Project" value={project} onChange={(e) => setProject(e.target.value)} />
+                  <Input label="Project Address" value={projectAddress} onChange={(e) => setProjectAddress(e.target.value)} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
+                  <Input label="Order Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
+                </div>
+
+                <Select 
+                  label="Supplier (Optional)" 
+                  value={selectedSupplier} 
+                  onChange={(e) => setSelectedSupplier(e.target.value)} 
+                  options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} 
+                />
+
+                <Select 
+                  label="Payment Basis *" 
+                  value={paymentBasis} 
+                  onChange={(e) => setPaymentBasis(e.target.value)} 
+                  options={[
+                    { value: 'debt', label: 'Debt (with supplier account)' },
+                    { value: 'non_debt', label: 'Cash/Non-debt (immediate payment)' }
+                  ]} 
+                  required 
+                />
+
+                <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
+
+                {/* Items */}
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Items *</label>
+                    <Button type="button" variant="secondary" size="sm" onClick={addItem}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Item
+                    </Button>
+                  </div>
+                  {items.map((item, index) => (
+                    <div key={index} className="flex gap-2 mb-2 items-end">
+                      <div className="flex-1">
+                        <input type="text" placeholder="Item ID" value={item.item_id} onChange={(e) => updateItem(index, 'item_id', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
+                      </div>
+                      <div className="w-24">
+                        <input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="1" required />
+                      </div>
+                      <div className="w-32">
+                        <input type="number" placeholder="Unit Price" value={item.unit_price} onChange={(e) => updateItem(index, 'unit_price', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="0" step="0.01" required />
+                      </div>
+                      <div className="w-24 text-right text-sm font-medium">{formatCurrency(item.quantity * item.unit_price)}</div>
+                      {items.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}><X className="w-4 h-4 text-red-500" /></Button>}
+                    </div>
+                  ))}
+                  <div className="text-right font-semibold text-lg mt-2">Total: {formatCurrency(calculateTotal())}</div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-4 border-t">
+                  <Button type="button" variant="secondary" onClick={closeEditModal}>Cancel</Button>
+                  <Button type="submit" disabled={submitting}>{submitting ? 'Saving...' : 'Save Changes'}</Button>
                 </div>
               </form>
             )}

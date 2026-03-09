@@ -8,7 +8,9 @@ import {
   Send,
   CheckCircle,
   XCircle,
-  Upload
+  Upload,
+  Eye,
+  X
 } from 'lucide-react';
 import { reimbursementService } from '../../services/reimbursements';
 import { useAuth } from '../../contexts/AuthContext';
@@ -78,10 +80,56 @@ const ReimbursementsManagement = () => {
     remarks: ''
   });
 
-  const [uploadingForId, setUploadingForId] = useState(null);
+  const [branches, setBranches] = useState([]);
+  const [loadingBranches, setLoadingBranches] = useState(false);
 
-  const canCreate = ['engineer', 'admin', 'super_admin'].includes(user?.role);
-  const canApprove = ['admin', 'super_admin'].includes(user?.role);
+  const openCreateModal = async () => {
+    setShowCreateModal(true);
+    setLoadingBranches(true);
+    try {
+      const branchesData = await fetch('https://jajr.xandree.com/get_branches_api.php').then(r => r.json());
+      // Handle branches API response format
+      let branchList = [];
+      if (Array.isArray(branchesData)) {
+        branchList = branchesData;
+      } else if (branchesData && Array.isArray(branchesData.data)) {
+        branchList = branchesData.data;
+      } else if (branchesData && Array.isArray(branchesData.branches)) {
+        branchList = branchesData.branches;
+      }
+      setBranches(branchList);
+    } catch (err) {
+      console.error('Failed to load branches', err);
+    } finally {
+      setLoadingBranches(false);
+    }
+  };
+
+  const handleProjectChange = (e) => {
+    const branchId = e.target.value;
+    const branch = branches.find(b => b.id === parseInt(branchId) || b.branch_id === parseInt(branchId));
+    if (branch) {
+      setFormData({
+        ...formData,
+        project: branch.branch_name || branch.name || '',
+        project_address: branch.address || branch.branch_address || '',
+        order_number: branch.order_number || branch.code || ''
+      });
+    } else {
+      setFormData({
+        ...formData,
+        project: '',
+        project_address: '',
+        order_number: ''
+      });
+    }
+  };
+
+  const canCreate = ['engineer', 'procurement', 'admin', 'super_admin'].includes(user?.role);
+  const canApprove = ['procurement', 'admin', 'super_admin'].includes(user?.role);
+
+  const [uploadingForId, setUploadingForId] = useState(null);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
 
   const fetchReimbursements = async () => {
     try {
@@ -223,7 +271,7 @@ const ReimbursementsManagement = () => {
           <p className="text-gray-500 mt-1">Standalone reimbursement requests with liquidation attachments</p>
         </div>
         {canCreate && (
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button onClick={openCreateModal}>
             <Plus className="w-4 h-4 mr-2" />
             New Reimbursement
           </Button>
@@ -279,12 +327,25 @@ const ReimbursementsManagement = () => {
                     </>
                   )}
 
-                  {canApprove && (r.status === 'Pending' || r.status === 'For Approval') && (
+                  {/* Procurement can approve when status is 'For Procurement Review' */}
+                  {user?.role === 'procurement' && r.status === 'For Procurement Review' && (
                     <>
-                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'approved')}>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'approved')} title="Approve">
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'rejected')}>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'rejected')} title="Reject">
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+
+                  {/* Admin/Super Admin can approve when status is 'For Super Admin Final Approval' or other pending states */}
+                  {['admin', 'super_admin'].includes(user?.role) && (r.status === 'For Procurement Review' || r.status === 'For Super Admin Final Approval' || r.status === 'Pending') && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'approved')} title="Approve">
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleApprove(r, 'rejected')} title="Reject">
                         <XCircle className="w-4 h-4 text-red-600" />
                       </Button>
                     </>
@@ -345,22 +406,31 @@ const ReimbursementsManagement = () => {
                       <div className="space-y-2">
                         {r.attachments.map((a) => (
                           <div key={a.id} className="flex items-center justify-between p-2 border border-gray-200 rounded">
-                            <a
-                              href={a.file_path}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-sm text-blue-600 hover:underline truncate"
+                            <span
+                              className="text-sm text-blue-600 hover:underline truncate cursor-pointer"
+                              onClick={() => setPreviewAttachment(a)}
                               title={a.file_name}
                             >
                               {a.file_name}
-                            </a>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteAttachment(r.id, a.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setPreviewAttachment(a)}
+                                title="Preview"
+                              >
+                                <Eye className="w-4 h-4 text-blue-600" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteAttachment(r.id, a.id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -433,20 +503,27 @@ const ReimbursementsManagement = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Project</label>
-                  <input
-                    type="text"
-                    value={formData.project}
-                    onChange={(e) => setFormData({ ...formData, project: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                  />
+                  <select
+                    value={branches.find(b => b.branch_name === formData.project || b.name === formData.project)?.id || branches.find(b => b.branch_name === formData.project || b.name === formData.project)?.branch_id || ''}
+                    onChange={handleProjectChange}
+                    disabled={loadingBranches}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+                  >
+                    <option value="">{loadingBranches ? 'Loading...' : 'Select a project'}</option>
+                    {branches.map(b => (
+                      <option key={b.id || b.branch_id} value={b.id || b.branch_id}>
+                        {b.branch_name || b.name || 'Unknown'}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Order Number</label>
                   <input
                     type="text"
                     value={formData.order_number}
-                    onChange={(e) => setFormData({ ...formData, order_number: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                    readOnly
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
                   />
                 </div>
               </div>
@@ -456,8 +533,8 @@ const ReimbursementsManagement = () => {
                 <input
                   type="text"
                   value={formData.project_address}
-                  onChange={(e) => setFormData({ ...formData, project_address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  readOnly
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
                 />
               </div>
 
@@ -481,6 +558,44 @@ const ReimbursementsManagement = () => {
               </Button>
             </div>
           </Card>
+        </div>
+      )}
+      {/* Preview Modal */}
+      {previewAttachment && (
+        <div className="fixed inset-0 bg-gray-900/80 flex items-center justify-center z-50 p-4" onClick={() => setPreviewAttachment(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] bg-white rounded-lg overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b">
+              <p className="text-sm font-medium text-gray-900 truncate max-w-md">{previewAttachment.file_name}</p>
+              <button
+                onClick={() => setPreviewAttachment(null)}
+                className="p-1 hover:bg-gray-100 rounded"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+            <div className="p-4 flex items-center justify-center bg-gray-50">
+              {previewAttachment.mime_type?.startsWith('image/') ? (
+                <img
+                  src={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '')}${previewAttachment.file_path}`}
+                  alt={previewAttachment.file_name}
+                  className="max-w-full max-h-[70vh] object-contain"
+                  crossOrigin="anonymous"
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-gray-500 mb-4">Preview not available for this file type</p>
+                  <a
+                    href={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '')}${previewAttachment.file_path}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    Download file
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>

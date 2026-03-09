@@ -91,16 +91,17 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create Payment Request (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { purchase_request_id, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, remarks, items } = req.body;
+    const { purchase_request_id, service_request_id, cash_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, remarks, items } = req.body;
     
     // Validate that at least one source is provided
-    if (!purchase_request_id && !service_request_id) {
-      return res.status(400).json({ message: 'Either Purchase Request ID or Service Request ID is required' });
+    if (!purchase_request_id && !service_request_id && !cash_request_id) {
+      return res.status(400).json({ message: 'Either Purchase Request ID, Service Request ID, or Cash Request ID is required' });
     }
     
-    // Validate that both are not provided at the same time
-    if (purchase_request_id && service_request_id) {
-      return res.status(400).json({ message: 'Cannot provide both Purchase Request ID and Service Request ID' });
+    // Validate that only one source is provided at a time
+    const sourceCount = [purchase_request_id, service_request_id, cash_request_id].filter(Boolean).length;
+    if (sourceCount > 1) {
+      return res.status(400).json({ message: 'Only one source (Purchase Request, Service Request, or Cash Request) can be provided at a time' });
     }
     
     let sourcePurpose = purpose || '';
@@ -147,6 +148,28 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       sourceRequestedBy = srDetails.requested_by;
     }
     
+    // If CR source, validate CR
+    if (cash_request_id) {
+      const [crs] = await db.query(
+        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name FROM cash_requests WHERE id = ?',
+        [cash_request_id]
+      );
+      if (crs.length === 0) {
+        return res.status(404).json({ message: 'Cash request not found' });
+      }
+      const crDetails = crs[0];
+      
+      // Only allow approved CRs with cr_type = 'payment_request' to become payment requests
+      if (crDetails.status !== 'Approved') {
+        return res.status(400).json({ message: 'Only approved Cash Requests can create payment requests' });
+      }
+      if (crDetails.cr_type !== 'payment_request') {
+        return res.status(400).json({ message: 'Only Cash Requests with cr_type = payment_request can create payment requests' });
+      }
+      sourcePurpose = crDetails.purpose || sourcePurpose;
+      sourceRequestedBy = crDetails.requested_by;
+    }
+    
     // Generate Payment Request number (MTN-YYYY-MM-### format)
     const now = new Date();
     const year = now.getFullYear();
@@ -183,12 +206,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       // Create payment request
       const [paymentResult] = await connection.query(
         `INSERT INTO payment_requests 
-         (pr_number, purchase_request_id, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, requested_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (pr_number, purchase_request_id, service_request_id, cash_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, requested_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           prNumber,
           purchase_request_id || null,
           service_request_id || null,
+          cash_request_id || null,
           payee_name || null,
           payee_address || null,
           purpose || sourcePurpose,
@@ -233,6 +257,14 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         await connection.query(
           'UPDATE service_requests SET status = ?, updated_at = NOW() WHERE id = ?',
           ['Payment Request Created', service_request_id]
+        );
+      }
+
+      // Update cash request status to 'Payment Request Created' if not draft
+      if (paymentStatus !== 'Draft' && cash_request_id) {
+        await connection.query(
+          'UPDATE cash_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          ['Payment Request Created', cash_request_id]
         );
       }
 

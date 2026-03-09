@@ -4,12 +4,23 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
-// Get all pricing history records with filters
+// Get all pricing history records with filters and pagination
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { item_id, supplier_id, start_date, end_date, search } = req.query;
+    const { item_id, supplier_id, start_date, end_date, search, page = 1, limit = 20 } = req.query;
     
-    let query = `
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const offset = (pageNum - 1) * limitNum;
+    
+    let countQuery = `
+      SELECT COUNT(*) as total
+      FROM pricing_history ph
+      LEFT JOIN items i ON ph.item_id = i.id
+      LEFT JOIN suppliers s ON ph.supplier_id = s.id
+      WHERE 1=1
+    `;
+    let dataQuery = `
       SELECT ph.*, 
              i.item_name, i.item_code, i.unit,
              s.supplier_name,
@@ -24,35 +35,57 @@ router.get('/', authenticate, async (req, res) => {
     const params = [];
     
     if (item_id) {
-      query += ' AND ph.item_id = ?';
+      countQuery += ' AND ph.item_id = ?';
+      dataQuery += ' AND ph.item_id = ?';
       params.push(item_id);
     }
     
     if (supplier_id) {
-      query += ' AND ph.supplier_id = ?';
+      countQuery += ' AND ph.supplier_id = ?';
+      dataQuery += ' AND ph.supplier_id = ?';
       params.push(supplier_id);
     }
     
     if (start_date) {
-      query += ' AND ph.date_recorded >= ?';
+      countQuery += ' AND ph.date_recorded >= ?';
+      dataQuery += ' AND ph.date_recorded >= ?';
       params.push(start_date);
     }
     
     if (end_date) {
-      query += ' AND ph.date_recorded <= ?';
+      countQuery += ' AND ph.date_recorded <= ?';
+      dataQuery += ' AND ph.date_recorded <= ?';
       params.push(end_date);
     }
     
     if (search) {
-      query += ' AND (i.item_name LIKE ? OR i.item_code LIKE ? OR s.supplier_name LIKE ?)';
+      const searchClause = ' AND (i.item_name LIKE ? OR i.item_code LIKE ? OR s.supplier_name LIKE ?)';
+      countQuery += searchClause;
+      dataQuery += searchClause;
       const searchTerm = `%${search}%`;
       params.push(searchTerm, searchTerm, searchTerm);
     }
     
-    query += ' ORDER BY ph.date_recorded DESC, ph.created_at DESC';
+    // Get total count
+    const [countResult] = await db.query(countQuery, params);
+    const total = countResult[0].total;
     
-    const [records] = await db.query(query, params);
-    res.json({ pricingHistory: records });
+    // Get paginated data
+    dataQuery += ' ORDER BY ph.date_recorded DESC, ph.created_at DESC';
+    dataQuery += ' LIMIT ? OFFSET ?';
+    const dataParams = [...params, limitNum, offset];
+    
+    const [records] = await db.query(dataQuery, dataParams);
+    
+    res.json({ 
+      pricingHistory: records,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        totalPages: Math.ceil(total / limitNum)
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch pricing history', error);
     res.status(500).json({ message: 'Failed to fetch pricing history' });
@@ -268,7 +301,7 @@ router.get('/stats/item/:itemId', authenticate, async (req, res) => {
 // Get monthly pricing trends for dashboard chart
 router.get('/trends/monthly', authenticate, async (req, res) => {
   try {
-    const { item_id, months = 12 } = req.query;
+    const { item_id, months = 12, year } = req.query;
     
     let query = `
       SELECT 
@@ -279,9 +312,19 @@ router.get('/trends/monthly', authenticate, async (req, res) => {
         MAX(unit_price) as max_price,
         COUNT(*) as record_count
       FROM pricing_history
-      WHERE date_recorded >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)
+      WHERE 1=1
     `;
-    const params = [parseInt(months)];
+    const params = [];
+    
+    if (year) {
+      // Filter by specific year
+      query += ' AND YEAR(date_recorded) = ?';
+      params.push(parseInt(year));
+    } else {
+      // Default: last N months
+      query += ' AND date_recorded >= DATE_SUB(CURDATE(), INTERVAL ? MONTH)';
+      params.push(parseInt(months));
+    }
     
     if (item_id) {
       query += ' AND item_id = ?';
@@ -295,6 +338,23 @@ router.get('/trends/monthly', authenticate, async (req, res) => {
     
     const [trends] = await db.query(query, params);
     
+    // Deduplicate trends by month to prevent duplicate labels
+    const seenMonths = new Set();
+    const uniqueTrends = trends.filter(t => {
+      if (seenMonths.has(t.month)) {
+        return false;
+      }
+      seenMonths.add(t.month);
+      return true;
+    });
+    
+    // Get available years for filter dropdown
+    const [years] = await db.query(`
+      SELECT DISTINCT YEAR(date_recorded) as year
+      FROM pricing_history
+      ORDER BY year DESC
+    `);
+    
     // Get top items for dropdown
     const [topItems] = await db.query(`
       SELECT i.id, i.item_name, i.item_code
@@ -306,8 +366,9 @@ router.get('/trends/monthly', authenticate, async (req, res) => {
     `);
     
     res.json({ 
-      trends: trends,
-      topItems: topItems
+      trends: uniqueTrends,
+      topItems: topItems,
+      availableYears: years.map(y => y.year)
     });
   } catch (error) {
     console.error('Failed to fetch monthly trends', error);

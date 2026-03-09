@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { itemService } from '../../services/items'
 import { supplierService } from '../../services/suppliers'
+import { categoryService } from '../../services/categories'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { useAuth } from '../../contexts/AuthContext'
 import { Search, Package, ShoppingCart, Plus, X, Trash2 } from 'lucide-react'
@@ -99,6 +100,10 @@ const Items = () => {
   const [branches, setBranches] = useState([])
   const [loadingBranches, setLoadingBranches] = useState(false)
   
+  // Categories from database
+  const [dbCategories, setDbCategories] = useState([])
+  const [loadingCategories, setLoadingCategories] = useState(false)
+  
   // Cart state
   const [cart, setCart] = useState([])
   const [showCart, setShowCart] = useState(false)
@@ -120,10 +125,20 @@ const Items = () => {
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [paymentBasis, setPaymentBasis] = useState('debt')
   const [remarks, setRemarks] = useState('')
+  const [showAddItemModal, setShowAddItemModal] = useState(false)
+  const [newItemForm, setNewItemForm] = useState({
+    item_code: '',
+    item_name: '',
+    description: '',
+    category_id: '',
+    unit: 'pcs'
+  })
+  const [addingItem, setAddingItem] = useState(false)
 
   useEffect(() => {
     fetchItems()
     fetchBranches()
+    fetchCategories()
   }, [])
 
   const fetchBranches = async () => {
@@ -154,6 +169,18 @@ const Items = () => {
       setBranches([])
     } finally {
       setLoadingBranches(false)
+    }
+  }
+
+  const fetchCategories = async () => {
+    try {
+      setLoadingCategories(true)
+      const data = await categoryService.getAll()
+      setDbCategories(data || [])
+    } catch (err) {
+      console.error('Failed to fetch categories:', err)
+    } finally {
+      setLoadingCategories(false)
     }
   }
 
@@ -268,6 +295,38 @@ const Items = () => {
     resetPRForm()
   }
 
+  const handleAddItemSubmit = async (e) => {
+    e.preventDefault()
+    if (!newItemForm.item_code || !newItemForm.item_name) {
+      alert('Item Code and Item Name are required')
+      return
+    }
+
+    try {
+      setAddingItem(true)
+      const dataToSubmit = {
+        ...newItemForm,
+        unit_price: newItemForm.unit_price ? parseFloat(newItemForm.unit_price) : null,
+        reorder_level: newItemForm.reorder_level ? parseInt(newItemForm.reorder_level) : null
+      }
+      await itemService.create(dataToSubmit)
+      alert('Item created successfully!')
+      setShowAddItemModal(false)
+      setNewItemForm({
+        item_code: '',
+        item_name: '',
+        description: '',
+        category_id: '',
+        unit: 'pcs'
+      })
+      fetchItems() // Refresh the list
+    } catch (err) {
+      console.error('Failed to create item:', err)
+      alert('Failed to create item: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setAddingItem(false)
+    }
+  }
   const resetPRForm = () => {
     setPurpose('')
     setProject('')
@@ -357,8 +416,15 @@ const Items = () => {
     }
   }
 
-  // Get unique categories
-  const categories = ['all', ...new Set(items.map(item => item.category).filter(Boolean))]
+  // Get unique categories from items + add 'all' option
+  const filterCategories = ['all', ...new Set(items.map(item => item.category).filter(Boolean))]
+  
+  // Category options from database for the add item modal
+  const categoryOptions = dbCategories.map(cat => ({ value: cat.id, label: cat.category_name }))
+
+  const unitOptions = [
+    'pcs', 'box', 'set', 'unit', 'meter', 'roll', 'kg', 'liter', 'gallon', 'sheet', 'pack', 'bundle'
+  ]
 
   // Filter items
   const filteredItems = items.filter(item => {
@@ -392,7 +458,12 @@ const Items = () => {
           <p className="text-sm text-gray-500">Select items and quantities for your purchase request</p>
         </div>
         <div className="flex items-center gap-3">
-          {/* Cart Button */}
+          {user?.role !== 'engineer' && (
+            <Button onClick={() => setShowAddItemModal(true)}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add New Item
+            </Button>
+          )}
           <button
             onClick={() => setShowCart(!showCart)}
             className="relative flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors"
@@ -485,7 +556,7 @@ const Items = () => {
           onChange={(e) => setSelectedCategory(e.target.value)}
           className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
         >
-          {categories.map(cat => (
+          {filterCategories.map(cat => (
             <option key={cat} value={cat}>
               {cat === 'all' ? 'All Categories' : cat}
             </option>
@@ -694,114 +765,71 @@ const Items = () => {
         </div>
       )}
 
-      {/* Preview Modal */}
-      {showPreviewModal && previewDraftPR && (
+      {/* Add Item Modal */}
+      {showAddItemModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Purchase Request Preview</h3>
-              <button onClick={closePreview} className="text-gray-400 hover:text-gray-600">
+              <h3 className="text-lg font-semibold text-gray-900">Add New Item</h3>
+              <button onClick={() => setShowAddItemModal(false)} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="p-6 space-y-4">
-              <div className="border border-gray-300 rounded-lg overflow-hidden">
-                <div className="bg-white p-4">
-                  <div className="grid grid-cols-12 gap-2 text-sm">
-                    <div className="col-span-8">
-                      <div className="grid grid-cols-12 border border-gray-300">
-                        <div className="col-span-3 px-2 py-1 border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">SUPPLIER</div>
-                        <div className="col-span-9 px-2 py-1">{previewDraftPR.supplier_name || '-'}</div>
-                        <div className="col-span-3 px-2 py-1 border-t border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">ADDRESS</div>
-                        <div className="col-span-9 px-2 py-1 border-t border-gray-300">{previewDraftPR.supplier_address || '-'}</div>
-                      </div>
-                    </div>
-                    <div className="col-span-4">
-                      <div className="grid grid-cols-12 border border-gray-300">
-                        <div className="col-span-5 px-2 py-1 border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">PR NO.</div>
-                        <div className="col-span-7 px-2 py-1 font-mono">{previewDraftPR.pr_number}</div>
-                        <div className="col-span-5 px-2 py-1 border-t border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">DATE</div>
-                        <div className="col-span-7 px-2 py-1 border-t border-gray-300">{formatDate(previewDraftPR.created_at)}</div>
-                      </div>
-                    </div>
+            <form onSubmit={handleAddItemSubmit} className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Item Code *"
+                  value={newItemForm.item_code}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, item_code: e.target.value })}
+                  placeholder="e.g., ITM001"
+                  required
+                />
+                <Input
+                  label="Item Name *"
+                  value={newItemForm.item_name}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, item_name: e.target.value })}
+                  placeholder="e.g., Cement"
+                  required
+                />
+              </div>
 
-                    <div className="col-span-12">
-                      <div className="grid grid-cols-12 border border-gray-300">
-                        <div className="col-span-2 px-2 py-1 border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">PROJECT</div>
-                        <div className="col-span-6 px-2 py-1">{previewDraftPR.project || '-'}</div>
-                        <div className="col-span-2 px-2 py-1 border-l border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">ORDER NO.</div>
-                        <div className="col-span-2 px-2 py-1">{previewDraftPR.order_number || '-'}</div>
-                        <div className="col-span-2 px-2 py-1 border-t border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">DATE NEEDED</div>
-                        <div className="col-span-2 px-2 py-1 border-t border-gray-300">{formatDate(previewDraftPR.date_needed)}</div>
-                        <div className="col-span-2 px-2 py-1 border-t border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">ADDRESS</div>
-                        <div className="col-span-6 px-2 py-1 border-t border-gray-300">{previewDraftPR.project_address || '-'}</div>
-                      </div>
-                    </div>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={newItemForm.description}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })}
+                  placeholder="Optional description..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
 
-                    <div className="col-span-12">
-                      <div className="grid grid-cols-12 border border-gray-300">
-                        <div className="col-span-2 px-2 py-1 border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">PURPOSE</div>
-                        <div className="col-span-10 px-2 py-1">{previewDraftPR.purpose || '-'}</div>
-                        <div className="col-span-2 px-2 py-1 border-t border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">STATUS</div>
-                        <div className="col-span-10 px-2 py-1 border-t border-gray-300">
-                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">{previewDraftPR.status}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 border border-gray-300 rounded-lg overflow-x-auto">
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 uppercase border-b border-gray-300">Qty</th>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 uppercase border-b border-gray-300">Unit</th>
-                          <th className="text-left py-2 px-3 text-xs font-medium text-gray-600 uppercase border-b border-gray-300">Description</th>
-                          <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 uppercase border-b border-gray-300">Unit Cost</th>
-                          <th className="text-right py-2 px-3 text-xs font-medium text-gray-600 uppercase border-b border-gray-300">Amount</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {previewDraftPR.items.map((it) => (
-                          <tr key={it.item_id} className="border-b border-gray-200">
-                            <td className="py-2 px-3 text-sm text-gray-900">{it.quantity}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700">{it.unit || '-'}</td>
-                            <td className="py-2 px-3 text-sm text-gray-900">{it.item_name || it.item_code || `Item ${it.item_id}`}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 text-right">{formatCurrency(it.unit_price)}</td>
-                            <td className="py-2 px-3 text-sm text-gray-700 text-right">{formatCurrency(it.total_price)}</td>
-                          </tr>
-                        ))}
-                        {previewDraftPR.items.length === 0 && (
-                          <tr>
-                            <td colSpan="5" className="py-6 text-center text-sm text-gray-500">No items</td>
-                          </tr>
-                        )}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan="4" className="py-2 px-3 text-sm font-semibold text-gray-900 text-right border-t border-gray-300">TOTAL</td>
-                          <td className="py-2 px-3 text-sm font-semibold text-gray-900 text-right border-t border-gray-300">
-                            {formatCurrency(previewDraftPR.total_amount)}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-
-                  {previewDraftPR.remarks && (
-                    <div className="mt-4 grid grid-cols-12 border border-gray-300">
-                      <div className="col-span-2 px-2 py-1 border-r border-gray-300 bg-gray-50 text-xs font-medium text-gray-600">REMARKS</div>
-                      <div className="col-span-10 px-2 py-1 text-sm">{previewDraftPR.remarks}</div>
-                    </div>
-                  )}
-                </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Category"
+                  value={newItemForm.category_id || ''}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, category_id: e.target.value })}
+                  options={categoryOptions}
+                  placeholder="Select category..."
+                />
+                <Select
+                  label="Unit"
+                  value={newItemForm.unit}
+                  onChange={(e) => setNewItemForm({ ...newItemForm, unit: e.target.value })}
+                  options={unitOptions.map(u => ({ value: u, label: u }))}
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button variant="secondary" onClick={closePreview}>Close Preview</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowAddItemModal(false)} disabled={addingItem}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={addingItem}>
+                  {addingItem ? 'Creating...' : 'Create Item'}
+                </Button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

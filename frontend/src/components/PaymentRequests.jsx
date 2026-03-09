@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { paymentRequestService } from '../services/paymentRequests'
 import { purchaseRequestService } from '../services/purchaseRequests'
 import { serviceRequestService } from '../services/serviceRequests'
+import { cashRequestService } from '../services/cashRequests'
 import { supplierService } from '../services/suppliers'
 import { ChevronUp, ChevronDown, Plus, X, Download, Eye } from 'lucide-react'
 import PaymentRequestPreviewModal from './payment-requests/PaymentRequestPreviewModal'
@@ -127,7 +128,8 @@ const PaymentRequests = () => {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [prs, setPrs] = useState([])
   const [serviceRequests, setServiceRequests] = useState([])
-  const [sourceType, setSourceType] = useState('pr') // 'pr' or 'sr'
+  const [cashRequests, setCashRequests] = useState([])
+  const [sourceType, setSourceType] = useState('pr') // 'pr', 'sr', or 'cr'
   const [suppliers, setSuppliers] = useState([])
   const [loadingForm, setLoadingForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -135,12 +137,16 @@ const PaymentRequests = () => {
   // Form state
   const [selectedPR, setSelectedPR] = useState('')
   const [selectedSR, setSelectedSR] = useState('')
+  const [selectedCR, setSelectedCR] = useState('')
   const [prSearchQuery, setPrSearchQuery] = useState('')
   const [srSearchQuery, setSrSearchQuery] = useState('')
+  const [crSearchQuery, setCrSearchQuery] = useState('')
   const [prSearchResults, setPrSearchResults] = useState([])
   const [srSearchResults, setSrSearchResults] = useState([])
+  const [crSearchResults, setCrSearchResults] = useState([])
   const [showPrResults, setShowPrResults] = useState(false)
   const [showSrResults, setShowSrResults] = useState(false)
+  const [showCrResults, setShowCrResults] = useState(false)
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [payeeName, setPayeeName] = useState('')
   const [payeeAddress, setPayeeAddress] = useState('')
@@ -171,15 +177,18 @@ const PaymentRequests = () => {
     setShowCreateModal(true)
     setLoadingForm(true)
     try {
-      const [prsData, suppliersData, srsData] = await Promise.all([
+      const [prsData, suppliersData, srsData, crsData] = await Promise.all([
         purchaseRequestService.getAll('all'),
         supplierService.getAll(),
-        serviceRequestService.getAll()
+        serviceRequestService.getAll(),
+        cashRequestService.getAll()
       ])
       // Show non-debt PRs with 'For Purchase' status
       setPrs(prsData.filter(pr => pr.status === 'For Purchase' && pr.payment_basis === 'non_debt'))
       // Show approved Service Requests with service_type = 'Service' (payment request type)
       setServiceRequests(srsData.filter(sr => sr.status === 'Approved' && sr.service_type === 'Service'))
+      // Show approved Cash Requests with cr_type = 'payment_request'
+      setCashRequests(crsData.filter(cr => cr.status === 'Approved' && cr.cr_type === 'payment_request'))
       setSuppliers(suppliersData)
     } catch (err) {
       console.error('Failed to load data', err)
@@ -196,13 +205,17 @@ const PaymentRequests = () => {
   const resetForm = () => {
     setSelectedPR('')
     setSelectedSR('')
+    setSelectedCR('')
     setSourceType('pr')
     setPrSearchQuery('')
     setSrSearchQuery('')
+    setCrSearchQuery('')
     setPrSearchResults([])
     setSrSearchResults([])
+    setCrSearchResults([])
     setShowPrResults(false)
     setShowSrResults(false)
+    setShowCrResults(false)
     setSelectedSupplier('')
     setPayeeName('')
     setPayeeAddress('')
@@ -260,6 +273,30 @@ const PaymentRequests = () => {
     }
   }
 
+  const loadCRData = async (crId) => {
+    try {
+      const cr = await cashRequestService.getById(crId)
+      setPurpose(cr.purpose || '')
+      setProject(cr.project || '')
+      setProjectAddress(cr.project_address || '')
+      setOrderNumber(cr.order_number || '')
+      setAmount(cr.amount || 0)
+      // Set payee name from supplier if available
+      if (cr.supplier_name) {
+        setPayeeName(cr.supplier_name)
+        setPayeeAddress(cr.supplier_address || '')
+      }
+      // Find and set supplier if exists
+      if (cr.supplier_id) {
+        setSelectedSupplier(cr.supplier_id.toString())
+      }
+      // Cash Requests don't have items like PRs, so clear items
+      setItems([])
+    } catch (err) {
+      console.error('Failed to load CR data', err)
+    }
+  }
+
   const openPreview = async (pr) => {
     try {
       setPreviewLoading(true)
@@ -313,6 +350,7 @@ const PaymentRequests = () => {
     e.preventDefault()
     if (sourceType === 'pr' && !selectedPR) { alert('Please select a Purchase Request'); return }
     if (sourceType === 'sr' && !selectedSR) { alert('Please select a Service Request'); return }
+    if (sourceType === 'cr' && !selectedCR) { alert('Please select a Cash Request'); return }
     if (!payeeName) { alert('Please enter payee name'); return }
 
     try {
@@ -329,6 +367,7 @@ const PaymentRequests = () => {
         source_type: sourceType,
         purchase_request_id: sourceType === 'pr' ? selectedPR : null,
         service_request_id: sourceType === 'sr' ? selectedSR : null,
+        cash_request_id: sourceType === 'cr' ? selectedCR : null,
         items: items.map(item => ({
           item_id: parseInt(item.item_id),
           quantity: parseFloat(item.quantity),
@@ -602,18 +641,48 @@ const PaymentRequests = () => {
                           setSourceType(e.target.value)
                           setSelectedPR('')
                           setSelectedSR('')
+                          setSelectedCR('')
                           setPrSearchQuery('')
                           setSrSearchQuery('')
+                          setCrSearchQuery('')
                           setPrSearchResults([])
                           setSrSearchResults([])
+                          setCrSearchResults([])
                           setShowPrResults(false)
                           setShowSrResults(false)
+                          setShowCrResults(false)
                           setItems([])
                           setAmount(0)
                         }}
                         className="mr-2"
                       />
                       <span className="text-sm">Service Request</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="cr"
+                        checked={sourceType === 'cr'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedPR('')
+                          setSelectedSR('')
+                          setSelectedCR('')
+                          setPrSearchQuery('')
+                          setSrSearchQuery('')
+                          setCrSearchQuery('')
+                          setPrSearchResults([])
+                          setSrSearchResults([])
+                          setCrSearchResults([])
+                          setShowPrResults(false)
+                          setShowSrResults(false)
+                          setShowCrResults(false)
+                          setItems([])
+                          setAmount(0)
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Cash Request</span>
                     </label>
                   </div>
                 </div>
@@ -749,6 +818,69 @@ const PaymentRequests = () => {
                       </div>
                     )}
                     <input type="hidden" value={selectedSR} required />
+                  </div>
+                )}
+
+                {/* CR Search Input */}
+                {sourceType === 'cr' && (
+                  <div className="mb-4 relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Cash Request (Approved for Payment) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={crSearchQuery}
+                      onChange={(e) => {
+                        const query = e.target.value
+                        setCrSearchQuery(query)
+                        if (query.trim() === '') {
+                          setCrSearchResults([])
+                          setShowCrResults(false)
+                        } else {
+                          const filtered = cashRequests.filter(cr =>
+                            cr.cr_number?.toLowerCase().includes(query.toLowerCase()) ||
+                            cr.project?.toLowerCase().includes(query.toLowerCase()) ||
+                            cr.purpose?.toLowerCase().includes(query.toLowerCase())
+                          )
+                          setCrSearchResults(filtered)
+                          setShowCrResults(true)
+                        }
+                      }}
+                      onFocus={() => {
+                        if (crSearchQuery.trim() !== '') {
+                          setShowCrResults(true)
+                        }
+                      }}
+                      placeholder="Search by CR number, project, or purpose..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      required={!selectedCR}
+                    />
+                    {showCrResults && crSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                        {crSearchResults.map(cr => (
+                          <div
+                            key={cr.id}
+                            onClick={() => {
+                              console.log('Selected CR data:', cr)
+                              setSelectedCR(cr.id)
+                              setCrSearchQuery(`${cr.cr_number} - ${cr.purpose || cr.project} (${formatCurrency(cr.amount)})`)
+                              setShowCrResults(false)
+                              loadCRData(cr.id)
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <div className="text-sm font-medium">{cr.cr_number} - {cr.purpose || cr.project}</div>
+                            <div className="text-xs text-gray-500">{cr.supplier_name || 'No supplier'} • {formatCurrency(cr.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showCrResults && crSearchQuery.trim() !== '' && crSearchResults.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                        No matching cash requests found
+                      </div>
+                    )}
+                    <input type="hidden" value={selectedCR} required />
                   </div>
                 )}
 

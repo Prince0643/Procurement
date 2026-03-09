@@ -85,13 +85,9 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Cash request not found' });
     }
 
-    // Get line items
-    const [items] = await db.query(
-      'SELECT * FROM cash_request_items WHERE cash_request_id = ? ORDER BY id',
-      [req.params.id]
-    );
-
-    res.json({ cashRequest: { ...crs[0], items } });
+    // Cash Requests store item data directly in the main table (no separate items table)
+    // quantity, unit, amount, purpose are columns in cash_requests
+    res.json({ cashRequest: { ...crs[0], items: [] } });
   } catch (error) {
     console.error('Fetch cash request error:', error);
     res.status(500).json({ message: 'Failed to fetch cash request: ' + error.message });

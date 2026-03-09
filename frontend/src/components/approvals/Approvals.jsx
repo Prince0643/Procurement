@@ -6,6 +6,7 @@ import { serviceRequestService } from '../../services/serviceRequests';
 import { disbursementVoucherService } from '../../services/disbursementVouchers';
 import { cashRequestService } from '../../services/cashRequests';
 import { paymentOrderService } from '../../services/paymentOrders';
+import { reimbursementService } from '../../services/reimbursements';
 import PRPreviewModal from '../purchase-requests/PRPreviewModal';
 import POPreviewModal from '../purchase-orders/POPreviewModal';
 import PaymentRequestPreviewModal from '../payment-requests/PaymentRequestPreviewModal';
@@ -125,6 +126,8 @@ const Approvals = () => {
   const [srSubTab, setSrSubTab] = useState('pending');
   const [crSubTab, setCrSubTab] = useState('pending');
   const [paymentOrderSubTab, setPaymentOrderSubTab] = useState('pending');
+  const [reimbursements, setReimbursements] = useState([]);
+  const [rmbSubTab, setRmbSubTab] = useState('pending');
   const [purchaseOrders, setPurchaseOrders] = useState([]);
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [paymentRequests, setPaymentRequests] = useState([]);
@@ -164,14 +167,15 @@ const Approvals = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [pos, prs, paymentReqs, srs, crs, dvs, paymentOrdersData] = await Promise.all([
+      const [pos, prs, paymentReqs, srs, crs, dvs, paymentOrdersData, reimbursementsData] = await Promise.all([
         purchaseOrderService.getAll(),
         purchaseRequestService.getAll('all'),
         paymentRequestService.getAll(),
         serviceRequestService.getAll(),
         cashRequestService.getAll(),
         disbursementVoucherService.getAll(),
-        paymentOrderService.getAll()
+        paymentOrderService.getAll(),
+        reimbursementService.getAll()
       ]);
       setPurchaseOrders(pos);
       setPurchaseRequests(prs);
@@ -180,6 +184,7 @@ const Approvals = () => {
       setCashRequests(crs);
       setDisbursementVouchers(dvs);
       setPaymentOrders(paymentOrdersData);
+      setReimbursements(reimbursementsData);
       
       // Debug logging
       console.log('Fetched Cash Requests:', crs);
@@ -291,6 +296,19 @@ const Approvals = () => {
   
   const approvedPaymentOrders = paymentOrders.filter(po => 
     po.status === 'Approved'
+  );
+
+  // Filter Reimbursements that need approval
+  const pendingReimbursements = reimbursements.filter(r => 
+    r.status === 'For Procurement Review' || r.status === 'For Super Admin Final Approval'
+  );
+  
+  const onHoldReimbursements = reimbursements.filter(r => 
+    r.status === 'On Hold'
+  );
+  
+  const approvedReimbursements = reimbursements.filter(r => 
+    r.status === 'For Purchase' || r.status === 'Paid'
   );
 
   const handleApprovePO = async (id) => {
@@ -601,6 +619,21 @@ const Approvals = () => {
     }
   };
 
+  const handleApproveReimbursement = async (id, status) => {
+    try {
+      setProcessingId(id);
+      const rejectionReason = status === 'rejected' ? prompt('Enter rejection reason:') : null;
+      if (status === 'rejected' && !rejectionReason) return;
+      
+      await reimbursementService.approve(id, status, rejectionReason);
+      await fetchData();
+    } catch (err) {
+      alert('Failed to process reimbursement: ' + err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -739,6 +772,24 @@ const Approvals = () => {
               {pendingPaymentOrders.length > 0 && (
                 <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs">
                   {pendingPaymentOrders.length}
+                </span>
+              )}
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('reimbursements')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'reimbursements'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <CreditCard className="w-4 h-4" />
+              <span>Reimbursements</span>
+              {pendingReimbursements.length > 0 && (
+                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full text-xs">
+                  {pendingReimbursements.length}
                 </span>
               )}
             </div>
@@ -2953,6 +3004,317 @@ const Approvals = () => {
                     <tr>
                       <td colSpan="6" className="py-8 text-center text-gray-500">
                         No {paymentOrderSubTab === 'pending' ? 'pending' : paymentOrderSubTab === 'on-hold' ? 'on hold' : 'approved'} payment orders
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Reimbursements Tab */}
+      {activeTab === 'reimbursements' && (
+        <div className="space-y-4">
+          {/* RMB Sub-tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setRmbSubTab('pending')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                rmbSubTab === 'pending'
+                  ? 'bg-yellow-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span>Pending</span>
+                {pendingReimbursements.length > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    rmbSubTab === 'pending' ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {pendingReimbursements.length}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setRmbSubTab('on-hold')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                rmbSubTab === 'on-hold'
+                  ? 'bg-orange-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span>On Hold</span>
+                {onHoldReimbursements.length > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    rmbSubTab === 'on-hold' ? 'bg-orange-600 text-white' : 'bg-orange-100 text-orange-800'
+                  }`}>
+                    {onHoldReimbursements.length}
+                  </span>
+                )}
+              </div>
+            </button>
+            <button
+              onClick={() => setRmbSubTab('approved')}
+              className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                rmbSubTab === 'approved'
+                  ? 'bg-green-500 text-white'
+                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span>Approved</span>
+                {approvedReimbursements.length > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs ${
+                    rmbSubTab === 'approved' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {approvedReimbursements.length}
+                  </span>
+                )}
+              </div>
+            </button>
+          </div>
+
+          <Card>
+            <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-gray-900">
+                {rmbSubTab === 'pending' && 'Pending Reimbursements'}
+                {rmbSubTab === 'on-hold' && 'On Hold Reimbursements'}
+                {rmbSubTab === 'approved' && 'Approved Reimbursements'}
+              </h3>
+              <span className="text-sm text-gray-500">
+                {rmbSubTab === 'pending' && `${pendingReimbursements.length} pending`}
+                {rmbSubTab === 'on-hold' && `${onHoldReimbursements.length} on hold`}
+                {rmbSubTab === 'approved' && `${approvedReimbursements.length} approved`}
+              </span>
+            </div>
+            
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-gray-200">
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">RMB Number</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Payee</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                    <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {/* Pending Reimbursements */}
+                  {rmbSubTab === 'pending' && pendingReimbursements.map(r => (
+                    <React.Fragment key={r.id}>
+                      <tr 
+                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{r.rmb_number}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
+                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="success"
+                              size="sm"
+                              disabled={processingId === r.id}
+                              onClick={(e) => { e.stopPropagation(); handleApproveReimbursement(r.id, 'approved'); }}
+                              title="Approve"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="danger"
+                              size="sm"
+                              disabled={processingId === r.id}
+                              onClick={(e) => { e.stopPropagation(); handleApproveReimbursement(r.id, 'rejected'); }}
+                              title="Reject"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === r.id ? null : r.id); }}
+                            >
+                              {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedId === r.id && (
+                        <tr>
+                          <td colSpan="6" className="bg-gray-50 p-4">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Project Address</p>
+                                  <p className="text-sm text-gray-900">{r.project_address || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Order Number</p>
+                                  <p className="text-sm text-gray-900">{r.order_number || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Date Needed</p>
+                                  <p className="text-sm text-gray-900">{r.date_needed ? new Date(r.date_needed).toLocaleDateString() : '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Purpose</p>
+                                  <p className="text-sm text-gray-900">{r.purpose || '-'}</p>
+                                </div>
+                              </div>
+                              {r.remarks && (
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Remarks</p>
+                                  <p className="text-sm text-gray-900">{r.remarks}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  
+                  {/* On Hold Reimbursements */}
+                  {rmbSubTab === 'on-hold' && onHoldReimbursements.map(r => (
+                    <React.Fragment key={r.id}>
+                      <tr 
+                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{r.rmb_number}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
+                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="success"
+                              size="sm"
+                              disabled={processingId === r.id}
+                              onClick={(e) => { e.stopPropagation(); handleApproveReimbursement(r.id, 'approved'); }}
+                              title="Approve"
+                            >
+                              <CheckCircle className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === r.id ? null : r.id); }}
+                            >
+                              {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedId === r.id && (
+                        <tr>
+                          <td colSpan="6" className="bg-gray-50 p-4">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Project Address</p>
+                                  <p className="text-sm text-gray-900">{r.project_address || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Order Number</p>
+                                  <p className="text-sm text-gray-900">{r.order_number || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Date Needed</p>
+                                  <p className="text-sm text-gray-900">{r.date_needed ? new Date(r.date_needed).toLocaleDateString() : '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Purpose</p>
+                                  <p className="text-sm text-gray-900">{r.purpose || '-'}</p>
+                                </div>
+                              </div>
+                              {r.remarks && (
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Remarks</p>
+                                  <p className="text-sm text-gray-900">{r.remarks}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  
+                  {/* Approved Reimbursements */}
+                  {rmbSubTab === 'approved' && approvedReimbursements.map(r => (
+                    <React.Fragment key={r.id}>
+                      <tr 
+                        className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                        onClick={() => setExpandedId(expandedId === r.id ? null : r.id)}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-gray-900">{r.rmb_number}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
+                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === r.id ? null : r.id); }}
+                            >
+                              {expandedId === r.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                      {expandedId === r.id && (
+                        <tr>
+                          <td colSpan="6" className="bg-gray-50 p-4">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Project Address</p>
+                                  <p className="text-sm text-gray-900">{r.project_address || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Order Number</p>
+                                  <p className="text-sm text-gray-900">{r.order_number || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Date Needed</p>
+                                  <p className="text-sm text-gray-900">{r.date_needed ? new Date(r.date_needed).toLocaleDateString() : '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Purpose</p>
+                                  <p className="text-sm text-gray-900">{r.purpose || '-'}</p>
+                                </div>
+                              </div>
+                              {r.remarks && (
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Remarks</p>
+                                  <p className="text-sm text-gray-900">{r.remarks}</p>
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  ))}
+                  
+                  {((rmbSubTab === 'pending' && pendingReimbursements.length === 0) ||
+                    (rmbSubTab === 'on-hold' && onHoldReimbursements.length === 0) ||
+                    (rmbSubTab === 'approved' && approvedReimbursements.length === 0)) && (
+                    <tr>
+                      <td colSpan="6" className="py-8 text-center text-gray-500">
+                        No {rmbSubTab === 'pending' ? 'pending' : rmbSubTab === 'on-hold' ? 'on hold' : 'approved'} reimbursements
                       </td>
                     </tr>
                   )}

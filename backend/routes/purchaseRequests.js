@@ -863,20 +863,20 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       // Delete existing items
       await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
 
-      // Insert new items with unit_price and total_price reset to NULL
-      // (Procurement will need to set these again during review)
+      // Insert new items with unit_price and total_price from frontend
       for (const item of items) {
         const itemId = item.item_id ?? item.id;
         const quantity = Number(item.quantity);
+        const unitPrice = item.unit_price != null ? Number(item.unit_price) : null;
+        const totalPrice = unitPrice != null ? unitPrice * quantity : null;
 
         if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
           throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
         }
 
-        // Reset prices to NULL - procurement will set them again
         await conn.query(
-          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, NULL, NULL, ?)',
-          [req.params.id, itemId, quantity, item.remarks ?? item.notes ?? null]
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.params.id, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
         );
       }
     }
@@ -925,6 +925,39 @@ router.put('/:id/approve', authenticate, async (req, res) => {
     res.json({ message: `Purchase request ${status} successfully` });
   } catch (error) {
     res.status(500).json({ message: 'Failed to update purchase request' });
+  }
+});
+
+// Mark PR as Received (engineer only, only when status is Completed)
+router.put('/:id/received', authenticate, async (req, res) => {
+  try {
+    // Check if PR exists
+    const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+
+    const pr = prs[0];
+
+    // Only the original requester can mark as received
+    if (pr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can mark this PR as received' });
+    }
+
+    // Only Completed PRs can be marked as Received
+    if (pr.status !== 'Completed') {
+      return res.status(400).json({ message: 'Only completed purchase requests can be marked as received' });
+    }
+
+    await db.query(
+      'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+      ['Received', req.params.id]
+    );
+
+    res.json({ message: 'Purchase request marked as received successfully', status: 'Received' });
+  } catch (error) {
+    console.error('Mark received error:', error);
+    res.status(500).json({ message: 'Failed to mark purchase request as received' });
   }
 });
 

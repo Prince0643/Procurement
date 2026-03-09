@@ -56,12 +56,6 @@ export const navigationItems = [
     roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
   {
-    path: '/dashboard/add-item',
-    label: 'Add Item',
-    icon: Plus,
-    roles: ['procurement', 'admin', 'super_admin']
-  },
-  {
     path: '/dashboard/pricing-history',
     label: 'Pricing History',
     icon: History,
@@ -113,7 +107,7 @@ export const navigationItems = [
     path: '/dashboard/reimbursements',
     label: 'Reimbursements',
     icon: Receipt,
-    roles: ['engineer', 'admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
   
   // Settings
@@ -145,7 +139,7 @@ export const navigationGroups = [
   },
   {
     title: 'Items',
-    items: ['/dashboard/items', '/dashboard/add-item', '/dashboard/pricing-history']
+    items: ['/dashboard/items', '/dashboard/pricing-history']
   },
   {
     title: 'Finance',

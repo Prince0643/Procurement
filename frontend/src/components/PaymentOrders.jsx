@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react'
 import { paymentOrderService } from '../services/paymentOrders'
 import { serviceRequestService } from '../services/serviceRequests'
+import { cashRequestService } from '../services/cashRequests'
+import { reimbursementService } from '../services/reimbursements'
 import { supplierService } from '../services/suppliers'
 import { ChevronUp, ChevronDown, Plus, X, Download, Eye } from 'lucide-react'
 import POPreviewModal from './payment-orders/POPreviewModal'
@@ -126,15 +128,26 @@ const PaymentOrders = () => {
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [serviceRequests, setServiceRequests] = useState([])
+  const [cashRequests, setCashRequests] = useState([])
   const [suppliers, setSuppliers] = useState([])
   const [loadingForm, setLoadingForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [sourceType, setSourceType] = useState('sr') // 'sr', 'cr', or 'reimbursement'
   
   // Form state
   const [selectedSR, setSelectedSR] = useState('')
+  const [selectedCR, setSelectedCR] = useState('')
+  const [selectedReimbursement, setSelectedReimbursement] = useState('')
   const [srSearchQuery, setSrSearchQuery] = useState('')
+  const [crSearchQuery, setCrSearchQuery] = useState('')
+  const [reimbursementSearchQuery, setReimbursementSearchQuery] = useState('')
   const [srSearchResults, setSrSearchResults] = useState([])
+  const [crSearchResults, setCrSearchResults] = useState([])
+  const [reimbursementSearchResults, setReimbursementSearchResults] = useState([])
   const [showSrResults, setShowSrResults] = useState(false)
+  const [showCrResults, setShowCrResults] = useState(false)
+  const [showReimbursementResults, setShowReimbursementResults] = useState(false)
+  const [reimbursements, setReimbursements] = useState([])
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [payeeName, setPayeeName] = useState('')
   const [payeeAddress, setPayeeAddress] = useState('')
@@ -166,12 +179,18 @@ const PaymentOrders = () => {
     setShowCreateModal(true)
     setLoadingForm(true)
     try {
-      const [suppliersData, srsData] = await Promise.all([
+      const [suppliersData, srsData, crsData, reimbursementsData] = await Promise.all([
         supplierService.getAll(),
-        serviceRequestService.getAll()
+        serviceRequestService.getAll(),
+        cashRequestService.getAll(),
+        reimbursementService.getAll()
       ])
       // Show approved Service Requests with sr_type = 'payment_order' (payment order type)
       setServiceRequests(srsData.filter(sr => sr.status === 'Approved' && sr.sr_type === 'payment_order'))
+      // Show approved Cash Requests with cr_type = 'payment_order'
+      setCashRequests(crsData.filter(cr => cr.status === 'Approved' && cr.cr_type === 'payment_order'))
+      // Show approved Reimbursements with status = 'For Purchase'
+      setReimbursements(reimbursementsData.filter(r => r.status === 'For Purchase'))
       setSuppliers(suppliersData)
     } catch (err) {
       console.error('Failed to load data', err)
@@ -187,9 +206,18 @@ const PaymentOrders = () => {
 
   const resetForm = () => {
     setSelectedSR('')
+    setSelectedCR('')
+    setSelectedReimbursement('')
+    setSourceType('sr')
     setSrSearchQuery('')
+    setCrSearchQuery('')
+    setReimbursementSearchQuery('')
     setSrSearchResults([])
+    setCrSearchResults([])
+    setReimbursementSearchResults([])
     setShowSrResults(false)
+    setShowCrResults(false)
+    setShowReimbursementResults(false)
     setSelectedSupplier('')
     setPayeeName('')
     setPayeeAddress('')
@@ -222,6 +250,49 @@ const PaymentOrders = () => {
     }
   }
 
+  const loadCRData = async (crId) => {
+    try {
+      const cr = await cashRequestService.getById(crId)
+      setPurpose(cr.purpose || '')
+      setProject(cr.project || '')
+      setProjectAddress(cr.project_address || '')
+      setOrderNumber(cr.order_number || '')
+      setAmount(cr.amount || 0)
+      // Set payee name from supplier if available
+      if (cr.supplier_name) {
+        setPayeeName(cr.supplier_name)
+        setPayeeAddress(cr.supplier_address || '')
+      }
+      // Find and set supplier if exists
+      if (cr.supplier_id) {
+        setSelectedSupplier(cr.supplier_id.toString())
+      }
+    } catch (err) {
+      console.error('Failed to load CR data', err)
+    }
+  }
+
+  const loadReimbursementData = async (reimbursementId) => {
+    try {
+      const r = await reimbursementService.getById(reimbursementId)
+      setPurpose(r.purpose || '')
+      setProject(r.project || '')
+      setProjectAddress(r.project_address || '')
+      setOrderNumber(r.order_number || '')
+      setAmount(r.amount || 0)
+      // Set payee from reimbursement payee field
+      if (r.payee) {
+        setPayeeName(r.payee)
+      } else if (r.employee_name) {
+        setPayeeName(r.employee_name)
+      }
+      // Clear supplier selection since payee comes from reimbursement
+      setSelectedSupplier('')
+    } catch (err) {
+      console.error('Failed to load reimbursement data', err)
+    }
+  }
+
   const handleExport = async (id, poNumber) => {
     try {
       const blob = await paymentOrderService.export(id)
@@ -240,13 +311,17 @@ const PaymentOrders = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!selectedSR) { alert('Please select a Service Request'); return }
+    if (sourceType === 'sr' && !selectedSR) { alert('Please select a Service Request'); return }
+    if (sourceType === 'cr' && !selectedCR) { alert('Please select a Cash Request'); return }
+    if (sourceType === 'reimbursement' && !selectedReimbursement) { alert('Please select a Reimbursement'); return }
     if (!payeeName) { alert('Please enter payee name'); return }
 
     try {
       setSubmitting(true)
       const poData = {
-        service_request_id: selectedSR,
+        service_request_id: sourceType === 'sr' ? selectedSR : null,
+        cash_request_id: sourceType === 'cr' ? selectedCR : null,
+        reimbursement_id: sourceType === 'reimbursement' ? selectedReimbursement : null,
         payee_name: payeeName,
         payee_address: payeeAddress || null,
         purpose: purpose || null,
@@ -465,68 +540,279 @@ const PaymentOrders = () => {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="p-6">
-                {/* SR Search Input */}
-                <div className="mb-4 relative">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Service Request (Approved for Payment Order) <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={srSearchQuery}
-                    onChange={(e) => {
-                      const query = e.target.value
-                      setSrSearchQuery(query)
-                      if (query.trim() === '') {
-                        setSrSearchResults([])
-                        setShowSrResults(false)
-                      } else {
-                        const filtered = serviceRequests.filter(sr =>
-                          sr.sr_number?.toLowerCase().includes(query.toLowerCase()) ||
-                          sr.project?.toLowerCase().includes(query.toLowerCase()) ||
-                          sr.purpose?.toLowerCase().includes(query.toLowerCase())
-                        )
-                        setSrSearchResults(filtered)
-                        setShowSrResults(true)
-                      }
-                    }}
-                    onFocus={() => {
-                      if (srSearchQuery.trim() !== '') {
-                        setShowSrResults(true)
-                      }
-                    }}
-                    placeholder="Search by SR number, project, or purpose..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                    required={!selectedSR}
-                  />
-                  {showSrResults && srSearchResults.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
-                      {srSearchResults.map(sr => (
-                        <div
-                          key={sr.id}
-                          onClick={() => {
-                            console.log('Selected SR data:', sr)
-                            setSelectedSR(sr.id)
-                            setSrSearchQuery(`${sr.sr_number} - ${sr.purpose || sr.project} (${formatCurrency(sr.amount)})`)
-                            setShowSrResults(false)
-                            loadSRData(sr.id)
-                          }}
-                          className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
-                        >
-                          <div className="text-sm font-medium">{sr.sr_number} - {sr.purpose || sr.project}</div>
-                          <div className="text-xs text-gray-500">{sr.supplier_name || 'No supplier'} • {formatCurrency(sr.amount)}</div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {showSrResults && srSearchQuery.trim() !== '' && srSearchResults.length === 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
-                      No matching service requests found
-                    </div>
-                  )}
-                  <input type="hidden" value={selectedSR} required />
+                {/* Source Type Selection */}
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Source Type</label>
+                  <div className="flex gap-4">
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="sr"
+                        checked={sourceType === 'sr'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedSR('')
+                          setSelectedCR('')
+                          setSrSearchQuery('')
+                          setCrSearchQuery('')
+                          setSrSearchResults([])
+                          setCrSearchResults([])
+                          setShowSrResults(false)
+                          setShowCrResults(false)
+                          setAmount(0)
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Service Request</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="cr"
+                        checked={sourceType === 'cr'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedSR('')
+                          setSelectedCR('')
+                          setSelectedReimbursement('')
+                          setSrSearchQuery('')
+                          setCrSearchQuery('')
+                          setReimbursementSearchQuery('')
+                          setSrSearchResults([])
+                          setCrSearchResults([])
+                          setReimbursementSearchResults([])
+                          setShowSrResults(false)
+                          setShowCrResults(false)
+                          setShowReimbursementResults(false)
+                          setAmount(0)
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Cash Request</span>
+                    </label>
+                    <label className="flex items-center">
+                      <input
+                        type="radio"
+                        value="reimbursement"
+                        checked={sourceType === 'reimbursement'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedSR('')
+                          setSelectedCR('')
+                          setSelectedReimbursement('')
+                          setSrSearchQuery('')
+                          setCrSearchQuery('')
+                          setReimbursementSearchQuery('')
+                          setSrSearchResults([])
+                          setCrSearchResults([])
+                          setReimbursementSearchResults([])
+                          setShowSrResults(false)
+                          setShowCrResults(false)
+                          setShowReimbursementResults(false)
+                          setAmount(0)
+                        }}
+                        className="mr-2"
+                      />
+                      <span className="text-sm">Reimbursement</span>
+                    </label>
+                  </div>
                 </div>
 
-                <Select label="Payee (Supplier)" value={selectedSupplier} onChange={(e) => { const supplierId = e.target.value; setSelectedSupplier(supplierId); const supplier = suppliers.find(s => s.id === parseInt(supplierId)); if (supplier) { setPayeeName(supplier.supplier_name); setPayeeAddress(supplier.address || ''); } }} options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} required />
+                {/* SR Search Input */}
+                {sourceType === 'sr' && (
+                  <div className="mb-4 relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Service Request (Approved for Payment Order) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={srSearchQuery}
+                      onChange={(e) => {
+                        const query = e.target.value
+                        setSrSearchQuery(query)
+                        if (query.trim() === '') {
+                          setSrSearchResults([])
+                          setShowSrResults(false)
+                        } else {
+                          const filtered = serviceRequests.filter(sr =>
+                            sr.sr_number?.toLowerCase().includes(query.toLowerCase()) ||
+                            sr.project?.toLowerCase().includes(query.toLowerCase()) ||
+                            sr.purpose?.toLowerCase().includes(query.toLowerCase())
+                          )
+                          setSrSearchResults(filtered)
+                          setShowSrResults(true)
+                        }
+                      }}
+                      onFocus={() => {
+                        if (srSearchQuery.trim() !== '') {
+                          setShowSrResults(true)
+                        }
+                      }}
+                      placeholder="Search by SR number, project, or purpose..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      required={!selectedSR}
+                    />
+                    {showSrResults && srSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                        {srSearchResults.map(sr => (
+                          <div
+                            key={sr.id}
+                            onClick={() => {
+                              console.log('Selected SR data:', sr)
+                              setSelectedSR(sr.id)
+                              setSrSearchQuery(`${sr.sr_number} - ${sr.purpose || sr.project} (${formatCurrency(sr.amount)})`)
+                              setShowSrResults(false)
+                              loadSRData(sr.id)
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <div className="text-sm font-medium">{sr.sr_number} - {sr.purpose || sr.project}</div>
+                            <div className="text-xs text-gray-500">{sr.supplier_name || 'No supplier'} • {formatCurrency(sr.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showSrResults && srSearchQuery.trim() !== '' && srSearchResults.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                        No matching service requests found
+                      </div>
+                    )}
+                    <input type="hidden" value={selectedSR} required />
+                  </div>
+                )}
+
+                {/* CR Search Input */}
+                {sourceType === 'cr' && (
+                  <div className="mb-4 relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Cash Request (Approved for Payment Order) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={crSearchQuery}
+                      onChange={(e) => {
+                        const query = e.target.value
+                        setCrSearchQuery(query)
+                        if (query.trim() === '') {
+                          setCrSearchResults([])
+                          setShowCrResults(false)
+                        } else {
+                          const filtered = cashRequests.filter(cr =>
+                            cr.cr_number?.toLowerCase().includes(query.toLowerCase()) ||
+                            cr.project?.toLowerCase().includes(query.toLowerCase()) ||
+                            cr.purpose?.toLowerCase().includes(query.toLowerCase())
+                          )
+                          setCrSearchResults(filtered)
+                          setShowCrResults(true)
+                        }
+                      }}
+                      onFocus={() => {
+                        if (crSearchQuery.trim() !== '') {
+                          setShowCrResults(true)
+                        }
+                      }}
+                      placeholder="Search by CR number, project, or purpose..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      required={!selectedCR}
+                    />
+                    {showCrResults && crSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                        {crSearchResults.map(cr => (
+                          <div
+                            key={cr.id}
+                            onClick={() => {
+                              console.log('Selected CR data:', cr)
+                              setSelectedCR(cr.id)
+                              setCrSearchQuery(`${cr.cr_number} - ${cr.purpose || cr.project} (${formatCurrency(cr.amount)})`)
+                              setShowCrResults(false)
+                              loadCRData(cr.id)
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <div className="text-sm font-medium">{cr.cr_number} - {cr.purpose || cr.project}</div>
+                            <div className="text-xs text-gray-500">{cr.supplier_name || 'No supplier'} • {formatCurrency(cr.amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showCrResults && crSearchQuery.trim() !== '' && crSearchResults.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                        No matching cash requests found
+                      </div>
+                    )}
+                    <input type="hidden" value={selectedCR} required />
+                  </div>
+                )}
+
+                {/* Reimbursement Search Input */}
+                {sourceType === 'reimbursement' && (
+                  <div className="mb-4 relative">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Reimbursement (For Purchase) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={reimbursementSearchQuery}
+                      onChange={(e) => {
+                        const query = e.target.value
+                        setReimbursementSearchQuery(query)
+                        if (query.trim() === '') {
+                          setReimbursementSearchResults([])
+                          setShowReimbursementResults(false)
+                        } else {
+                          const filtered = reimbursements.filter(r =>
+                            r.rmb_number?.toLowerCase().includes(query.toLowerCase()) ||
+                            r.project?.toLowerCase().includes(query.toLowerCase()) ||
+                            r.purpose?.toLowerCase().includes(query.toLowerCase())
+                          )
+                          setReimbursementSearchResults(filtered)
+                          setShowReimbursementResults(true)
+                        }
+                      }}
+                      onFocus={() => {
+                        if (reimbursementSearchQuery.trim() !== '') {
+                          setShowReimbursementResults(true)
+                        }
+                      }}
+                      placeholder="Search by RMB number, project, or purpose..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      required={!selectedReimbursement}
+                    />
+                    {showReimbursementResults && reimbursementSearchResults.length > 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-auto">
+                        {reimbursementSearchResults.map(r => (
+                          <div
+                            key={r.id}
+                            onClick={() => {
+                              console.log('Selected Reimbursement data:', r)
+                              setSelectedReimbursement(r.id)
+                              setReimbursementSearchQuery(`${r.rmb_number} - ${r.purpose || r.project} (${formatCurrency(r.total_amount)})`)
+                              setShowReimbursementResults(false)
+                              loadReimbursementData(r.id)
+                            }}
+                            className="px-3 py-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                          >
+                            <div className="text-sm font-medium">{r.rmb_number} - {r.purpose || r.project}</div>
+                            <div className="text-xs text-gray-500">{r.employee_name || 'No employee'} • {formatCurrency(r.total_amount)}</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {showReimbursementResults && reimbursementSearchQuery.trim() !== '' && reimbursementSearchResults.length === 0 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
+                        No matching reimbursements found
+                      </div>
+                    )}
+                    <input type="hidden" value={selectedReimbursement} required />
+                  </div>
+                )}
+
+                {/* Payee Field - Show dropdown for SR/CR, text input for reimbursement */}
+                {sourceType === 'reimbursement' ? (
+                  <Input label="Payee" value={payeeName} onChange={(e) => setPayeeName(e.target.value)} required />
+                ) : (
+                  <Select label="Payee (Supplier)" value={selectedSupplier} onChange={(e) => { const supplierId = e.target.value; setSelectedSupplier(supplierId); const supplier = suppliers.find(s => s.id === parseInt(supplierId)); if (supplier) { setPayeeName(supplier.supplier_name); setPayeeAddress(supplier.address || ''); } }} options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} required />
+                )}
 
                 <Input label="Payee Address" value={payeeAddress} onChange={(e) => setPayeeAddress(e.target.value)} />
 

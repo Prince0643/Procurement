@@ -57,6 +57,11 @@ export const purchaseRequestService = {
     return response.data;
   },
 
+  markAsReceived: async (id) => {
+    const response = await api.put(`/purchase-requests/${id}/received`);
+    return response.data;
+  },
+
   exportToExcel: async (id) => {
     const response = await api.get(`/purchase-requests/${id}/export`, {
       responseType: 'blob'

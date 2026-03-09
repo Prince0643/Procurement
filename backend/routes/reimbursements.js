@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import reimbursementUpload from '../middleware/reimbursementUpload.js';
-import { createNotification, getAdmins } from '../utils/notifications.js';
+import { createNotification, getAdmins, getSuperAdmins } from '../utils/notifications.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,7 +61,37 @@ router.get('/', authenticate, async (req, res) => {
     query += ' ORDER BY r.created_at DESC';
 
     const [rows] = await db.query(query, params);
-    res.json({ reimbursements: rows });
+
+    // Fetch attachments for each reimbursement
+    const reimbursementIds = rows.map(r => r.id);
+    let attachmentsMap = {};
+    
+    if (reimbursementIds.length > 0) {
+      const placeholders = reimbursementIds.map(() => '?').join(',');
+      const [attachments] = await db.query(
+        `SELECT ra.*, e.first_name as uploaded_by_first_name, e.last_name as uploaded_by_last_name
+         FROM reimbursement_attachments ra
+         LEFT JOIN employees e ON ra.uploaded_by = e.id
+         WHERE ra.reimbursement_id IN (${placeholders})
+         ORDER BY ra.uploaded_at DESC`,
+        reimbursementIds
+      );
+      
+      // Group attachments by reimbursement_id
+      attachmentsMap = attachments.reduce((acc, att) => {
+        if (!acc[att.reimbursement_id]) acc[att.reimbursement_id] = [];
+        acc[att.reimbursement_id].push(att);
+        return acc;
+      }, {});
+    }
+
+    // Add attachments to each reimbursement
+    const reimbursementsWithAttachments = rows.map(r => ({
+      ...r,
+      attachments: attachmentsMap[r.id] || []
+    }));
+
+    res.json({ reimbursements: reimbursementsWithAttachments });
   } catch (error) {
     console.error('Fetch reimbursements error:', error);
     res.status(500).json({ message: 'Failed to fetch reimbursements: ' + error.message });
@@ -142,7 +172,7 @@ router.post('/', authenticate, async (req, res) => {
         parseFloat(amount),
         date_needed || null,
         remarks || null,
-        'Draft'
+        'For Procurement Review'
       ]
     );
 
@@ -152,7 +182,7 @@ router.post('/', authenticate, async (req, res) => {
       message: 'Reimbursement created successfully',
       reimbursementId: result.insertId,
       rmb_number: rmbNumber,
-      status: 'Draft'
+      status: 'For Procurement Review'
     });
   } catch (error) {
     if (conn) {
@@ -274,8 +304,13 @@ router.put('/:id/submit', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject reimbursement (admin)
-router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
+// Approve/Reject reimbursement (procurement, admin, super_admin)
+router.put('/:id/approve', authenticate, async (req, res) => {
+  // Allow procurement, admin, and super_admin to approve
+  if (!['procurement', 'admin', 'super_admin'].includes(req.user.role)) {
+    return res.status(403).json({ message: 'Access denied' });
+  }
+  
   let conn;
   try {
     const { status, rejection_reason } = req.body; // 'approved' | 'rejected'
@@ -287,8 +322,16 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
     const r = rows[0];
 
-    if (r.status !== 'Pending' && r.status !== 'For Approval') {
-      return res.status(400).json({ message: 'Reimbursement not ready for approval' });
+    // Procurement can only approve/reject when status is 'For Procurement Review'
+    if (req.user.role === 'procurement' && r.status !== 'For Procurement Review') {
+      return res.status(400).json({ message: 'Reimbursement is not pending procurement review' });
+    }
+    
+    // Admin/Super Admin can approve when status is 'For Super Admin Final Approval' or other pending states
+    if (['admin', 'super_admin'].includes(req.user.role)) {
+      if (r.status !== 'For Procurement Review' && r.status !== 'For Super Admin Final Approval' && r.status !== 'Pending') {
+        return res.status(400).json({ message: 'Reimbursement not ready for approval' });
+      }
     }
 
     conn = await db.getConnection();
@@ -296,7 +339,13 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
     let newStatus;
     if (status === 'approved') {
-      newStatus = 'Approved';
+      // If procurement approves, move to 'For Super Admin Final Approval'
+      // If super admin approves, move to 'For Purchase'
+      if (req.user.role === 'procurement') {
+        newStatus = 'For Super Admin Final Approval';
+      } else {
+        newStatus = 'For Purchase';
+      }
       await conn.query(
         'UPDATE reimbursements SET status = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?',
         [newStatus, req.user.id, req.params.id]
@@ -311,11 +360,26 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
     await conn.commit();
 
+    // Notify the requester
     if (status === 'approved') {
+      if (newStatus === 'For Super Admin Final Approval') {
+        // Notify super admins that procurement approved
+        const superAdmins = await getSuperAdmins();
+        for (const adminId of superAdmins) {
+          await createNotification(
+            adminId,
+            'Reimbursement Pending Final Approval',
+            `Reimbursement ${r.rmb_number} has been approved by procurement and requires your final approval`,
+            'PR Approved',
+            r.id,
+            'reimbursement'
+          );
+        }
+      }
       await createNotification(
         r.requested_by,
-        'Reimbursement Approved',
-        `Your Reimbursement ${r.rmb_number} has been approved`,
+        newStatus === 'For Super Admin Final Approval' ? 'Reimbursement Approved by Procurement' : 'Reimbursement Approved',
+        `Your Reimbursement ${r.rmb_number} has been ${newStatus === 'For Super Admin Final Approval' ? 'approved by procurement and is pending final approval' : 'approved'}`,
         'PR Approved',
         r.id,
         'reimbursement'
