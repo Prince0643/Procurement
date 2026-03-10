@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { navigationItems, filterNavigationByRole, navigationGroups } from '../../config/navigation';
 
-const Sidebar = ({ user, onLogout }) => {
+const Sidebar = ({ user, onLogout, pendingCount }) => {
   // Filter navigation items based on user role
   const filteredNavItems = filterNavigationByRole(navigationItems, user?.role);
   
@@ -42,6 +42,8 @@ const Sidebar = ({ user, onLogout }) => {
               <ul className="space-y-1">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
+                  const isApprovals = item.path === '/dashboard/approvals';
+                  const badgeCount = isApprovals ? pendingCount : item.badge;
                   return (
                     <li key={item.path}>
                       <NavLink
@@ -57,9 +59,9 @@ const Sidebar = ({ user, onLogout }) => {
                       >
                         <Icon className="w-5 h-5 flex-shrink-0" />
                         <span className="flex-1">{item.label}</span>
-                        {item.badge && (
+                        {badgeCount > 0 && (
                           <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
-                            {item.badge}
+                            {badgeCount}
                           </span>
                         )}
                       </NavLink>

@@ -58,5 +58,17 @@ export const reimbursementService = {
   delete: async (id) => {
     const response = await api.delete(`/reimbursements/${id}`);
     return response.data;
+  },
+
+  exportToExcel: async (id) => {
+    const response = await api.get(`/reimbursements/${id}/export`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  getPendingCount: async () => {
+    const response = await api.get('/reimbursements/pending-count');
+    return response.data;
   }
 };

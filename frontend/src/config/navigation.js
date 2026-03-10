@@ -94,6 +94,14 @@ export const navigationItems = [
     roles: ['admin', 'super_admin']
   },
   
+  // Order Numbers
+  {
+    path: '/dashboard/order-numbers',
+    label: 'Order Numbers',
+    icon: Receipt,
+    roles: ['admin', 'super_admin']
+  },
+  
   // Cash Requests
   {
     path: '/dashboard/cash-requests',
@@ -135,7 +143,7 @@ export const navigationGroups = [
   },
   {
     title: 'Orders & Vouchers',
-    items: ['/dashboard/purchase-orders', '/dashboard/payment-requests', '/dashboard/payment-orders', '/dashboard/disbursement-vouchers']
+    items: ['/dashboard/purchase-orders', '/dashboard/payment-requests', '/dashboard/payment-orders', '/dashboard/disbursement-vouchers', '/dashboard/order-numbers']
   },
   {
     title: 'Items',

@@ -20,6 +20,7 @@ import SRPreviewModal from './SRPreviewModal';
 import { serviceRequestService } from '../../services/serviceRequests';
 import { supplierService } from '../../services/suppliers';
 import { useAuth } from '../../contexts/AuthContext';
+import { socketService } from '../../services/socket';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
@@ -159,6 +160,29 @@ const ServiceRequestsManagement = () => {
     fetchServiceRequests();
     fetchSuppliers();
     fetchBranches();
+  }, []);
+
+  // Listen for real-time updates
+  useEffect(() => {
+    console.log('Setting up SR socket listeners');
+    
+    const handleSRUpdate = (data) => {
+      console.log('SR updated (real-time):', data);
+      fetchServiceRequests();
+    };
+
+    const handleSRStatusChange = (data) => {
+      console.log('SR status changed (real-time):', data);
+      fetchServiceRequests();
+    };
+
+    socketService.on('sr_updated', handleSRUpdate);
+    socketService.on('sr_status_changed', handleSRStatusChange);
+    
+    return () => {
+      socketService.off('sr_updated', handleSRUpdate);
+      socketService.off('sr_status_changed', handleSRStatusChange);
+    };
   }, []);
 
   const fetchBranches = async () => {

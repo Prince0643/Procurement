@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import ExcelJS from 'exceljs';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import reimbursementUpload from '../middleware/reimbursementUpload.js';
@@ -11,6 +12,79 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+
+// Get pending approvals count for sidebar badge - MUST be before /:id routes
+router.get('/pending-count', authenticate, async (req, res) => {
+  try {
+    // Get counts from all relevant tables
+    const [poCount] = await db.query(`
+      SELECT COUNT(*) as count FROM purchase_orders 
+      WHERE status IN ('Pending Approval', 'Draft')
+    `);
+    
+    const [prCount] = await db.query(`
+      SELECT COUNT(*) as count FROM purchase_requests 
+      WHERE status IN ('Pending', 'For Approval', 'For Super Admin Final Approval')
+    `);
+    
+    const [paymentCount] = await db.query(`
+      SELECT COUNT(*) as count FROM payment_requests 
+      WHERE status IN ('Pending', 'For Approval')
+    `);
+    
+    const [dvCount] = await db.query(`
+      SELECT COUNT(*) as count FROM disbursement_vouchers 
+      WHERE status IN ('Pending', 'Draft')
+    `);
+    
+    const [srCount] = await db.query(`
+      SELECT COUNT(*) as count FROM service_requests 
+      WHERE status = 'For Super Admin Final Approval'
+    `);
+    
+    const [crCount] = await db.query(`
+      SELECT COUNT(*) as count FROM cash_requests 
+      WHERE status = 'For Super Admin Final Approval'
+    `);
+    
+    const [paymentOrderCount] = await db.query(`
+      SELECT COUNT(*) as count FROM payment_orders 
+      WHERE status IN ('Pending', 'Draft')
+    `);
+    
+    const [rmbCount] = await db.query(`
+      SELECT COUNT(*) as count FROM reimbursements 
+      WHERE status IN ('For Procurement Review', 'For Super Admin Final Approval')
+    `);
+    
+    const totalCount = 
+      poCount[0].count + 
+      prCount[0].count + 
+      paymentCount[0].count + 
+      dvCount[0].count + 
+      srCount[0].count + 
+      crCount[0].count + 
+      paymentOrderCount[0].count + 
+      rmbCount[0].count;
+    
+    res.json({ 
+      count: totalCount,
+      breakdown: {
+        purchaseOrders: poCount[0].count,
+        purchaseRequests: prCount[0].count,
+        paymentRequests: paymentCount[0].count,
+        disbursementVouchers: dvCount[0].count,
+        serviceRequests: srCount[0].count,
+        cashRequests: crCount[0].count,
+        paymentOrders: paymentOrderCount[0].count,
+        reimbursements: rmbCount[0].count
+      }
+    });
+  } catch (error) {
+    console.error('Get pending count error:', error);
+    res.status(500).json({ message: 'Failed to get pending count' });
+  }
+});
 
 // Generate RMB number (RMB-Initials-YYYY-MM-XXX format)
 const generateRMBNumber = async (user) => {
@@ -192,6 +266,79 @@ router.post('/', authenticate, async (req, res) => {
     res.status(500).json({ message: 'Failed to create reimbursement: ' + error.message });
   } finally {
     if (conn) conn.release();
+  }
+});
+
+// Get pending approvals count for sidebar badge - MUST be before /:id routes
+router.get('/pending-count', authenticate, async (req, res) => {
+  try {
+    // Get counts from all relevant tables
+    const [poCount] = await db.query(`
+      SELECT COUNT(*) as count FROM purchase_orders 
+      WHERE status IN ('Pending Approval', 'Draft')
+    `);
+    
+    const [prCount] = await db.query(`
+      SELECT COUNT(*) as count FROM purchase_requests 
+      WHERE status IN ('Pending', 'For Approval', 'For Super Admin Final Approval')
+    `);
+    
+    const [paymentCount] = await db.query(`
+      SELECT COUNT(*) as count FROM payment_requests 
+      WHERE status IN ('Pending', 'For Approval')
+    `);
+    
+    const [dvCount] = await db.query(`
+      SELECT COUNT(*) as count FROM disbursement_vouchers 
+      WHERE status IN ('Pending', 'Draft')
+    `);
+    
+    const [srCount] = await db.query(`
+      SELECT COUNT(*) as count FROM service_requests 
+      WHERE status = 'For Super Admin Final Approval'
+    `);
+    
+    const [crCount] = await db.query(`
+      SELECT COUNT(*) as count FROM cash_requests 
+      WHERE status = 'For Super Admin Final Approval'
+    `);
+    
+    const [paymentOrderCount] = await db.query(`
+      SELECT COUNT(*) as count FROM payment_orders 
+      WHERE status IN ('Pending', 'Draft')
+    `);
+    
+    const [rmbCount] = await db.query(`
+      SELECT COUNT(*) as count FROM reimbursements 
+      WHERE status IN ('For Procurement Review', 'For Super Admin Final Approval')
+    `);
+    
+    const totalCount = 
+      poCount[0].count + 
+      prCount[0].count + 
+      paymentCount[0].count + 
+      dvCount[0].count + 
+      srCount[0].count + 
+      crCount[0].count + 
+      paymentOrderCount[0].count + 
+      rmbCount[0].count;
+    
+    res.json({ 
+      count: totalCount,
+      breakdown: {
+        purchaseOrders: poCount[0].count,
+        purchaseRequests: prCount[0].count,
+        paymentRequests: paymentCount[0].count,
+        disbursementVouchers: dvCount[0].count,
+        serviceRequests: srCount[0].count,
+        cashRequests: crCount[0].count,
+        paymentOrders: paymentOrderCount[0].count,
+        reimbursements: rmbCount[0].count
+      }
+    });
+  } catch (error) {
+    console.error('Get pending count error:', error);
+    res.status(500).json({ message: 'Failed to get pending count' });
   }
 });
 
@@ -557,6 +704,135 @@ router.delete('/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Delete reimbursement error:', error);
     res.status(500).json({ message: 'Failed to delete reimbursement: ' + error.message });
+  }
+});
+
+// Delete reimbursement (Draft only)
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Reimbursement not found' });
+    }
+
+    const r = rows[0];
+
+    if (r.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can delete this reimbursement' });
+    }
+
+    if (r.status !== 'Draft') {
+      return res.status(400).json({ message: 'Only draft reimbursements can be deleted' });
+    }
+
+    await db.query('DELETE FROM reimbursements WHERE id = ?', [req.params.id]);
+
+    res.json({ message: 'Reimbursement deleted successfully' });
+  } catch (error) {
+    console.error('Delete reimbursement error:', error);
+    res.status(500).json({ message: 'Failed to delete reimbursement: ' + error.message });
+  }
+});
+
+router.get('/:id/export', authenticate, async (req, res) => {
+  try {
+    // Get reimbursement details
+    const [reimbursements] = await db.query(`
+      SELECT r.*, 
+             e.first_name as requester_first_name, 
+             e.last_name as requester_last_name
+      FROM reimbursements r
+      JOIN employees e ON r.requested_by = e.id
+      WHERE r.id = ?
+    `, [req.params.id]);
+    
+    if (reimbursements.length === 0) {
+      return res.status(404).json({ message: 'Reimbursement not found' });
+    }
+    
+    const rmb = reimbursements[0];
+    
+    console.log('Exporting reimbursement:', rmb.id, 'purpose:', rmb.purpose, 'amount:', rmb.amount);
+    
+    // Load template workbook
+    const templatePath = path.join(__dirname, '..', '..', 'Reimbursement.xlsx');
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.readFile(templatePath);
+    
+    const worksheet = workbook.getWorksheet(1);
+    
+    // Format date helper
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    };
+    
+    // Fill payee (B5)
+    worksheet.getCell('B5').value = rmb.payee || '';
+    
+    // Fill address (B7)
+    worksheet.getCell('B7').value = rmb.project_address || '';
+    
+    // Fill project (B8)
+    worksheet.getCell('B8').value = rmb.project || '';
+    
+    // Fill RMB number (G5)
+    worksheet.getCell('G5').value = rmb.rmb_number || '';
+    
+    // Fill date (G6)
+    worksheet.getCell('G6').value = formatDate(rmb.created_at);
+    
+    // Fill order number (G8)
+    worksheet.getCell('G8').value = rmb.order_number || '';
+    
+    // Fill place of delivery (B9)
+    worksheet.getCell('B9').value = rmb.project || '';
+    
+    // Fill delivery term (F9)
+    worksheet.getCell('F9').value = '';
+    
+    // Fill date of delivery (B10)
+    worksheet.getCell('B10').value = formatDate(rmb.date_needed);
+    
+    // Fill payment term (F10)
+    worksheet.getCell('F10').value = '';
+    
+    // Clear row 12 first to remove any template values
+    ['A12', 'B12', 'C12', 'D12', 'E12', 'F12', 'G12'].forEach(cell => {
+      worksheet.getCell(cell).value = null;
+    });
+    
+    // Fill row 12 data
+    worksheet.getCell('A12').value = 1;  // QTY
+    worksheet.getCell('B12').value = 'lot';  // UNIT
+    worksheet.getCell('C12').value = rmb.purpose || '';  // DESCRIPTION
+    worksheet.getCell('F12').value = parseFloat(rmb.amount) || 0;  // UNIT COST
+    worksheet.getCell('G12').value = parseFloat(rmb.amount) || 0;  // AMOUNT
+    
+    console.log('Set C12 to:', rmb.purpose, 'F12 to:', rmb.amount, 'G12 to:', rmb.amount);
+    
+    // Fill grand total (G27)
+    worksheet.getCell('G27').value = parseFloat(rmb.amount) || 0;
+    
+    // Fill prepared by (B31)
+    const requesterName = `${rmb.requester_first_name || ''} ${rmb.requester_last_name || ''}`.trim();
+    worksheet.getCell('B31').value = requesterName || '';
+    
+    // Generate filename
+    const filename = `RMB-${rmb.rmb_number}-${Date.now()}.xlsx`;
+    
+    // Set response headers
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    
+    // Write to response
+    await workbook.xlsx.write(res);
+    res.end();
+    
+  } catch (error) {
+    console.error('Export reimbursement error:', error);
+    res.status(500).json({ message: 'Failed to export reimbursement: ' + error.message });
   }
 });
 

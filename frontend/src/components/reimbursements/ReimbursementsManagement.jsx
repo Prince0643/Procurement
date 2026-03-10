@@ -10,7 +10,8 @@ import {
   XCircle,
   Upload,
   Eye,
-  X
+  X,
+  Download
 } from 'lucide-react';
 import { reimbursementService } from '../../services/reimbursements';
 import { useAuth } from '../../contexts/AuthContext';
@@ -255,6 +256,22 @@ const ReimbursementsManagement = () => {
     }
   };
 
+  const handleExport = async (id, rmbNumber) => {
+    try {
+      const blob = await reimbursementService.exportToExcel(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `RMB-${rmbNumber}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      alert('Failed to export reimbursement: ' + err.message);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -387,19 +404,29 @@ const ReimbursementsManagement = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-medium text-gray-900">Liquidation Attachments</p>
-                      <label className="inline-flex items-center cursor-pointer">
-                        <input
-                          type="file"
-                          multiple
-                          className="hidden"
-                          onChange={(e) => handleUpload(r.id, Array.from(e.target.files || []))}
-                          disabled={uploadingForId === r.id}
-                        />
-                        <span className="inline-flex items-center text-sm text-gray-700 hover:text-gray-900">
-                          <Upload className="w-4 h-4 mr-1" />
-                          {uploadingForId === r.id ? 'Uploading...' : 'Upload'}
-                        </span>
-                      </label>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleExport(r.id, r.rmb_number)}
+                          title="Export to Excel"
+                        >
+                          <Download className="w-4 h-4 text-green-600" />
+                        </Button>
+                        <label className="inline-flex items-center cursor-pointer">
+                          <input
+                            type="file"
+                            multiple
+                            className="hidden"
+                            onChange={(e) => handleUpload(r.id, Array.from(e.target.files || []))}
+                            disabled={uploadingForId === r.id}
+                          />
+                          <span className="inline-flex items-center text-sm text-gray-700 hover:text-gray-900">
+                            <Upload className="w-4 h-4 mr-1" />
+                            {uploadingForId === r.id ? 'Uploading...' : 'Upload'}
+                          </span>
+                        </label>
+                      </div>
                     </div>
 
                     {Array.isArray(r.attachments) && r.attachments.length > 0 ? (

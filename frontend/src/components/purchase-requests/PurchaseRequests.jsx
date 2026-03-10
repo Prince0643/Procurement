@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { supplierService } from '../../services/suppliers'
+import { socketService } from '../../services/socket'
 import PRPreviewModal from './PRPreviewModal'
 import { ChevronUp, ChevronDown, Plus, FileSpreadsheet, Edit, Trash2, X, Eye, CheckCircle, XCircle, Pause } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -170,13 +171,41 @@ const PurchaseRequests = () => {
     fetchPurchaseRequests()
   }, [])
 
+  // Listen for real-time updates
+  useEffect(() => {
+    console.log('Setting up PR status change listener');
+    
+    const handleStatusChange = (data) => {
+      console.log('PR status changed (real-time):', data)
+      fetchPurchaseRequests()
+    }
+
+    socketService.on('pr_status_changed', handleStatusChange)
+    
+    // Also listen to general pr_updated event
+    const handlePRUpdate = (data) => {
+      console.log('PR updated (real-time):', data)
+      fetchPurchaseRequests()
+    }
+    socketService.on('pr_updated', handlePRUpdate)
+
+    return () => {
+      socketService.off('pr_status_changed', handleStatusChange)
+      socketService.off('pr_updated', handlePRUpdate)
+    }
+  }, [])
+
   const fetchPurchaseRequests = async () => {
     try {
+      console.log('Fetching purchase requests...');
       setLoading(true)
       const view = user?.role === 'admin' || user?.role === 'super_admin' ? 'all' : null
+      console.log('Fetching with view:', view, 'user role:', user?.role);
       const data = await purchaseRequestService.getAll(view)
+      console.log('Fetched data:', data);
       setPurchaseRequests(data)
     } catch (err) {
+      console.error('Failed to fetch:', err);
       setError('Failed to fetch purchase requests')
     } finally {
       setLoading(false)

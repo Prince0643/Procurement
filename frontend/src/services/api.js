@@ -2,9 +2,8 @@ import axios from 'axios';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Simple in-memory cache with TTL
 const cache = new Map();
-const CACHE_TTL = 30000; // 30 seconds - prevents rate limiting issues
+const CACHE_TTL = 30000;
 
 const getCacheKey = (config) => {
   return `${config.method}:${config.url}:${JSON.stringify(config.params || {})}`;
@@ -30,7 +29,6 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add auth token and check cache for GET requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -38,8 +36,8 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     
-    // Check cache for GET requests
-    if (config.method === 'get') {
+    // Skip cache if explicitly disabled
+    if (config.method === 'get' && config.cache !== false) {
       const cacheKey = getCacheKey(config);
       const cached = getCachedResponse(cacheKey);
       if (cached) {
@@ -60,11 +58,10 @@ api.interceptors.request.use(
   }
 );
 
-// Response interceptor to handle errors and cache GET responses
 api.interceptors.response.use(
   (response) => {
-    // Cache GET responses
-    if (response.config.method === 'get') {
+    // Skip cache if explicitly disabled
+    if (response.config.method === 'get' && response.config.cache !== false) {
       const cacheKey = getCacheKey(response.config);
       setCachedResponse(cacheKey, response.data);
     }
@@ -76,7 +73,6 @@ api.interceptors.response.use(
       const isAuthRequest = requestUrl.includes('/auth/login');
 
       if (!isAuthRequest) {
-        // Token expired or invalid
         localStorage.removeItem('token');
         localStorage.removeItem('user');
         window.location.href = '/login';
@@ -85,5 +81,9 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const clearApiCache = () => {
+  cache.clear();
+};
 
 export default api;

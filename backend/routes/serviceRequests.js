@@ -304,6 +304,14 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       );
     }
 
+    // Emit real-time SR update to procurement officers
+    req.io.to('role_procurement').emit('sr_updated', {
+      id: sr.id,
+      sr_number: sr.sr_number,
+      status: 'For Procurement Review',
+      type: 'new_sr'
+    });
+
     res.json({ message: 'Service request submitted successfully', status: 'For Procurement Review' });
   } catch (error) {
     if (conn) {
@@ -396,6 +404,15 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       );
     }
 
+    // Emit real-time SR status update
+    req.io.emit('sr_status_changed', {
+      id: req.params.id,
+      sr_number: srData.sr_number,
+      status: newStatus,
+      type: 'status_update',
+      updated_by: 'procurement'
+    });
+
     res.json({ message: `Service request ${status} by Procurement successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
@@ -478,6 +495,15 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
         'service_request'
       );
     }
+
+    // Emit real-time SR status update
+    req.io.emit('sr_status_changed', {
+      id: req.params.id,
+      sr_number: sr.sr_number,
+      status: newStatus,
+      type: 'status_update',
+      updated_by: 'super_admin'
+    });
 
     res.json({ message: `Service request ${status} successfully`, status: newStatus });
   } catch (error) {

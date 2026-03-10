@@ -7,6 +7,7 @@ import { disbursementVoucherService } from '../../services/disbursementVouchers'
 import { cashRequestService } from '../../services/cashRequests';
 import { paymentOrderService } from '../../services/paymentOrders';
 import { reimbursementService } from '../../services/reimbursements';
+import { socketService } from '../../services/socket';
 import PRPreviewModal from '../purchase-requests/PRPreviewModal';
 import POPreviewModal from '../purchase-orders/POPreviewModal';
 import PaymentRequestPreviewModal from '../payment-requests/PaymentRequestPreviewModal';
@@ -164,9 +165,33 @@ const Approvals = () => {
     fetchData();
   }, []);
 
+  // Listen for real-time updates
+  useEffect(() => {
+    console.log('Approvals: Setting up socket listeners');
+    
+    const handlePRUpdate = (data) => {
+      console.log('Approvals: PR updated (real-time):', data);
+      fetchData();
+    };
+
+    console.log('Approvals: Registering listeners for pr_status_changed and pr_updated');
+    socketService.on('pr_status_changed', handlePRUpdate);
+    socketService.on('pr_updated', handlePRUpdate);
+    
+    console.log('Approvals: Socket connected?', socketService.isConnected?.() || 'unknown');
+
+    return () => {
+      console.log('Approvals: Cleaning up socket listeners');
+      socketService.off('pr_status_changed', handlePRUpdate);
+      socketService.off('pr_updated', handlePRUpdate);
+    };
+  }, []);
+
   const fetchData = async () => {
+    console.log('Approvals: fetchData called');
     try {
       setLoading(true);
+      console.log('Approvals: Calling APIs...');
       const [pos, prs, paymentReqs, srs, crs, dvs, paymentOrdersData, reimbursementsData] = await Promise.all([
         purchaseOrderService.getAll(),
         purchaseRequestService.getAll('all'),
@@ -177,6 +202,7 @@ const Approvals = () => {
         paymentOrderService.getAll(),
         reimbursementService.getAll()
       ]);
+      console.log('Approvals: APIs returned, setting state...');
       setPurchaseOrders(pos);
       setPurchaseRequests(prs);
       setPaymentRequests(paymentReqs);
@@ -185,13 +211,9 @@ const Approvals = () => {
       setDisbursementVouchers(dvs);
       setPaymentOrders(paymentOrdersData);
       setReimbursements(reimbursementsData);
-      
-      // Debug logging
-      console.log('Fetched Cash Requests:', crs);
-      console.log('Pending Cash Requests (For Super Admin Final Approval):', crs.filter(cr => cr.status === 'For Super Admin Final Approval'));
-      console.log('All CR statuses:', crs.map(cr => ({ id: cr.id, status: cr.status, cr_number: cr.cr_number })));
+      console.log('Approvals: State updated, PR count:', prs.length);
     } catch (err) {
-      console.error('Failed to fetch data', err);
+      console.error('Approvals: Failed to fetch data', err);
     } finally {
       setLoading(false);
     }
@@ -336,12 +358,18 @@ const Approvals = () => {
   };
 
   const handleApprovePR = async (id) => {
+    // Optimistic UI update - immediately move to approved
+    setPurchaseRequests(prev => prev.map(pr => 
+      pr.id === id ? { ...pr, status: 'For Purchase' } : pr
+    ));
+    
     try {
       setProcessingId(id);
       await purchaseRequestService.approve(id, 'For Purchase');
-      await fetchData();
+      await fetchData(); // Refresh to get accurate data
     } catch (err) {
       alert('Failed to approve purchase request: ' + err.message);
+      await fetchData(); // Revert on error
     } finally {
       setProcessingId(null);
     }
@@ -370,14 +398,18 @@ const Approvals = () => {
   const submitRejection = async () => {
     if (!rejectPR) return;
     
+    // Optimistic UI update - immediately remove from list
+    setPurchaseRequests(prev => prev.filter(pr => pr.id !== rejectPR.id));
+    setShowRejectModal(false);
+    setRejectPR(null);
+    
     try {
       setProcessingId(rejectPR.id);
       await purchaseRequestService.approve(rejectPR.id, 'rejected', rejectRemarks);
-      setShowRejectModal(false);
-      setRejectPR(null);
-      await fetchData();
+      await fetchData(); // Refresh to get accurate data
     } catch (err) {
       alert('Failed to reject purchase request: ' + err.message);
+      await fetchData(); // Revert on error
     } finally {
       setProcessingId(null);
     }
@@ -467,16 +499,18 @@ const Approvals = () => {
   };
 
   const handleHoldPR = async (id) => {
-    console.log('Hold button clicked for PR:', id);
+    // Optimistic UI update - immediately move to on hold
+    setPurchaseRequests(prev => prev.map(pr => 
+      pr.id === id ? { ...pr, status: 'On Hold' } : pr
+    ));
+    
     try {
       setProcessingId(id);
-      console.log('Calling purchaseRequestService.updateStatus...');
       await purchaseRequestService.updateStatus(id, 'On Hold');
-      console.log('Hold successful, fetching data...');
-      await fetchData();
+      await fetchData(); // Refresh to get accurate data
     } catch (err) {
-      console.error('Hold error:', err);
       alert('Failed to hold purchase request: ' + err.message);
+      await fetchData(); // Revert on error
     } finally {
       setProcessingId(null);
     }

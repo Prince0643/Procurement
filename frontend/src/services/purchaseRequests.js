@@ -4,9 +4,8 @@ import api from './api';
 const inFlightRequests = new Map();
 
 const dedupeRequest = async (key, requestFn) => {
-  if (inFlightRequests.has(key)) {
-    return inFlightRequests.get(key);
-  }
+  // Clear any existing cache for this key to ensure fresh data
+  inFlightRequests.delete(key);
   
   const promise = requestFn().finally(() => {
     inFlightRequests.delete(key);

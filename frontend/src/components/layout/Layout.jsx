@@ -1,17 +1,48 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import { useAuth } from '../../contexts/AuthContext';
+import { reimbursementService } from '../../services/reimbursements';
 
 const Layout = ({ user, notifications, onLogout, children }) => {
+  const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    const fetchPendingCount = async () => {
+      console.log('Checking user for pending count fetch:', user);
+      if (user?.role === 'super_admin') {
+        try {
+          console.log('Fetching pending count...');
+          const data = await reimbursementService.getPendingCount();
+          console.log('Pending count received:', data);
+          setPendingCount(data.count);
+        } catch (err) {
+          console.error('Failed to fetch pending count:', err);
+        }
+      } else {
+        console.log('Not super admin, skipping pending count fetch. Role:', user?.role);
+      }
+    };
+
+    fetchPendingCount();
+    // Refresh every 30 seconds
+    const interval = setInterval(fetchPendingCount, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
 
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
+
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <div className="flex h-screen bg-gray-50">
       {/* Sidebar - Desktop (always visible) */}
       <div className="hidden lg:block flex-shrink-0">
-        <Sidebar user={user} onLogout={onLogout} />
+        <Sidebar user={user} onLogout={handleLogout} pendingCount={pendingCount} />
       </div>
 
       {/* Sidebar - Mobile (overlay) */}
@@ -24,7 +55,7 @@ const Layout = ({ user, notifications, onLogout, children }) => {
           />
           {/* Sidebar */}
           <div className="absolute left-0 top-0 h-full">
-            <Sidebar user={user} onLogout={onLogout} />
+            <Sidebar user={user} onLogout={onLogout} pendingCount={pendingCount} />
           </div>
         </div>
       )}

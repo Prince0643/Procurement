@@ -4,7 +4,7 @@ import { purchaseOrderService } from '../services/purchaseOrders'
 import { serviceRequestService } from '../services/serviceRequests'
 import { cashRequestService } from '../services/cashRequests'
 import pricingHistoryService from '../services/pricingHistory'
-import { FileText, Clock, CheckCircle, ShoppingCart, AlertCircle, CreditCard, TrendingUp } from 'lucide-react'
+import { FileText, Clock, CheckCircle, ShoppingCart, AlertCircle, CreditCard, TrendingUp, Eye } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 // UI Components
@@ -46,6 +46,9 @@ const formatDate = (dateString) => {
 }
 
 const Dashboard = () => {
+  const [activeTab, setActiveTab] = useState('overview')
+  const [purchaseRequests, setPurchaseRequests] = useState([])
+  const [purchaseOrders, setPurchaseOrders] = useState([])
   const [stats, setStats] = useState({
     totalPRs: 0,
     pendingPRs: 0,
@@ -85,9 +88,13 @@ const Dashboard = () => {
         cashRequestService.getAll()
       ])
 
+      // Store full data for tabs
+      setPurchaseRequests(prs)
+      setPurchaseOrders(pos)
+
       // Calculate stats
       const pendingPRs = prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Approval').length
-      const approvedPRs = prs.filter(pr => pr.status === 'Approved' || pr.status === 'PO Created').length
+      const approvedPRs = prs.filter(pr => pr.status === 'Approved' || pr.status === 'PO Created' || pr.status === 'For Purchase').length
       const pendingSRs = srs.filter(sr => sr.status === 'For Procurement Review').length
       const pendingCRs = crs.filter(cr => cr.status === 'Pending' || cr.status === 'For Admin Approval').length
 
@@ -188,8 +195,57 @@ const Dashboard = () => {
         <p className="text-sm text-gray-500">Overview of procurement activities</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Tabs */}
+      <div className="border-b border-gray-200">
+        <nav className="flex gap-6">
+          <button
+            onClick={() => setActiveTab('overview')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'overview'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            onClick={() => setActiveTab('purchase-requests')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'purchase-requests'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>Purchase Requests</span>
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
+                {purchaseRequests.length}
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('purchase-orders')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'purchase-orders'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>Purchase Orders</span>
+              <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full text-xs">
+                {purchaseOrders.length}
+              </span>
+            </div>
+          </button>
+        </nav>
+      </div>
+
+      {/* Overview Tab */}
+      {activeTab === 'overview' && (
+        <>
+          {/* Stats Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard
           title="Total Purchase Requests"
           value={stats.totalPRs}
@@ -368,6 +424,103 @@ const Dashboard = () => {
           )}
         </div>
       </Card>
+      </>)}
+
+      {/* Purchase Requests Tab */}
+      {activeTab === 'purchase-requests' && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">All Purchase Requests</h3>
+            <span className="text-sm text-gray-500">{purchaseRequests.length} total</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchaseRequests.length > 0 ? (
+                  purchaseRequests.map((pr) => (
+                    <tr key={pr.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{pr.project || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{pr.purpose || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.total_amount)}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(pr.status)}`}>
+                          {pr.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{formatDate(pr.created_at)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-gray-500">
+                      No purchase requests found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Purchase Orders Tab */}
+      {activeTab === 'purchase-orders' && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">All Purchase Orders</h3>
+            <span className="text-sm text-gray-500">{purchaseOrders.length} total</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {purchaseOrders.length > 0 ? (
+                  purchaseOrders.map((po) => (
+                    <tr key={po.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{po.po_number}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(po.status)}`}>
+                          {po.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{formatDate(po.created_at)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-gray-500">
+                      No purchase orders found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

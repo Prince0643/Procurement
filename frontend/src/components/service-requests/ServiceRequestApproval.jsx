@@ -3,6 +3,7 @@ import { CheckCircle, XCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { serviceRequestService } from '../../services/serviceRequests';
 import { supplierService } from '../../services/suppliers';
 import { useAuth } from '../../contexts/AuthContext';
+import { socketService } from '../../services/socket';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
@@ -77,6 +78,29 @@ const ServiceRequestApproval = () => {
   useEffect(() => {
     fetchServiceRequestsForReview();
     fetchSuppliers();
+  }, []);
+
+  // Listen for real-time updates
+  useEffect(() => {
+    console.log('ServiceRequestApproval: Setting up socket listeners');
+    
+    const handleSRUpdate = (data) => {
+      console.log('ServiceRequestApproval: SR updated (real-time):', data);
+      fetchServiceRequestsForReview();
+    };
+
+    const handleSRStatusChange = (data) => {
+      console.log('ServiceRequestApproval: SR status changed (real-time):', data);
+      fetchServiceRequestsForReview();
+    };
+
+    socketService.on('sr_updated', handleSRUpdate);
+    socketService.on('sr_status_changed', handleSRStatusChange);
+    
+    return () => {
+      socketService.off('sr_updated', handleSRUpdate);
+      socketService.off('sr_status_changed', handleSRStatusChange);
+    };
   }, []);
 
   const fetchServiceRequestsForReview = async () => {

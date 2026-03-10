@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { itemService } from '../services/items';
 import { useAuth } from '../contexts/AuthContext';
 
-// Example: How to connect to backend API
 const ItemsExample = () => {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
