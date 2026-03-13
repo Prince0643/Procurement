@@ -4,7 +4,7 @@ import Header from './Header';
 import { useAuth } from '../../contexts/AuthContext';
 import { reimbursementService } from '../../services/reimbursements';
 
-const Layout = ({ user, notifications, onLogout, children }) => {
+const Layout = ({ user, notifications, setNotifications, onLogout, children }) => {
   const { logout } = useAuth();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
@@ -65,6 +65,7 @@ const Layout = ({ user, notifications, onLogout, children }) => {
         <Header 
           user={user} 
           notifications={notifications}
+          setNotifications={setNotifications}
           onToggleSidebar={toggleSidebar}
           isSidebarOpen={isSidebarOpen}
         />
