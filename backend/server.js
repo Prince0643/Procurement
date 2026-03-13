@@ -29,6 +29,7 @@ import disbursementVoucherRoutes from './routes/disbursementVouchers.js';
 import paymentRequestRoutes from './routes/paymentRequests.js';
 import paymentOrdersRoutes from './routes/paymentOrders.js';
 import pricingHistoryRoutes from './routes/pricingHistory.js';
+import orderNumberRoutes from './routes/orderNumbers.js';
 
 dotenv.config();
 
@@ -42,16 +43,42 @@ app.set('trust proxy', 1);
 // Initialize Socket.IO
 const io = initSocket(httpServer);
 
-// Middleware
+// Middleware - CORS with dynamic origin checking
 const corsOptions = {
-  origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    const allowedOrigins = ['https://procurement.xandree.com', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('CORS blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 };
 
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions));
+
+// Explicitly handle OPTIONS requests for all routes
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  const allowedOrigins = ['https://procurement.xandree.com', 'http://localhost:5173', 'http://127.0.0.1:5173'];
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.status(204).send();
+});
 
 // Security headers
 app.use(helmet({
@@ -140,6 +167,7 @@ app.use('/api/disbursement-vouchers', disbursementVoucherRoutes);
 app.use('/api/payment-requests', paymentRequestRoutes);
 app.use('/api/payment-orders', paymentOrdersRoutes);
 app.use('/api/pricing-history', pricingHistoryRoutes);
+app.use('/api/order-numbers', orderNumberRoutes);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 

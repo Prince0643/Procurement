@@ -7,11 +7,11 @@ import {
 import { 
   FileText, Search, ChevronDown, ChevronUp, Building2, 
   ShoppingCart, Wrench, Banknote, Receipt, ArrowLeft,
-  Calendar, MapPin, User, DollarSign, Filter, AlertCircle
+  Calendar, MapPin, User, DollarSign, Filter
 } from 'lucide-react';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = 'https://procurement-api.xandree.com/api';
 
 const COLORS = {
   'Purchase Requests': '#3B82F6', // blue-500
@@ -55,7 +55,6 @@ const OrderNumbers = () => {
   const [selectedProject, setSelectedProject] = useState('all');
   const [dashboardData, setDashboardData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedSections, setExpandedSections] = useState({
     purchaseRequests: true,
@@ -92,7 +91,6 @@ const OrderNumbers = () => {
   const fetchDashboardData = async (orderNumber, project) => {
     try {
       setLoading(true);
-      setError(null);
       const token = localStorage.getItem('token');
       const params = project && project !== 'all' ? `?project=${encodeURIComponent(project)}` : '';
       const response = await axios.get(`${API_BASE_URL}/order-numbers/dashboard/${orderNumber}${params}`, {
@@ -101,7 +99,6 @@ const OrderNumbers = () => {
       setDashboardData(response.data);
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
-      setError(error.response?.data?.message || error.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
     }
@@ -275,7 +272,6 @@ const OrderNumbers = () => {
     };
     const Icon = icons[type];
     const isExpanded = expandedSections[type];
-    const typeLabel = type.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
 
     return (
       <Card className="mb-4">
@@ -286,12 +282,14 @@ const OrderNumbers = () => {
           <div className="flex items-center gap-3">
             <div 
               className="p-2 rounded-lg"
-              style={{ backgroundColor: COLORS[typeLabel] }}
+              style={{ backgroundColor: COLORS[type.replace(/([A-Z])/g, ' $1').trim()] }}
             >
               <Icon className="w-5 h-5 text-white" />
             </div>
             <div className="text-left">
-              <h3 className="font-semibold text-gray-900">{typeLabel}</h3>
+              <h3 className="font-semibold text-gray-900">
+                {type.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim()}
+              </h3>
               <p className="text-sm text-gray-500">{data.length} item(s)</p>
             </div>
           </div>
@@ -476,17 +474,6 @@ const OrderNumbers = () => {
               />
             </div>
           </>
-        ) : error ? (
-          <Card className="p-8 text-center">
-            <div className="text-red-500 mb-4">
-              <AlertCircle className="w-12 h-12 mx-auto" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Error Loading Dashboard</h3>
-            <p className="text-gray-500 mb-4">{error}</p>
-            <Button variant="secondary" onClick={() => fetchDashboardData(selectedOrder.order_number, selectedProject)}>
-              Retry
-            </Button>
-          </Card>
         ) : null}
       </div>
     );
@@ -524,36 +511,35 @@ const OrderNumbers = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredOrders.map((order, index) => (
-            <div key={index} onClick={() => {
-              console.log('Card clicked:', order);
-              setSelectedOrder(order);
-            }} className="cursor-pointer">
-              <Card className="p-4 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="p-2 bg-yellow-100 rounded-lg">
-                    <FileText className="w-5 h-5 text-yellow-600" />
-                  </div>
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                    View Dashboard
-                  </span>
+            <Card 
+              key={index} 
+              className="p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setSelectedOrder(order)}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="p-2 bg-yellow-100 rounded-lg">
+                  <FileText className="w-5 h-5 text-yellow-600" />
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-1">{order.order_number}</h3>
-                <div className="space-y-1">
-                  {order.project && (
-                    <p className="text-sm text-gray-600 flex items-center gap-1">
-                      <Building2 className="w-3 h-3" />
-                      {order.project}
-                    </p>
-                  )}
-                  {order.project_address && (
-                    <p className="text-sm text-gray-500 flex items-center gap-1">
-                      <MapPin className="w-3 h-3" />
-                      {order.project_address}
-                    </p>
-                  )}
-                </div>
-              </Card>
-            </div>
+                <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                  View Dashboard
+                </span>
+              </div>
+              <h3 className="font-semibold text-gray-900 mb-1">{order.order_number}</h3>
+              <div className="space-y-1">
+                {order.project && (
+                  <p className="text-sm text-gray-600 flex items-center gap-1">
+                    <Building2 className="w-3 h-3" />
+                    {order.project}
+                  </p>
+                )}
+                {order.project_address && (
+                  <p className="text-sm text-gray-500 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {order.project_address}
+                  </p>
+                )}
+              </div>
+            </Card>
           ))}
         </div>
       )}
