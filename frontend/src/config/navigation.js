@@ -99,7 +99,7 @@ export const navigationItems = [
     path: '/dashboard/order-numbers',
     label: 'Order Numbers',
     icon: Receipt,
-    roles: ['admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
   
   // Cash Requests
