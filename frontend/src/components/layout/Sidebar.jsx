@@ -44,6 +44,32 @@ const Sidebar = ({ user, onLogout, pendingCount }) => {
                   const Icon = item.icon;
                   const isApprovals = item.path === '/dashboard/approvals';
                   const badgeCount = isApprovals ? pendingCount : item.badge;
+                  
+                  // Handle external URLs
+                  if (item.externalUrl) {
+                    return (
+                      <li key={item.path}>
+                        <a
+                          href={item.externalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="
+                            flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors
+                            text-gray-600 hover:bg-gray-50 hover:text-gray-900
+                          "
+                        >
+                          <Icon className="w-5 h-5 flex-shrink-0" />
+                          <span className="flex-1">{item.label}</span>
+                          {badgeCount > 0 && (
+                            <span className="px-2 py-0.5 text-xs bg-blue-100 text-blue-700 rounded-full">
+                              {badgeCount}
+                            </span>
+                          )}
+                        </a>
+                      </li>
+                    );
+                  }
+                  
                   return (
                     <li key={item.path}>
                       <NavLink

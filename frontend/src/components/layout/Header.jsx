@@ -29,7 +29,8 @@ const Header = ({ user, notifications = [], onToggleSidebar, isSidebarOpen, setN
   const handleMarkAsRead = async (id) => {
     try {
       await notificationService.markAsRead(id);
-      setNotifications(prev => prev.filter(n => n.id !== id));
+      // Use functional update to ensure we work with fresh state
+      setNotifications(currentNotifications => currentNotifications.filter(n => n.id !== id));
     } catch (err) {
       console.error('Failed to mark as read:', err);
     }

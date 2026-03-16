@@ -123,7 +123,7 @@ export const navigationItems = [
     path: '/dashboard/settings',
     label: 'Settings',
     icon: Settings,
-    roles: ['super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
   
   // Attendance
@@ -131,7 +131,8 @@ export const navigationItems = [
     path: '/dashboard/attendance',
     label: 'Attendance',
     icon: UserCheck,
-    roles: ['admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin'],
+    externalUrl: 'https://jajr.xandree.com/'
   }
 ];
 

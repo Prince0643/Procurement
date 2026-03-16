@@ -9,6 +9,7 @@ const ServiceRequestsManagement = lazy(() => import('../components/service-reque
 const ServiceRequestApproval = lazy(() => import('../components/service-requests/ServiceRequestApproval'));
 const CashRequestsManagement = lazy(() => import('../components/cash-requests/CashRequestsManagement'));
 const ReimbursementsManagement = lazy(() => import('../components/reimbursements/ReimbursementsManagement'));
+const Settings = lazy(() => import('../components/settings/Settings'));
 
 const PurchaseOrders = lazy(() => import('../components/purchase-orders/PurchaseOrders'));
 const PurchaseRequests = lazy(() => import('../components/purchase-requests/PurchaseRequests'));
@@ -80,8 +81,8 @@ const AppRoutes = () => {
         {/* Reimbursements */}
         <Route path="reimbursements" element={<ReimbursementsManagement />} />
         
-        {/* Settings - placeholder */}
-        <Route path="settings" element={<Placeholder title="Settings" />} />
+        {/* Settings */}
+        <Route path="settings" element={<Settings />} />
         
         {/* Attendance - placeholder */}
         <Route path="attendance" element={<Placeholder title="Attendance" />} />

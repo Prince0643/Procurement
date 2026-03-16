@@ -61,6 +61,7 @@ function App() {
     <Layout 
       user={user}
       notifications={notifications}
+      setNotifications={setNotifications}
       onLogout={handleLogout}
     >
       <AppRoutes />
