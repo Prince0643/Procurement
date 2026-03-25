@@ -84,6 +84,13 @@ const formatDate = (dateString) => {
   });
 };
 
+const InfoRow = ({ label, value }) => (
+  <div className="flex items-start justify-between gap-3">
+    <span className="text-xs text-gray-500 shrink-0">{label}</span>
+    <span className="text-xs text-gray-700 text-right break-words">{value}</span>
+  </div>
+);
+
 const PricingHistory = () => {
   const [records, setRecords] = useState([]);
   const [items, setItems] = useState([]);
@@ -286,20 +293,23 @@ const PricingHistory = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Pricing History</h2>
           <p className="text-sm text-gray-500">Track and analyze historical pricing for items</p>
         </div>
-        <Button onClick={openCreateModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Record
-        </Button>
+        <div className="flex justify-start sm:justify-end">
+          <Button onClick={openCreateModal} className="px-3 py-2">
+            <Plus className="w-4 h-4 mr-2" />
+            <span className="hidden sm:inline">Add Record</span>
+            <span className="sm:hidden">Add</span>
+          </Button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
       {stats && (
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           <Card className="p-4">
             <div className="flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
@@ -360,8 +370,8 @@ const PricingHistory = () => {
 
       {/* Search and Filters */}
       <Card className="p-4">
-        <div className="flex gap-4 items-end">
-          <div className="flex-1">
+        <div className="flex flex-col gap-3 sm:flex-row sm:gap-4 sm:items-end">
+          <div className="flex-1 min-w-0">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -373,15 +383,17 @@ const PricingHistory = () => {
               />
             </div>
           </div>
-          <Button variant="secondary" onClick={() => setShowFilters(!showFilters)}>
-            <Filter className="w-4 h-4 mr-2" />
-            Filters
-          </Button>
-          <Button onClick={handleSearch}>Search</Button>
+          <div className="flex gap-2 sm:gap-3">
+            <Button variant="secondary" onClick={() => setShowFilters(!showFilters)} className="flex-1 sm:flex-none">
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+            </Button>
+            <Button onClick={handleSearch} className="flex-1 sm:flex-none">Search</Button>
+          </div>
         </div>
         
         {showFilters && (
-          <div className="grid grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-200">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 pt-4 border-t border-gray-200">
             <Select
               label="Item"
               value={filters.item_id}
@@ -414,7 +426,86 @@ const PricingHistory = () => {
 
       {/* Records Table */}
       <Card>
-        <div className="overflow-x-auto">
+
+        {/* Mobile card list */}
+        <div className="divide-y divide-gray-200 sm:hidden">
+          {loading ? (
+            <div className="py-8 text-center text-gray-500">Loading...</div>
+          ) : records.length === 0 ? (
+            <div className="py-8 text-center text-gray-500">No pricing history records found</div>
+          ) : (
+            records.map(record => {
+              const isExpanded = expandedId === record.id
+              return (
+                <div key={record.id} className="p-4" onClick={() => setExpandedId(isExpanded ? null : record.id)}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 break-words">
+                        {record.item_name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5 break-words">
+                        {record.item_code || '-'}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="text-sm font-semibold text-gray-900">{formatCurrency(record.unit_price)}</p>
+                      <p className="text-xs text-gray-500">{formatDate(record.date_recorded)}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-1">
+                    <InfoRow label="Supplier" value={record.supplier_name || '-'} />
+                    <InfoRow label="Qty" value={record.quantity || '-'} />
+                    <InfoRow label="Total" value={formatCurrency(record.total_amount)} />
+                    <InfoRow
+                      label="Ref"
+                      value={record.po_number ? `PO: ${record.po_number}` : record.pr_number ? `PR: ${record.pr_number}` : '-'}
+                    />
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); openEditModal(record); }}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(record.id); }}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    </div>
+                    <button
+                      className="text-gray-500"
+                      onClick={(e) => { e.stopPropagation(); setExpandedId(isExpanded ? null : record.id); }}
+                      aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                    >
+                      {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                      <div className="space-y-2">
+                        <InfoRow label="Notes" value={record.notes || '-'} />
+                        <InfoRow label="Created By" value={`${record.created_by_first_name || ''} ${record.created_by_last_name || ''}`.trim() || '-'} />
+                        <InfoRow label="Created At" value={formatDate(record.created_at)} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
@@ -444,7 +535,7 @@ const PricingHistory = () => {
               ) : (
                 records.map(record => (
                   <React.Fragment key={record.id}>
-                    <tr 
+                    <tr
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                       onClick={() => setExpandedId(expandedId === record.id ? null : record.id)}
                     >

@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Lock, User, AlertCircle } from 'lucide-react';
+import { Lock, User, AlertCircle, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const Login = () => {
   const [employeeNo, setEmployeeNo] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
@@ -24,7 +26,25 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
+      {/* Gradient background */}
+      <div 
+        className="absolute inset-0 -z-20"
+        style={{
+          background: 'linear-gradient(135deg, #F9F9F9 0%, #FAEBC4 100%)'
+        }}
+      />
+      {/* Grid overlay */}
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `
+            linear-gradient(to right, rgba(161, 98, 7, 0.15) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(161, 98, 7, 0.15) 1px, transparent 1px)
+          `,
+          backgroundSize: '50px 50px'
+        }}
+      />
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow-lg">
         <div className="text-center">
           <div className="mx-auto h-12 w-12 bg-yellow-100 rounded-full flex items-center justify-center">
@@ -79,13 +99,25 @@ const Login = () => {
                 <input
                   id="password"
                   name="password"
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
+                  className="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-yellow-500 focus:border-yellow-500 sm:text-sm"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center focus:outline-none"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  ) : (
+                    <Eye className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+                  )}
+                </button>
               </div>
             </div>
           </div>
@@ -98,6 +130,16 @@ const Login = () => {
             >
               {loading ? 'Signing in...' : 'Sign in'}
             </button>
+          </div>
+
+          <div className="text-center">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-yellow-600 transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to home page
+            </Link>
           </div>
         </form>
       </div>

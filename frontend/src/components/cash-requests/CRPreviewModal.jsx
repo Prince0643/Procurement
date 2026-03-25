@@ -69,7 +69,7 @@ const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled 
   );
 };
 
-const CRPreviewModal = ({ cr, loading, onClose, onApprove, onHold, processingId }) => {
+const CRPreviewModal = ({ cr, loading, onClose, onApprove, onHold, processingId, readOnly }) => {
   if (!cr) return null;
 
   const handleClose = (e) => {
@@ -273,7 +273,7 @@ const CRPreviewModal = ({ cr, loading, onClose, onApprove, onHold, processingId 
           >
             Close
           </Button>
-          {(cr.status === 'For Super Admin Final Approval' || cr.status === 'On Hold' || cr.status === 'Draft') && (
+          {(cr.status === 'For Super Admin Final Approval' || cr.status === 'On Hold' || cr.status === 'Draft') && !readOnly && (
             <>
               {onHold && (
                 <Button 

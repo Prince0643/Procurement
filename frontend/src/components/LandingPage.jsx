@@ -14,7 +14,7 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-yellow-50 to-orange-100">
       {/* Navigation */}
-      <nav className="bg-white shadow-sm">
+      <nav className="bg-white shadow-sm relative z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
@@ -40,23 +40,37 @@ const LandingPage = () => {
       </nav>
 
       {/* Hero Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-16">
-        <div className="text-center">
-          <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl md:text-6xl">
-            Streamline Your
-            <span className="text-yellow-600"> Procurement</span> Process
-          </h1>
-          <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-            Complete procurement management system - from purchase requests to disbursement vouchers, all in one platform.
-          </p>
-          <div className="mt-10 flex justify-center">
-            <Link 
-              to="/login" 
-              className="bg-yellow-600 text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-yellow-700 inline-flex items-center"
-            >
-              Start Using ProcureFlow
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Link>
+      <div 
+        className="relative overflow-hidden flex items-center"
+        style={{
+          minHeight: '93vh',
+          backgroundColor: '#F9F9F9',
+          backgroundImage: `
+            linear-gradient(to right, rgba(161, 98, 7, 0.15) 1px, transparent 1px),
+            linear-gradient(to bottom, rgba(161, 98, 7, 0.15) 1px, transparent 1px),
+            linear-gradient(135deg, #F9F9F9 0%, #FAEBC4 100%)
+          `,
+          backgroundSize: '50px 50px, 50px 50px, 100% 100%'
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10">
+          <div className="text-center">
+            <h1 className="text-4xl font-bold text-gray-900 sm:text-5xl md:text-6xl">
+              Streamline Your
+              <span className="text-yellow-600"> Procurement</span> Process
+            </h1>
+            <p className="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
+              Complete procurement management system - from purchase requests to disbursement vouchers, all in one platform.
+            </p>
+            <div className="mt-10 flex justify-center">
+              <Link 
+                to="/login" 
+                className="bg-yellow-600 text-white px-8 py-3 rounded-md text-lg font-medium hover:bg-yellow-700 inline-flex items-center"
+              >
+                Start Using ProcureFlow
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </div>
           </div>
         </div>
       </div>

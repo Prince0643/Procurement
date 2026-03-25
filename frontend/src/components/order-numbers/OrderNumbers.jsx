@@ -7,9 +7,13 @@ import {
 import { 
   FileText, Search, ChevronDown, ChevronUp, Building2, 
   ShoppingCart, Wrench, Banknote, Receipt, ArrowLeft,
-  Calendar, MapPin, User, DollarSign, Filter, AlertCircle
+  Calendar, MapPin, User, DollarSign, Filter, AlertCircle,
+  X, Eye, CheckCircle, FileSpreadsheet
 } from 'lucide-react';
 import axios from 'axios';
+import PRPreviewModal from '../purchase-requests/PRPreviewModal';
+import SRPreviewModal from '../service-requests/SRPreviewModal';
+import CRPreviewModal from '../cash-requests/CRPreviewModal';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -17,7 +21,10 @@ const COLORS = {
   'Purchase Requests': '#3B82F6', // blue-500
   'Service Requests': '#10B981', // emerald-500
   'Cash Requests': '#F59E0B', // amber-500
-  'Reimbursements': '#EF4444' // red-500
+  'Reimbursements': '#EF4444', // red-500
+  'Purchase Orders': '#6366F1', // indigo-500
+  'Payment Requests': '#8B5CF6', // violet-500
+  'Payment Orders': '#EC4899' // pink-500
 };
 
 const Card = ({ children, className = '' }) => (
@@ -48,6 +55,34 @@ const Button = ({ children, variant = 'primary', size = 'md', className = '', ..
   );
 };
 
+const StatusBadge = ({ status }) => {
+  const getStatusColor = (status) => {
+    const colors = {
+      'Draft': 'bg-gray-100 text-gray-800',
+      'Pending': 'bg-yellow-100 text-yellow-800',
+      'For Approval': 'bg-blue-100 text-blue-800',
+      'Approved': 'bg-green-100 text-green-800',
+      'Rejected': 'bg-red-100 text-red-800',
+      'Cancelled': 'bg-gray-100 text-gray-600',
+      'For Procurement Review': 'bg-orange-100 text-orange-800',
+      'For Super Admin Final Approval': 'bg-purple-100 text-purple-800',
+      'PO Created': 'bg-indigo-100 text-indigo-800',
+      'Paid': 'bg-green-100 text-green-800',
+      'On Hold': 'bg-orange-100 text-orange-800',
+      'Completed': 'bg-green-100 text-green-800',
+      'Received': 'bg-blue-100 text-blue-800',
+      'For Purchase': 'bg-yellow-100 text-yellow-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  return (
+    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(status)}`}>
+      {status}
+    </span>
+  );
+};
+
 const OrderNumbers = () => {
   const navigate = useNavigate();
   const [orderNumbers, setOrderNumbers] = useState([]);
@@ -61,8 +96,20 @@ const OrderNumbers = () => {
     purchaseRequests: true,
     serviceRequests: false,
     cashRequests: false,
-    reimbursements: false
+    reimbursements: false,
+    purchaseOrders: false,
+    paymentRequests: false,
+    paymentOrders: false
   });
+  // Preview state
+  const [previewItem, setPreviewItem] = useState(null);
+  const [previewType, setPreviewType] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  // Planned cost state
+  const [plannedCost, setPlannedCost] = useState(null);
+  const [isEditingPlannedCost, setIsEditingPlannedCost] = useState(false);
+  const [plannedCostInput, setPlannedCostInput] = useState('');
+  const [savingPlannedCost, setSavingPlannedCost] = useState(false);
 
   useEffect(() => {
     fetchOrderNumbers();
@@ -99,11 +146,46 @@ const OrderNumbers = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDashboardData(response.data);
+      // Set planned cost from API response
+      setPlannedCost(response.data.plannedCost);
+      setPlannedCostInput(response.data.plannedCost ? response.data.plannedCost.toString() : '');
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
       setError(error.response?.data?.message || error.message || 'Failed to load dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const savePlannedCost = async () => {
+    try {
+      setSavingPlannedCost(true);
+      const token = localStorage.getItem('token');
+      const value = parseFloat(plannedCostInput);
+      
+      if (isNaN(value) || value < 0) {
+        alert('Please enter a valid amount');
+        return;
+      }
+
+      await axios.put(
+        `${API_BASE_URL}/order-numbers/${selectedOrder.order_number}/budget`,
+        {
+          planned_cost: value,
+          project: selectedProject === 'all' ? null : selectedProject
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setPlannedCost(value);
+      setIsEditingPlannedCost(false);
+      // Refresh dashboard to get updated data
+      fetchDashboardData(selectedOrder.order_number, selectedProject);
+    } catch (error) {
+      console.error('Failed to save planned cost:', error);
+      alert('Failed to save planned cost');
+    } finally {
+      setSavingPlannedCost(false);
     }
   };
 
@@ -128,6 +210,88 @@ const OrderNumbers = () => {
     });
   };
 
+  const exportAllPurchaseRequestItems = async () => {
+    if (!selectedOrder?.order_number) return;
+    try {
+      const token = localStorage.getItem('token');
+      const params = selectedProject && selectedProject !== 'all'
+        ? `?project=${encodeURIComponent(selectedProject)}`
+        : '';
+
+      const response = await axios.get(
+        `${API_BASE_URL}/order-numbers/dashboard/${encodeURIComponent(selectedOrder.order_number)}/purchase-requests/export-items${params}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+
+      const blob = new Blob([response.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeOrderNumber = String(selectedOrder.order_number).replace(/[^a-z0-9-_]/gi, '');
+      const safeProject = selectedProject && selectedProject !== 'all'
+        ? String(selectedProject).replace(/[^a-z0-9-_ ]/gi, '')
+        : 'ALL';
+      a.href = url;
+      a.download = `ORDER-${safeOrderNumber}-PR-ITEMS-${safeProject}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export PR items:', error);
+      alert(error.response?.data?.message || 'Failed to export purchase request items');
+    }
+  };
+
+  // Fetch preview data for a specific request
+  const fetchPreviewData = async (item, type) => {
+    try {
+      setPreviewLoading(true);
+      setPreviewType(type);
+      const token = localStorage.getItem('token');
+      
+      // Map type to endpoint
+      const endpointMap = {
+        purchaseRequests: `purchase-requests/${item.id}`,
+        serviceRequests: `service-requests/${item.id}`,
+        cashRequests: `cash-requests/${item.id}`,
+        reimbursements: `reimbursements/${item.id}`
+      };
+      
+      const response = await axios.get(`${API_BASE_URL}/${endpointMap[type]}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Handle nested response structure (purchaseRequest, serviceRequest, etc.)
+      const dataKeyMap = {
+        purchaseRequests: 'purchaseRequest',
+        serviceRequests: 'serviceRequest',
+        cashRequests: 'cashRequest',
+        reimbursements: 'reimbursement'
+      };
+      
+      const dataKey = dataKeyMap[type];
+      const itemData = response.data[dataKey] || response.data;
+      setPreviewItem(itemData);
+    } catch (error) {
+      console.error('Failed to fetch preview data:', error);
+      // Fallback to using the item from the table if API fails
+      setPreviewItem(item);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewItem(null);
+    setPreviewType(null);
+  };
+
   const filteredOrders = orderNumbers.filter(o => 
     o.order_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     o.project?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -137,6 +301,10 @@ const OrderNumbers = () => {
   const SummaryCards = () => {
     if (!dashboardData) return null;
     const { summary } = dashboardData;
+    const totalActual = summary.totalActualCost;
+    const remaining = plannedCost ? plannedCost - totalActual : null;
+    const percentUsed = plannedCost && plannedCost > 0 ? (totalActual / plannedCost) * 100 : 0;
+    const isOverBudget = remaining !== null && remaining < 0;
 
     const cards = [
       { 
@@ -146,6 +314,21 @@ const OrderNumbers = () => {
         color: 'bg-yellow-500',
         textColor: 'text-yellow-600'
       },
+      ...(plannedCost !== null ? [{
+        title: 'Planned Cost',
+        value: plannedCost,
+        icon: () => <span className="text-white text-sm">₱</span>,
+        color: 'bg-purple-500',
+        textColor: 'text-purple-600'
+      }] : []),
+      ...(remaining !== null ? [{
+        title: isOverBudget ? 'Over Budget' : 'Remaining Budget',
+        value: Math.abs(remaining),
+        icon: isOverBudget ? AlertCircle : () => <span className="text-white text-sm">₱</span>,
+        color: isOverBudget ? 'bg-red-500' : 'bg-green-500',
+        textColor: isOverBudget ? 'text-red-600' : 'text-green-600',
+        subtitle: isOverBudget ? `(${percentUsed.toFixed(1)}% over)` : `(${percentUsed.toFixed(1)}% used)`
+      }] : []),
       { 
         title: 'Purchase Requests', 
         value: summary.purchaseRequests.total, 
@@ -177,34 +360,174 @@ const OrderNumbers = () => {
         icon: Receipt, 
         color: 'bg-red-500',
         textColor: 'text-red-600'
+      },
+      {
+        title: 'Purchase Orders',
+        value: dashboardData?.additionalSummary?.purchaseOrders?.total || 0,
+        count: dashboardData?.additionalSummary?.purchaseOrders?.count || 0,
+        icon: FileText,
+        color: 'bg-indigo-500',
+        textColor: 'text-indigo-600'
+      },
+      {
+        title: 'Payment Requests',
+        value: dashboardData?.additionalSummary?.paymentRequests?.total || 0,
+        count: dashboardData?.additionalSummary?.paymentRequests?.count || 0,
+        icon: Banknote,
+        color: 'bg-violet-500',
+        textColor: 'text-violet-600'
+      },
+      {
+        title: 'Payment Orders',
+        value: dashboardData?.additionalSummary?.paymentOrders?.total || 0,
+        count: dashboardData?.additionalSummary?.paymentOrders?.count || 0,
+        icon: CheckCircle,
+        color: 'bg-pink-500',
+        textColor: 'text-pink-600'
       }
     ];
 
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        {cards.map((card, index) => (
-          <Card key={index} className="p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-500 mb-1">{card.title}</p>
-                <p className={`text-xl font-bold ${card.textColor}`}>
-                  {formatCurrency(card.value)}
-                </p>
-                {card.count !== undefined && (
-                  <p className="text-xs text-gray-400 mt-1">{card.count} request(s)</p>
-                )}
-              </div>
-              <div className={`${card.color} p-2 rounded-lg`}>
-                <card.icon className="w-5 h-5 text-white" />
-              </div>
+      <>
+        {/* Budget Progress Bar */}
+        {plannedCost !== null && (
+          <Card className="mb-4 p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-gray-600">Budget Utilization</span>
+              <span className={`text-sm font-bold ${isOverBudget ? 'text-red-600' : 'text-green-600'}`}>
+                {percentUsed.toFixed(1)}% {isOverBudget ? 'Over Budget' : 'Used'}
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-3">
+              <div 
+                className={`h-3 rounded-full transition-all duration-500 ${isOverBudget ? 'bg-red-500' : 'bg-green-500'}`}
+                style={{ width: `${Math.min(percentUsed, 100)}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-gray-500">
+              <span>Planned: {formatCurrency(plannedCost)}</span>
+              <span>Actual: {formatCurrency(totalActual)}</span>
             </div>
           </Card>
-        ))}
-      </div>
+        )}
+
+        {/* Summary Cards Grid - Row 1 (5 cards) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-4">
+          {cards.slice(0, 5).map((card, index) => (
+            <Card key={index} className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">{card.title}</p>
+                  <p className={`text-xl font-bold ${card.textColor}`}>
+                    {formatCurrency(card.value)}
+                  </p>
+                  {card.count !== undefined && (
+                    <p className="text-xs text-gray-400 mt-1">{card.count} request(s)</p>
+                  )}
+                  {card.subtitle && (
+                    <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
+                  )}
+                </div>
+                <div className={`${card.color} p-2 rounded-lg`}>
+                  <card.icon className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+
+        {/* Summary Cards Grid - Row 2 (5 cards) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+          {cards.slice(5).map((card, index) => (
+            <Card key={index + 5} className="p-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1">{card.title}</p>
+                  <p className={`text-xl font-bold ${card.textColor}`}>
+                    {formatCurrency(card.value)}
+                  </p>
+                  {card.count !== undefined && (
+                    <p className="text-xs text-gray-400 mt-1">{card.count} request(s)</p>
+                  )}
+                  {card.subtitle && (
+                    <p className="text-xs text-gray-400 mt-1">{card.subtitle}</p>
+                  )}
+                </div>
+                <div className={`${card.color} p-2 rounded-lg`}>
+                  <card.icon className="w-5 h-5 text-white" />
+                </div>
+              </div>
+            </Card>
+          ))}
+        </div>
+      </>
     );
   };
 
-  // Pie Chart Component
+  // Additional Cost Chart Component (for Purchase Orders, Payment Requests, Payment Orders)
+  const AdditionalCostChart = () => {
+    if (!dashboardData?.additionalSummary) return null;
+
+    const data = [
+      { name: 'Purchase Orders', value: dashboardData.additionalSummary.purchaseOrders?.total || 0, count: dashboardData.additionalSummary.purchaseOrders?.count || 0 },
+      { name: 'Payment Requests', value: dashboardData.additionalSummary.paymentRequests?.total || 0, count: dashboardData.additionalSummary.paymentRequests?.count || 0 },
+      { name: 'Payment Orders', value: dashboardData.additionalSummary.paymentOrders?.total || 0, count: dashboardData.additionalSummary.paymentOrders?.count || 0 }
+    ].filter(item => item.value > 0);
+
+    if (data.length === 0) {
+      return (
+        <Card className="p-6 mt-4">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">PO & Payment Distribution</h3>
+          <div className="flex items-center justify-center h-48 text-gray-400">
+            No PO or payment data available
+          </div>
+        </Card>
+      );
+    }
+
+    return (
+      <Card className="p-6 mt-4">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">PO & Payment Distribution</h3>
+        <div className="h-48">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={data}
+                cx="50%"
+                cy="50%"
+                innerRadius={40}
+                outerRadius={60}
+                paddingAngle={5}
+                dataKey="value"
+              >
+                {data.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
+                ))}
+              </Pie>
+              <Tooltip 
+                formatter={(value) => formatCurrency(value)}
+                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+              />
+              <Legend />
+            </PieChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="grid grid-cols-1 gap-1 mt-2">
+          {data.map((item, index) => (
+            <div key={index} className="flex items-center gap-2 text-sm">
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: COLORS[item.name] }}
+              />
+              <span className="text-gray-600">{item.name}:</span>
+              <span className="font-medium">{formatCurrency(item.value)}</span>
+              <span className="text-xs text-gray-400">({item.count})</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    );
+  };
   const CostDistributionChart = () => {
     if (!dashboardData?.pieChartData?.length) return null;
 
@@ -264,18 +587,38 @@ const OrderNumbers = () => {
   };
 
   // Request Table Component
-  const RequestTable = ({ data, type, columns }) => {
+  const RequestTable = ({ data, type, columns, onRowClick }) => {
     if (!data?.length) return null;
 
     const icons = {
       purchaseRequests: ShoppingCart,
       serviceRequests: Wrench,
       cashRequests: Banknote,
-      reimbursements: Receipt
+      reimbursements: Receipt,
+      purchaseOrders: FileText,
+      paymentRequests: Banknote,
+      paymentOrders: CheckCircle
     };
     const Icon = icons[type];
     const isExpanded = expandedSections[type];
     const typeLabel = type.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+
+    // Helper to render cell content with StatusBadge for status column
+    const renderCell = (col, item) => {
+      const value = item[col.key];
+      
+      // Use StatusBadge for status column
+      if (col.key === 'status') {
+        return <StatusBadge status={value} />;
+      }
+      
+      // Use format function if provided
+      if (col.format) {
+        return col.format(value, item);
+      }
+      
+      return value;
+    };
 
     return (
       <Card className="mb-4">
@@ -308,6 +651,7 @@ const OrderNumbers = () => {
                       {col.header}
                     </th>
                   ))}
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -315,9 +659,18 @@ const OrderNumbers = () => {
                   <tr key={idx} className="hover:bg-gray-50">
                     {columns.map((col, colIdx) => (
                       <td key={colIdx} className="px-4 py-3 text-sm">
-                        {col.format ? col.format(item[col.key], item) : item[col.key]}
+                        {renderCell(col, item)}
                       </td>
                     ))}
+                    <td className="px-4 py-3 text-sm">
+                      <button
+                        onClick={() => onRowClick(item, type)}
+                        className="text-yellow-600 hover:text-yellow-700 transition-colors"
+                        title="Preview"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -359,24 +712,71 @@ const OrderNumbers = () => {
               </div>
             </div>
             
-            {/* Project Filter */}
-            {dashboardData?.projects?.length > 1 && (
+            <div className="flex items-center gap-4">
+              {/* Planned Cost Input */}
               <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-gray-400" />
-                <select
-                  value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                >
-                  <option value="all">All Projects</option>
-                  {dashboardData.projects.map((proj, idx) => (
-                    <option key={idx} value={proj.project}>
-                      {proj.project}
-                    </option>
-                  ))}
-                </select>
+                <span className="text-sm font-medium text-gray-600">Planned Cost:</span>
+                {isEditingPlannedCost ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      value={plannedCostInput}
+                      onChange={(e) => setPlannedCostInput(e.target.value)}
+                      placeholder="Enter amount"
+                      className="border border-gray-300 rounded-lg px-3 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      autoFocus
+                    />
+                    <button
+                      onClick={savePlannedCost}
+                      disabled={savingPlannedCost}
+                      className="text-green-600 hover:text-green-700 transition-colors"
+                    >
+                      {savingPlannedCost ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                      ) : (
+                        <CheckCircle className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsEditingPlannedCost(false);
+                        setPlannedCostInput(plannedCost ? plannedCost.toString() : '');
+                      }}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setIsEditingPlannedCost(true)}
+                    className="flex items-center gap-1 text-sm font-medium text-purple-600 hover:text-purple-700 transition-colors"
+                  >
+                    {plannedCost !== null ? formatCurrency(plannedCost) : 'Set Budget'}
+                    <span className="text-xs text-gray-400">(click to edit)</span>
+                  </button>
+                )}
               </div>
-            )}
+
+              {/* Project Filter */}
+              {dashboardData?.projects?.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <Filter className="w-4 h-4 text-gray-400" />
+                  <select
+                    value={selectedProject}
+                    onChange={(e) => setSelectedProject(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  >
+                    <option value="all">All Projects</option>
+                    {dashboardData.projects.map((proj, idx) => (
+                      <option key={idx} value={proj.project}>
+                        {proj.project}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -391,23 +791,26 @@ const OrderNumbers = () => {
 
             {/* Chart Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-1 flex flex-col">
                 <CostDistributionChart />
+                <AdditionalCostChart />
               </div>
               <div className="lg:col-span-2">
-                <Card className="p-6 h-full">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Cost Breakdown by Type</h3>
-                  <div className="h-64">
+                <Card className="p-6 h-full flex flex-col">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-4">Budget vs Actual</h3>
+                  <div className="flex-1 min-h-0">
                     <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={dashboardData.pieChartData.filter(d => d.value > 0)}>
+                      <BarChart data={[
+                        { name: 'Planned Cost', value: dashboardData.plannedCost || 0, color: '#8B5CF6' },
+                        { name: 'Actual Cost', value: dashboardData.summary.totalActualCost || 0, color: '#10B981' }
+                      ].filter(d => d.value > 0 || d.name === 'Actual Cost')}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                         <YAxis tickFormatter={(val) => `₱${(val/1000).toFixed(0)}k`} />
                         <Tooltip formatter={(value) => formatCurrency(value)} />
                         <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {dashboardData.pieChartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[entry.name]} />
-                          ))}
+                          <Cell fill="#8B5CF6" />
+                          <Cell fill="#F0B100" />
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
@@ -418,11 +821,18 @@ const OrderNumbers = () => {
 
             {/* Detailed Tables */}
             <div className="mt-8">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Detailed Breakdown</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-gray-900">Detailed Breakdown</h2>
+                <Button variant="outline" onClick={exportAllPurchaseRequestItems}>
+                  <FileSpreadsheet className="w-4 h-4" />
+                  Export PR Items
+                </Button>
+              </div>
               
               <RequestTable 
                 type="purchaseRequests"
                 data={dashboardData.details.purchaseRequests}
+                onRowClick={fetchPreviewData}
                 columns={[
                   { header: 'PR Number', key: 'pr_number' },
                   { header: 'Purpose', key: 'purpose' },
@@ -436,6 +846,7 @@ const OrderNumbers = () => {
               <RequestTable 
                 type="serviceRequests"
                 data={dashboardData.details.serviceRequests}
+                onRowClick={fetchPreviewData}
                 columns={[
                   { header: 'SR Number', key: 'sr_number' },
                   { header: 'Purpose', key: 'purpose' },
@@ -450,6 +861,7 @@ const OrderNumbers = () => {
               <RequestTable 
                 type="cashRequests"
                 data={dashboardData.details.cashRequests}
+                onRowClick={fetchPreviewData}
                 columns={[
                   { header: 'CR Number', key: 'cr_number' },
                   { header: 'Purpose', key: 'purpose' },
@@ -464,6 +876,7 @@ const OrderNumbers = () => {
               <RequestTable 
                 type="reimbursements"
                 data={dashboardData.details.reimbursements}
+                onRowClick={fetchPreviewData}
                 columns={[
                   { header: 'RMB Number', key: 'rmb_number' },
                   { header: 'Purpose', key: 'purpose' },
@@ -474,7 +887,162 @@ const OrderNumbers = () => {
                   { header: 'Created', key: 'created_at', format: (v) => formatDate(v) }
                 ]}
               />
+
+              <RequestTable 
+                type="purchaseOrders"
+                data={dashboardData.additionalDetails?.purchaseOrders}
+                onRowClick={fetchPreviewData}
+                columns={[
+                  { header: 'PO Number', key: 'po_number' },
+                  { header: 'Purpose', key: 'purpose' },
+                  { header: 'Project', key: 'project' },
+                  { header: 'Amount', key: 'amount', format: (v) => formatCurrency(v) },
+                  { header: 'Status', key: 'status' },
+                  { header: 'Created', key: 'created_at', format: (v) => formatDate(v) }
+                ]}
+              />
+
+              <RequestTable 
+                type="paymentRequests"
+                data={dashboardData.additionalDetails?.paymentRequests}
+                onRowClick={fetchPreviewData}
+                columns={[
+                  { header: 'PR Number', key: 'pr_number' },
+                  { header: 'Purpose', key: 'purpose' },
+                  { header: 'Payee', key: 'payee' },
+                  { header: 'Project', key: 'project' },
+                  { header: 'Amount', key: 'amount', format: (v) => formatCurrency(v) },
+                  { header: 'Status', key: 'status' },
+                  { header: 'Created', key: 'created_at', format: (v) => formatDate(v) }
+                ]}
+              />
+
+              <RequestTable 
+                type="paymentOrders"
+                data={dashboardData.additionalDetails?.paymentOrders}
+                onRowClick={fetchPreviewData}
+                columns={[
+                  { header: 'PO Number', key: 'po_number' },
+                  { header: 'Purpose', key: 'purpose' },
+                  { header: 'Payee', key: 'payee' },
+                  { header: 'Project', key: 'project' },
+                  { header: 'Amount', key: 'amount', format: (v) => formatCurrency(v) },
+                  { header: 'Status', key: 'status' },
+                  { header: 'Created', key: 'created_at', format: (v) => formatDate(v) }
+                ]}
+              />
             </div>
+
+            {/* External Preview Modals */}
+            <PRPreviewModal 
+              pr={previewType === 'purchaseRequests' ? previewItem : null}
+              loading={previewLoading}
+              onClose={closePreview}
+              readOnly
+            />
+            <SRPreviewModal 
+              sr={previewType === 'serviceRequests' ? previewItem : null}
+              loading={previewLoading}
+              onClose={closePreview}
+              readOnly
+            />
+            <CRPreviewModal 
+              cr={previewType === 'cashRequests' ? previewItem : null}
+              loading={previewLoading}
+              onClose={closePreview}
+              readOnly
+            />
+
+            {/* Inline Reimbursement Preview Modal (no external modal available) */}
+            {previewItem && previewType === 'reimbursements' && (
+              <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+                <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">{previewItem.rmb_number}</h3>
+                      <p className="text-sm text-gray-500">Reimbursement Preview</p>
+                    </div>
+                    <button
+                      onClick={closePreview}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                  <div className="p-6 overflow-y-auto max-h-[70vh]">
+                    {previewLoading ? (
+                      <div className="flex items-center justify-center h-32">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-600">Status:</span>
+                          <StatusBadge status={previewItem.status} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg">
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Purpose</span>
+                            <p className="text-sm font-medium text-gray-900">{previewItem.purpose || '-'}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Amount</span>
+                            <p className="text-sm font-medium text-gray-900">{formatCurrency(previewItem.amount || 0)}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Project</span>
+                            <p className="text-sm font-medium text-gray-900">{previewItem.project || '-'}</p>
+                          </div>
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Created</span>
+                            <p className="text-sm font-medium text-gray-900">{formatDate(previewItem.created_at)}</p>
+                          </div>
+                          {previewItem.payee && (
+                            <div>
+                              <span className="text-xs text-gray-500 uppercase">Payee</span>
+                              <p className="text-sm font-medium text-gray-900">{previewItem.payee}</p>
+                            </div>
+                          )}
+                          {previewItem.requested_by && (
+                            <div>
+                              <span className="text-xs text-gray-500 uppercase">Requested By</span>
+                              <p className="text-sm font-medium text-gray-900">{previewItem.requested_by}</p>
+                            </div>
+                          )}
+                          {previewItem.approved_by && (
+                            <div>
+                              <span className="text-xs text-gray-500 uppercase">Approved By</span>
+                              <p className="text-sm font-medium text-gray-900">{previewItem.approved_by}</p>
+                            </div>
+                          )}
+                          {previewItem.approved_at && (
+                            <div>
+                              <span className="text-xs text-gray-500 uppercase">Approved Date</span>
+                              <p className="text-sm font-medium text-gray-900">{formatDate(previewItem.approved_at)}</p>
+                            </div>
+                          )}
+                        </div>
+                        {previewItem.description && (
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Description</span>
+                            <p className="text-sm text-gray-700 mt-1 bg-gray-50 p-3 rounded-lg">{previewItem.description}</p>
+                          </div>
+                        )}
+                        {previewItem.remarks && (
+                          <div>
+                            <span className="text-xs text-gray-500 uppercase">Remarks</span>
+                            <p className="text-sm text-gray-700 mt-1 bg-yellow-50 p-3 rounded-lg border border-yellow-100">{previewItem.remarks}</p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex justify-end">
+                    <Button variant="secondary" onClick={closePreview}>Close</Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </>
         ) : error ? (
           <Card className="p-8 text-center">

@@ -29,6 +29,13 @@ const StatCard = ({ title, value, icon: Icon, color, subtitle }) => (
   </Card>
 )
 
+const InfoRow = ({ label, value }) => (
+  <div className="flex items-start justify-between gap-3">
+    <span className="text-xs text-gray-500 shrink-0">{label}</span>
+    <span className="text-xs text-gray-700 text-right break-words">{value}</span>
+  </div>
+)
+
 const formatCurrency = (amount) => {
   return new Intl.NumberFormat('en-PH', {
     style: 'currency',
@@ -47,6 +54,7 @@ const formatDate = (dateString) => {
 
 const Dashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
+  const [isMobile, setIsMobile] = useState(false)
   const [purchaseRequests, setPurchaseRequests] = useState([])
   const [purchaseOrders, setPurchaseOrders] = useState([])
   const [stats, setStats] = useState({
@@ -70,6 +78,20 @@ const Dashboard = () => {
   useEffect(() => {
     fetchDashboardData()
     fetchPricingTrends()
+  }, [])
+
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 640px)')
+    const update = () => setIsMobile(media.matches)
+    update()
+
+    if (typeof media.addEventListener === 'function') {
+      media.addEventListener('change', update)
+      return () => media.removeEventListener('change', update)
+    }
+
+    media.addListener(update)
+    return () => media.removeListener(update)
   }, [])
 
   useEffect(() => {
@@ -197,7 +219,7 @@ const Dashboard = () => {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+        <nav className="flex gap-6 overflow-x-auto whitespace-nowrap [-webkit-overflow-scrolling:touch]">
           <button
             onClick={() => setActiveTab('overview')}
             className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
@@ -290,19 +312,21 @@ const Dashboard = () => {
 
       {/* Pricing Trends Chart */}
       <Card className="p-4">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
           <div>
             <h3 className="text-sm font-semibold text-gray-900">Item Pricing Trends</h3>
             <p className="text-xs text-gray-500">
               {selectedYear ? `Monthly average pricing for ${selectedYear}` : 'Monthly average pricing over the last 12 months'}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-gray-400" />
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-gray-400" />
+            </div>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              className="w-full sm:w-auto px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
             >
               <option value="">Last 12 Months</option>
               {availableYears.map(year => (
@@ -312,7 +336,7 @@ const Dashboard = () => {
             <select
               value={selectedItem}
               onChange={(e) => setSelectedItem(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              className="w-full sm:w-auto px-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
             >
               <option value="">All Items (Combined)</option>
               {topItems.map(item => (
@@ -327,15 +351,18 @@ const Dashboard = () => {
         {pricingTrends.length > 0 ? (
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
-              <LineChart data={pricingTrends}>
+              <LineChart data={pricingTrends} margin={isMobile ? { top: 8, right: 8, left: 0, bottom: 8 } : undefined}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 
                   dataKey="month_label" 
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: isMobile ? 10 : 12 }}
                   stroke="#9ca3af"
+                  interval={isMobile ? 'preserveStartEnd' : 0}
+                  tickMargin={isMobile ? 6 : 8}
                 />
                 <YAxis 
-                  tick={{ fontSize: 12 }}
+                  width={isMobile ? 40 : 60}
+                  tick={{ fontSize: isMobile ? 10 : 12 }}
                   stroke="#9ca3af"
                   tickFormatter={(value) => `₱${value}`}
                 />
@@ -348,14 +375,14 @@ const Dashboard = () => {
                     borderRadius: '6px'
                   }}
                 />
-                <Legend />
+                <Legend wrapperStyle={isMobile ? { fontSize: 10 } : undefined} />
                 <Line 
                   type="monotone" 
                   dataKey="avg_price" 
                   name="Average Price" 
                   stroke="#f59e0b" 
                   strokeWidth={2}
-                  dot={{ fill: '#f59e0b', r: 4 }}
+                  dot={{ fill: '#f59e0b', r: isMobile ? 3 : 4 }}
                   activeDot={{ r: 6 }}
                 />
                 <Line 
@@ -433,7 +460,35 @@ const Dashboard = () => {
             <h3 className="text-sm font-semibold text-gray-900">All Purchase Requests</h3>
             <span className="text-sm text-gray-500">{purchaseRequests.length} total</span>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Mobile list */}
+          <div className="space-y-3 md:hidden">
+            {purchaseRequests.length > 0 ? (
+              purchaseRequests.map((pr) => (
+                <div key={pr.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{pr.pr_number}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{pr.project || '-'}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(pr.status)}`}>
+                      {pr.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                    <InfoRow label="Amount" value={formatCurrency(pr.total_amount)} />
+                    <InfoRow label="Date" value={formatDate(pr.created_at)} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-8">No purchase requests found</p>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
@@ -481,7 +536,35 @@ const Dashboard = () => {
             <h3 className="text-sm font-semibold text-gray-900">All Purchase Orders</h3>
             <span className="text-sm text-gray-500">{purchaseOrders.length} total</span>
           </div>
-          <div className="overflow-x-auto">
+
+          {/* Mobile list */}
+          <div className="space-y-3 md:hidden">
+            {purchaseOrders.length > 0 ? (
+              purchaseOrders.map((po) => (
+                <div key={po.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{po.po_number}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">PR: {po.pr_number || '-'}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(po.status)}`}>
+                      {po.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <InfoRow label="Supplier" value={po.supplier_name || '-'} />
+                    <InfoRow label="Total" value={formatCurrency(po.total_amount)} />
+                    <InfoRow label="Date" value={formatDate(po.created_at)} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-8">No purchase orders found</p>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">

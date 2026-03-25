@@ -452,24 +452,26 @@ const Items = () => {
   return (
     <div className="space-y-6">
       {/* Header with Cart */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Items Catalog</h2>
           <p className="text-sm text-gray-500">Select items and quantities for your purchase request</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           {user?.role !== 'engineer' && (
-            <Button onClick={() => setShowAddItemModal(true)}>
+            <Button onClick={() => setShowAddItemModal(true)} className="px-3 py-2">
               <Plus className="w-4 h-4 mr-2" />
-              Add New Item
+              <span className="hidden sm:inline">Add New Item</span>
+              <span className="sm:hidden">Add</span>
             </Button>
           )}
           <button
             onClick={() => setShowCart(!showCart)}
-            className="relative flex items-center gap-2 px-4 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors"
+            className="relative flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors"
           >
             <ShoppingCart className="w-5 h-5" />
-            <span className="font-medium">Cart ({cart.length})</span>
+            <span className="font-medium hidden sm:inline">Cart ({cart.length})</span>
+            <span className="font-medium sm:hidden">({cart.length})</span>
             {cart.length > 0 && (
               <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
                 {cart.length}
@@ -573,70 +575,137 @@ const Items = () => {
             {searchQuery && <p className="text-sm">Try adjusting your search</p>}
           </div>
         ) : (
-          <div className="divide-y divide-gray-200">
-            {filteredItems.map(item => {
-              const inCart = cart.find(c => c.item_id === item.id)
-              return (
-                <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
-                  {/* Icon */}
-                  <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <Package className="w-6 h-6 text-gray-400" />
-                  </div>
-                  
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-gray-900">{item.item_name}</p>
-                      {item.category && (
-                        <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                          {item.category}
-                        </span>
+          <>
+            {/* Mobile grid */}
+            <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
+              {filteredItems.map(item => {
+                const inCart = cart.find(c => c.item_id === item.id)
+                return (
+                  <div key={item.id} className="border border-gray-200 rounded-lg p-3 flex flex-col">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Package className="w-5 h-5 text-gray-400" />
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-gray-900 leading-snug break-words">
+                          {item.item_name}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5 break-words">
+                          {item.item_code} • {item.unit || 'pcs'}
+                        </p>
+                        {item.last_unit_price && (
+                          <p className="text-xs text-green-600 font-medium mt-1">
+                            {formatCurrency(item.last_unit_price)}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-3">
+                      {inCart ? (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-medium text-green-700">In cart: {inCart.quantity}</span>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-red-500 hover:text-red-700"
+                            aria-label="Remove from cart"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            min="1"
+                            value={itemQuantities[item.id] ?? 1}
+                            onChange={(e) => updateItemQuantity(item.id, e.target.value)}
+                            className="w-14 px-2 py-1 border border-gray-300 rounded text-center text-sm"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addToCart(item)}
+                            className="flex-1"
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add
+                          </Button>
+                        </div>
                       )}
                     </div>
-                    <p className="text-sm text-gray-500">{item.item_code} • Unit: {item.unit || 'pcs'}</p>
-                    {item.last_unit_price && (
-                      <p className="text-sm text-green-600 font-medium">
-                        Last Price: {formatCurrency(item.last_unit_price)}
-                      </p>
-                    )}
                   </div>
-                  
-                  {/* Add to Cart */}
-                  <div className="flex items-center gap-3">
-                    {inCart ? (
-                      <div className="flex items-center gap-2 text-green-600">
-                        <span className="text-sm font-medium">In cart: {inCart.quantity}</span>
-                        <button 
-                          onClick={() => removeFromCart(item.id)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
+                )
+              })}
+            </div>
+
+            {/* Desktop/tablet list */}
+            <div className="hidden sm:block divide-y divide-gray-200">
+              {filteredItems.map(item => {
+                const inCart = cart.find(c => c.item_id === item.id)
+                return (
+                  <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
+                    {/* Icon */}
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Package className="w-6 h-6 text-gray-400" />
+                    </div>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-gray-900">{item.item_name}</p>
+                        {item.category && (
+                          <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                            {item.category}
+                          </span>
+                        )}
                       </div>
-                    ) : (
-                      <>
-                        <input
-                          type="number"
-                          min="1"
-                          value={itemQuantities[item.id] ?? 1}
-                          onChange={(e) => updateItemQuantity(item.id, e.target.value)}
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
-                        />
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => addToCart(item)}
-                        >
-                          <Plus className="w-4 h-4 mr-1" />
-                          Add
-                        </Button>
-                      </>
-                    )}
+                      <p className="text-sm text-gray-500">{item.item_code} • Unit: {item.unit || 'pcs'}</p>
+                      {item.last_unit_price && (
+                        <p className="text-sm text-green-600 font-medium">
+                          Last Price: {formatCurrency(item.last_unit_price)}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Add to Cart */}
+                    <div className="flex items-center gap-3">
+                      {inCart ? (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <span className="text-sm font-medium">In cart: {inCart.quantity}</span>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="text-red-500 hover:text-red-700"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <input
+                            type="number"
+                            min="1"
+                            value={itemQuantities[item.id] ?? 1}
+                            onChange={(e) => updateItemQuantity(item.id, e.target.value)}
+                            className="w-16 px-2 py-1 border border-gray-300 rounded text-center"
+                          />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addToCart(item)}
+                          >
+                            <Plus className="w-4 h-4 mr-1" />
+                            Add
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          </>
         )}
       </Card>
 

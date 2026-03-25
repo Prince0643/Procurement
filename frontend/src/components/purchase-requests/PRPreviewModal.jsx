@@ -73,7 +73,7 @@ const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled 
   );
 };
 
-const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId }) => {
+const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnly }) => {
   if (!pr) return null;
 
   // Calculate total from items if not provided
@@ -273,7 +273,7 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId }) => {
           >
             Close
           </Button>
-          {onApprove && pr.status !== 'PO Created' && pr.status !== 'Completed' && (
+          {onApprove && !readOnly && pr.status !== 'PO Created' && pr.status !== 'Completed' && (
             <Button 
               variant="success" 
               onClick={handleApprove}

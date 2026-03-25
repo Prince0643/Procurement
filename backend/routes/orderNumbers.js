@@ -1,6 +1,7 @@
 import express from 'express';
 import db from '../config/database.js';
 import { authenticate } from '../middleware/auth.js';
+import ExcelJS from 'exceljs';
 
 const router = express.Router();
 
@@ -39,8 +40,22 @@ router.get('/', authenticate, async (req, res) => {
         SELECT 
           order_number COLLATE utf8mb4_unicode_ci,
           project COLLATE utf8mb4_unicode_ci,
-          project_address COLLATE utf8mb4_unicode_ci
-        FROM reimbursements 
+          NULL as project_address
+        FROM purchase_orders 
+        WHERE order_number IS NOT NULL AND order_number != ''
+        UNION
+        SELECT 
+          order_number COLLATE utf8mb4_unicode_ci,
+          project COLLATE utf8mb4_unicode_ci,
+          NULL as project_address
+        FROM payment_requests 
+        WHERE order_number IS NOT NULL AND order_number != ''
+        UNION
+        SELECT 
+          order_number COLLATE utf8mb4_unicode_ci,
+          project COLLATE utf8mb4_unicode_ci,
+          NULL as project_address
+        FROM payment_orders 
         WHERE order_number IS NOT NULL AND order_number != ''
       ) as combined
       LEFT JOIN purchase_requests pr ON pr.order_number = combined.order_number COLLATE utf8mb4_unicode_ci AND pr.project = combined.project COLLATE utf8mb4_unicode_ci
@@ -117,13 +132,50 @@ router.get('/dashboard/:orderNumber', authenticate, async (req, res) => {
       params
     );
 
-    // Calculate totals
+    // Get Purchase Orders data (excluded from total actual cost)
+    const [purchaseOrders] = await db.query(
+      `SELECT 
+        id, po_number, notes as purpose, project, NULL as project_address,
+        total_amount as amount, status, created_at
+      FROM purchase_orders 
+      ${whereClause} AND total_amount > 0
+      ORDER BY created_at DESC`,
+      params
+    );
+
+    // Get Payment Requests data (excluded from total actual cost)
+    const [paymentRequests] = await db.query(
+      `SELECT 
+        id, pr_number, purpose, payee_name as payee, project, project_address,
+        amount, status, created_at
+      FROM payment_requests 
+      ${whereClause} AND amount > 0
+      ORDER BY created_at DESC`,
+      params
+    );
+
+    // Get Payment Orders data (excluded from total actual cost)
+    const [paymentOrders] = await db.query(
+      `SELECT 
+        id, po_number, purpose, payee_name as payee, project, project_address,
+        amount, status, created_at
+      FROM payment_orders 
+      ${whereClause} AND amount > 0
+      ORDER BY created_at DESC`,
+      params
+    );
+
+    // Calculate totals for original 4 types only (actual cost)
     const prTotal = purchaseRequests.reduce((sum, pr) => sum + parseFloat(pr.total_amount || 0), 0);
     const srTotal = serviceRequests.reduce((sum, sr) => sum + parseFloat(sr.amount || 0), 0);
     const crTotal = cashRequests.reduce((sum, cr) => sum + parseFloat(cr.amount || 0), 0);
     const rmbTotal = reimbursements.reduce((sum, rmb) => sum + parseFloat(rmb.amount || 0), 0);
 
     const totalActualCost = prTotal + srTotal + crTotal + rmbTotal;
+
+    const poTotal = purchaseOrders.reduce((sum, po) => sum + parseFloat(po.amount || 0), 0);
+    const pyreqTotal = paymentRequests.reduce((sum, pr) => sum + parseFloat(pr.amount || 0), 0);
+    const pyordTotal = paymentOrders.reduce((sum, po) => sum + parseFloat(po.amount || 0), 0);
 
     // Get unique projects for this order number
     const projectsQuery = `
@@ -148,10 +200,41 @@ router.get('/dashboard/:orderNumber', authenticate, async (req, res) => {
     `;
     const [projects] = await db.query(projectsQuery, [orderNumber, orderNumber, orderNumber, orderNumber]);
 
+    // Get planned cost for this order number
+    const [budgets] = await db.query(
+      `SELECT * FROM order_number_budgets 
+       WHERE order_number = ? COLLATE utf8mb4_unicode_ci`,
+      [orderNumber]
+    );
+
+    // Get the overall planned cost (project = null) or project-specific
+    let plannedCost = null;
+    if (project && project !== 'all') {
+      // Look for project-specific budget first
+      const projectBudget = budgets.find(b => b.project === project);
+      if (projectBudget) {
+        plannedCost = parseFloat(projectBudget.planned_cost);
+      } else {
+        // Fall back to overall budget
+        const overallBudget = budgets.find(b => b.project === null);
+        if (overallBudget) {
+          plannedCost = parseFloat(overallBudget.planned_cost);
+        }
+      }
+    } else {
+      // Use overall budget
+      const overallBudget = budgets.find(b => b.project === null);
+      if (overallBudget) {
+        plannedCost = parseFloat(overallBudget.planned_cost);
+      }
+    }
+
     res.json({
       orderNumber,
       project: project || 'All Projects',
       projects,
+      plannedCost,
+      budgetDetails: budgets,
       summary: {
         totalActualCost,
         purchaseRequests: {
@@ -177,16 +260,139 @@ router.get('/dashboard/:orderNumber', authenticate, async (req, res) => {
         { name: 'Cash Requests', value: crTotal, count: cashRequests.length },
         { name: 'Reimbursements', value: rmbTotal, count: reimbursements.length }
       ],
+      additionalSummary: {
+        purchaseOrders: {
+          count: purchaseOrders.length,
+          total: poTotal
+        },
+        paymentRequests: {
+          count: paymentRequests.length,
+          total: pyreqTotal
+        },
+        paymentOrders: {
+          count: paymentOrders.length,
+          total: pyordTotal
+        }
+      },
       details: {
         purchaseRequests,
         serviceRequests,
         cashRequests,
         reimbursements
+      },
+      additionalDetails: {
+        purchaseOrders,
+        paymentRequests,
+        paymentOrders
       }
     });
   } catch (error) {
     console.error('Error fetching order number dashboard:', error);
     res.status(500).json({ message: 'Failed to fetch dashboard data' });
+  }
+});
+
+// Export ALL purchase request items for an order number (optionally filtered by project)
+router.get('/dashboard/:orderNumber/purchase-requests/export-items', authenticate, async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const { project } = req.query;
+
+    let where = 'WHERE pr.order_number = ?';
+    const params = [orderNumber];
+    if (project && project !== 'all') {
+      where += ' AND pr.project = ?';
+      params.push(project);
+    }
+
+    const [rows] = await db.query(
+      `SELECT
+         pr.id as purchase_request_id,
+         pr.pr_number,
+         pr.purpose,
+         pr.project,
+         pr.project_address,
+         pr.order_number,
+         pr.status,
+         pr.created_at,
+         pr.date_needed,
+         pr.total_amount,
+         e.first_name as requester_first_name,
+         e.last_name as requester_last_name,
+         pri.id as purchase_request_item_id,
+         pri.item_id,
+         i.item_code,
+         i.item_name,
+         COALESCE(pri.unit, i.unit) as unit,
+         pri.quantity,
+         pri.unit_price,
+         pri.total_price,
+         pri.remarks as item_remarks
+       FROM purchase_requests pr
+       JOIN employees e ON pr.requested_by = e.id
+       JOIN purchase_request_items pri ON pri.purchase_request_id = pr.id
+       JOIN items i ON pri.item_id = i.id
+       ${where}
+       ORDER BY pr.created_at DESC, pr.id DESC, pri.id ASC`,
+      params
+    );
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('PR Items');
+
+    worksheet.columns = [
+      { header: 'PR Number', key: 'pr_number', width: 20 },
+      { header: 'PR Status', key: 'status', width: 22 },
+      { header: 'Order Number', key: 'order_number', width: 18 },
+      { header: 'Project', key: 'project', width: 20 },
+      { header: 'Project Address', key: 'project_address', width: 28 },
+      { header: 'Purpose', key: 'purpose', width: 32 },
+      { header: 'Requested By', key: 'requested_by', width: 22 },
+      { header: 'Created At', key: 'created_at', width: 16 },
+      { header: 'Date Needed', key: 'date_needed', width: 16 },
+      { header: 'Item Code', key: 'item_code', width: 16 },
+      { header: 'Item Name', key: 'item_name', width: 28 },
+      { header: 'Unit', key: 'unit', width: 10 },
+      { header: 'Quantity', key: 'quantity', width: 10 },
+      { header: 'Unit Price', key: 'unit_price', width: 14 },
+      { header: 'Total Price', key: 'total_price', width: 14 },
+      { header: 'Item Remarks', key: 'item_remarks', width: 28 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    for (const r of rows) {
+      worksheet.addRow({
+        pr_number: r.pr_number,
+        status: r.status,
+        order_number: r.order_number,
+        project: r.project,
+        project_address: r.project_address,
+        purpose: r.purpose,
+        requested_by: `${r.requester_first_name || ''} ${r.requester_last_name || ''}`.trim(),
+        created_at: r.created_at ? new Date(r.created_at).toISOString().slice(0, 10) : '',
+        date_needed: r.date_needed ? new Date(r.date_needed).toISOString().slice(0, 10) : '',
+        item_code: r.item_code,
+        item_name: r.item_name,
+        unit: r.unit,
+        quantity: r.quantity,
+        unit_price: r.unit_price ?? null,
+        total_price: r.total_price ?? null,
+        item_remarks: r.item_remarks
+      });
+    }
+
+    const safeProject = project && project !== 'all' ? String(project).replace(/[^a-z0-9-_ ]/gi, '') : 'ALL';
+    const filename = `ORDER-${String(orderNumber).replace(/[^a-z0-9-_]/gi, '')}-PR-ITEMS-${safeProject}-${Date.now()}.xlsx`;
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.error('Error exporting PR items by order number:', error);
+    res.status(500).json({ message: 'Failed to export purchase request items' });
   }
 });
 
@@ -250,6 +456,76 @@ router.get('/project-breakdown/:orderNumber', authenticate, async (req, res) => 
   } catch (error) {
     console.error('Error fetching project breakdown:', error);
     res.status(500).json({ message: 'Failed to fetch project breakdown' });
+  }
+});
+
+// Get planned cost/budget for an order number
+router.get('/:orderNumber/budget', authenticate, async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const { project } = req.query;
+
+    let query = 'SELECT * FROM order_number_budgets WHERE order_number = ? COLLATE utf8mb4_unicode_ci';
+    const params = [orderNumber];
+
+    if (project && project !== 'all') {
+      query += ' AND project = ?';
+      params.push(project);
+    }
+
+    const [budgets] = await db.query(query, params);
+    res.json(budgets);
+  } catch (error) {
+    console.error('Error fetching budget:', error);
+    res.status(500).json({ message: 'Failed to fetch budget' });
+  }
+});
+
+// Update planned cost/budget for an order number
+router.put('/:orderNumber/budget', authenticate, async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const { planned_cost, project } = req.body;
+
+    if (planned_cost === undefined || planned_cost === null) {
+      return res.status(400).json({ message: 'planned_cost is required' });
+    }
+
+    // Check if budget exists
+    let query = 'SELECT id FROM order_number_budgets WHERE order_number = ? COLLATE utf8mb4_unicode_ci';
+    const params = [orderNumber];
+
+    if (project) {
+      query += ' AND project = ?';
+      params.push(project);
+    } else {
+      query += ' AND project IS NULL';
+    }
+
+    const [existing] = await db.query(query, params);
+
+    if (existing.length > 0) {
+      // Update existing
+      await db.query(
+        'UPDATE order_number_budgets SET planned_cost = ? WHERE id = ?',
+        [planned_cost, existing[0].id]
+      );
+    } else {
+      // Insert new
+      await db.query(
+        'INSERT INTO order_number_budgets (order_number, project, planned_cost) VALUES (?, ?, ?)',
+        [orderNumber, project || null, planned_cost]
+      );
+    }
+
+    res.json({ 
+      order_number: orderNumber,
+      project: project || null,
+      planned_cost: parseFloat(planned_cost)
+    });
+  } catch (error) {
+    console.error('Error updating budget:', error);
+    res.status(500).json({ message: 'Failed to update budget' });
   }
 });
 

@@ -70,7 +70,7 @@ const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled 
   );
 };
 
-const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId }) => {
+const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId, readOnly }) => {
   if (!sr) return null;
 
   const handleClose = (e) => {
@@ -247,7 +247,7 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId 
           >
             Close
           </Button>
-          {(sr.status === 'Pending Approval' || sr.status === 'On Hold' || sr.status === 'Draft') && (
+          {(sr.status === 'Pending Approval' || sr.status === 'On Hold' || sr.status === 'Draft') && !readOnly && (
             <>
               {onHold && (
                 <Button 

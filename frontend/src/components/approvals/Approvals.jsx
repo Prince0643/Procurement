@@ -24,6 +24,13 @@ const Card = ({ children, className = '' }) => (
   </div>
 );
 
+const InfoRow = ({ label, value, className = '' }) => (
+  <div className={`flex justify-between items-start py-1.5 border-b border-gray-100 last:border-0 ${className}`}>
+    <span className="text-xs text-gray-500 uppercase tracking-wide">{label}</span>
+    <span className="text-sm text-gray-900 font-medium text-right">{value}</span>
+  </div>
+);
+
 const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled = false, className = '' }) => {
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
   
@@ -129,13 +136,14 @@ const Approvals = () => {
   const [paymentOrderSubTab, setPaymentOrderSubTab] = useState('pending');
   const [reimbursements, setReimbursements] = useState([]);
   const [rmbSubTab, setRmbSubTab] = useState('pending');
+  const [isMobile, setIsMobile] = useState(false);
   const [purchaseOrders, setPurchaseOrders] = useState([]);
+  const [paymentOrders, setPaymentOrders] = useState([]);
   const [purchaseRequests, setPurchaseRequests] = useState([]);
   const [paymentRequests, setPaymentRequests] = useState([]);
   const [serviceRequests, setServiceRequests] = useState([]);
   const [cashRequests, setCashRequests] = useState([]);
   const [disbursementVouchers, setDisbursementVouchers] = useState([]);
-  const [paymentOrders, setPaymentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
@@ -685,10 +693,10 @@ const Approvals = () => {
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
-        <nav className="flex gap-6">
+        <nav className="flex gap-6 overflow-x-auto whitespace-nowrap [-webkit-overflow-scrolling:touch] pb-1 sm:overflow-visible sm:whitespace-normal">
           <button
             onClick={() => setActiveTab('purchase-orders')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'purchase-orders'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -705,7 +713,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('purchase-requests')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'purchase-requests'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -722,7 +730,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('payment-requests')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'payment-requests'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -740,7 +748,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('disbursement-vouchers')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'disbursement-vouchers'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -758,7 +766,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('service-requests')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'service-requests'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -776,7 +784,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('cash-requests')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'cash-requests'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -794,7 +802,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('payment-orders')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'payment-orders'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -812,7 +820,7 @@ const Approvals = () => {
           </button>
           <button
             onClick={() => setActiveTab('reimbursements')}
-            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors flex-shrink-0 ${
               activeTab === 'reimbursements'
                 ? 'border-yellow-500 text-yellow-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -835,7 +843,7 @@ const Approvals = () => {
       {activeTab === 'purchase-orders' && (
         <div className="space-y-4">
           {/* PO Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setPoSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -909,7 +917,8 @@ const Approvals = () => {
               </span>
             </div>
             
-            <div className="overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="overflow-x-auto hidden sm:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
@@ -1156,6 +1165,162 @@ const Approvals = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card List */}
+            <div className="sm:hidden p-4 space-y-3">
+              {/* Pending POs */}
+              {poSubTab === 'pending' && pendingPOs.map(po => (
+                <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
+                    <StatusBadge status={po.status} />
+                  </div>
+                  <InfoRow label="PR Number" value={po.pr_number || '-'} />
+                  <InfoRow label="Supplier" value={po.supplier_name || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(po.total_amount)} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        disabled={processingId === po.id}
+                        onClick={() => handleApprovePO(po.id)}
+                        className="px-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={processingId === po.id}
+                        onClick={() => handleHoldPO(po.id)}
+                        className="px-2"
+                      >
+                        <Clock className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewPO(po)}
+                        className="px-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <button
+                      onClick={() => setExpandedId(expandedId === po.id ? null : po.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === po.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === po.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Prepared By" value={`${po.prepared_by_first_name || ''} ${po.prepared_by_last_name || ''}`} />
+                      <InfoRow label="Date" value={formatDate(po.created_at)} />
+                      <InfoRow label="Delivery" value={po.delivery_term || '-'} />
+                      <InfoRow label="Payment" value={po.payment_term || '-'} />
+                      {po.notes && <p className="text-xs text-gray-600 mt-2">{po.notes}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* On Hold POs */}
+              {poSubTab === 'on-hold' && onHoldPOs.map(po => (
+                <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
+                    <StatusBadge status={po.status} />
+                  </div>
+                  <InfoRow label="PR Number" value={po.pr_number || '-'} />
+                  <InfoRow label="Supplier" value={po.supplier_name || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(po.total_amount)} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        disabled={processingId === po.id}
+                        onClick={() => handleApprovePO(po.id)}
+                        className="px-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewPO(po)}
+                        className="px-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <button
+                      onClick={() => setExpandedId(expandedId === po.id ? null : po.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === po.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === po.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Prepared By" value={`${po.prepared_by_first_name || ''} ${po.prepared_by_last_name || ''}`} />
+                      <InfoRow label="Date" value={formatDate(po.created_at)} />
+                      <InfoRow label="Delivery" value={po.delivery_term || '-'} />
+                      <InfoRow label="Payment" value={po.payment_term || '-'} />
+                      {po.notes && <p className="text-xs text-gray-600 mt-2">{po.notes}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Approved POs */}
+              {poSubTab === 'approved' && approvedPOs.map(po => (
+                <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
+                    <StatusBadge status={po.status} />
+                  </div>
+                  <InfoRow label="PR Number" value={po.pr_number || '-'} />
+                  <InfoRow label="Supplier" value={po.supplier_name || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(po.total_amount)} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewPO(po)}
+                      className="px-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <button
+                      onClick={() => setExpandedId(expandedId === po.id ? null : po.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === po.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === po.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Prepared By" value={`${po.prepared_by_first_name || ''} ${po.prepared_by_last_name || ''}`} />
+                      <InfoRow label="Date" value={formatDate(po.created_at)} />
+                      <InfoRow label="Delivery" value={po.delivery_term || '-'} />
+                      <InfoRow label="Payment" value={po.payment_term || '-'} />
+                      {po.notes && <p className="text-xs text-gray-600 mt-2">{po.notes}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {((poSubTab === 'pending' && pendingPOs.length === 0) ||
+                (poSubTab === 'on-hold' && onHoldPOs.length === 0) ||
+                (poSubTab === 'approved' && approvedPOs.length === 0)) && (
+                <p className="text-center text-gray-500 py-4 text-sm">
+                  No {poSubTab === 'pending' ? 'pending' : poSubTab === 'on-hold' ? 'on hold' : 'approved'} purchase orders
+                </p>
+              )}
+            </div>
           </Card>
         </div>
       )}
@@ -1164,7 +1329,7 @@ const Approvals = () => {
       {activeTab === 'purchase-requests' && (
         <div className="space-y-4">
           {/* PR Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setPrSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1238,7 +1403,8 @@ const Approvals = () => {
               </span>
             </div>
             
-            <div className="overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="overflow-x-auto hidden sm:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200">
@@ -1472,6 +1638,171 @@ const Approvals = () => {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile Card List */}
+            <div className="sm:hidden p-4 space-y-3">
+              {/* Pending PRs */}
+              {prSubTab === 'pending' && pendingPRs.map(pr => (
+                <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                    <StatusBadge status={pr.status} />
+                  </div>
+                  <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                  <InfoRow label="Project" value={pr.project || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(calculatePRAmount(pr, prAmounts))} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        disabled={processingId === pr.id}
+                        onClick={() => handleApprovePR(pr.id)}
+                        className="px-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={processingId === pr.id}
+                        onClick={() => handleHoldPR(pr.id)}
+                        className="px-2"
+                      >
+                        <Clock className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={processingId === pr.id}
+                        onClick={() => handleRejectPR(pr)}
+                        className="px-2"
+                      >
+                        <XCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewPR(pr)}
+                        className="px-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <button
+                      onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === pr.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                      <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                      <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                      <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                      {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* On Hold PRs */}
+              {prSubTab === 'on-hold' && onHoldPRs.map(pr => (
+                <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                    <StatusBadge status={pr.status} />
+                  </div>
+                  <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                  <InfoRow label="Project" value={pr.project || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(calculatePRAmount(pr))} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="success"
+                        size="sm"
+                        disabled={processingId === pr.id}
+                        onClick={() => handleApprovePR(pr.id)}
+                        className="px-2"
+                      >
+                        <CheckCircle className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewPR(pr)}
+                        className="px-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <button
+                      onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === pr.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                      <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                      <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                      <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                      {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Approved PRs */}
+              {prSubTab === 'approved' && approvedPRs.map(pr => (
+                <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                    <StatusBadge status={pr.status} />
+                  </div>
+                  <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                  <InfoRow label="Project" value={pr.project || '-'} />
+                  <InfoRow label="Amount" value={formatCurrency(calculatePRAmount(pr, prAmounts))} />
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleViewPR(pr)}
+                      className="px-2"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <button
+                      onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                    </button>
+                  </div>
+                  {expandedId === pr.id && (
+                    <div className="pt-2 border-t border-gray-100 space-y-2">
+                      <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                      <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                      <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                      <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                      {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {((prSubTab === 'pending' && pendingPRs.length === 0) ||
+                (prSubTab === 'on-hold' && onHoldPRs.length === 0) ||
+                (prSubTab === 'approved' && approvedPRs.length === 0)) && (
+                <p className="text-center text-gray-500 py-4 text-sm">
+                  No {prSubTab === 'pending' ? 'pending' : prSubTab === 'on-hold' ? 'on hold' : 'approved'} purchase requests
+                </p>
+              )}
+            </div>
           </Card>
         </div>
       )}
@@ -1479,7 +1810,7 @@ const Approvals = () => {
       {activeTab === 'payment-requests' && (
         <div className="space-y-4">
           {/* Payment Request Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setPaymentSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -1553,7 +1884,7 @@ const Approvals = () => {
             </span>
           </div>
           
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto hidden sm:block">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
@@ -1789,6 +2120,112 @@ const Approvals = () => {
               </tbody>
             </table>
           </div>
+
+          {/* Mobile Card List */}
+          <div className="sm:hidden p-4 space-y-3">
+            {/* Pending */}
+            {paymentSubTab === 'pending' && pendingPaymentRequests.map(pr => (
+              <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <StatusBadge status={pr.status} />
+                </div>
+                <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                <InfoRow label="Project" value={pr.project || '-'} />
+                <InfoRow label="Amount" value={formatCurrency(pr.amount)} />
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Button variant="success" size="sm" disabled={processingId === pr.id} onClick={() => handleApprovePaymentRequest(pr.id)} className="px-2">
+                      <CheckCircle className="w-4 h-4" />
+                    </Button>
+                    <Button variant="secondary" size="sm" disabled={processingId === pr.id} onClick={() => handleHoldPaymentRequest(pr.id)} className="px-2">
+                      <Clock className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <button onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)} className="text-gray-400 hover:text-gray-600">
+                    {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                </div>
+                {expandedId === pr.id && (
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                    <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                    <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                    <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                    {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* On Hold */}
+            {paymentSubTab === 'on-hold' && onHoldPaymentRequests.map(pr => (
+              <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <StatusBadge status={pr.status} />
+                </div>
+                <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                <InfoRow label="Project" value={pr.project || '-'} />
+                <InfoRow label="Amount" value={formatCurrency(pr.amount)} />
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <Button variant="success" size="sm" disabled={processingId === pr.id} onClick={() => handleApprovePaymentRequest(pr.id)} className="px-2">
+                    <CheckCircle className="w-4 h-4" />
+                  </Button>
+                  <button onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)} className="text-gray-400 hover:text-gray-600">
+                    {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                </div>
+                {expandedId === pr.id && (
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                    <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                    <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                    <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                    {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Approved */}
+            {paymentSubTab === 'approved' && approvedPaymentRequests.map(pr => (
+              <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <StatusBadge status={pr.status} />
+                </div>
+                <InfoRow label="Payee" value={pr.payee_name || '-'} />
+                <InfoRow label="Project" value={pr.project || '-'} />
+                <InfoRow label="Amount" value={formatCurrency(pr.amount)} />
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <Button variant="ghost" size="sm" onClick={() => handleViewPayment(pr)} className="px-2">
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <button onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)} className="text-gray-400 hover:text-gray-600">
+                    {expandedId === pr.id ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+                  </button>
+                </div>
+                {expandedId === pr.id && (
+                  <div className="pt-2 border-t border-gray-100 space-y-2">
+                    <InfoRow label="Payee Address" value={pr.payee_address || '-'} />
+                    <InfoRow label="Purpose" value={pr.purpose || '-'} />
+                    <InfoRow label="Project Address" value={pr.project_address || '-'} />
+                    <InfoRow label="Order Number" value={pr.order_number || '-'} />
+                    {pr.remarks && <p className="text-xs text-gray-600 mt-2">{pr.remarks}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {((paymentSubTab === 'pending' && pendingPaymentRequests.length === 0) ||
+              (paymentSubTab === 'on-hold' && onHoldPaymentRequests.length === 0) ||
+              (paymentSubTab === 'approved' && approvedPaymentRequests.length === 0)) && (
+              <p className="text-center text-gray-500 py-4 text-sm">
+                No {paymentSubTab === 'pending' ? 'pending' : paymentSubTab === 'on-hold' ? 'on hold' : 'approved'} payment requests
+              </p>
+            )}
+          </div>
         </Card>
         </div>
       )}
@@ -1796,7 +2233,7 @@ const Approvals = () => {
       {activeTab === 'disbursement-vouchers' && (
         <div className="space-y-4">
           {/* DV Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setDvSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -2029,7 +2466,7 @@ const Approvals = () => {
       {activeTab === 'service-requests' && (
         <div className="space-y-4">
           {/* SR Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setSrSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -2354,7 +2791,7 @@ const Approvals = () => {
       {activeTab === 'cash-requests' && (
         <div className="space-y-4">
           {/* CR Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setCrSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -2705,7 +3142,7 @@ const Approvals = () => {
       {activeTab === 'payment-orders' && (
         <div className="space-y-4">
           {/* Payment Order Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setPaymentOrderSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
@@ -3052,7 +3489,7 @@ const Approvals = () => {
       {activeTab === 'reimbursements' && (
         <div className="space-y-4">
           {/* RMB Sub-tabs */}
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setRmbSubTab('pending')}
               className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
