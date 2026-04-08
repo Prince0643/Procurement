@@ -17,10 +17,60 @@ const dedupeRequest = async (key, requestFn) => {
 };
 
 export const serviceRequestService = {
-  getAll: async () => {
-    return dedupeRequest('serviceRequests-getAll', async () => {
-      const response = await api.get('/service-requests');
-      return response.data.serviceRequests;
+  list: async (params = {}) => {
+    const view = params?.view ?? null;
+    const page = params?.page ?? null;
+    const pageSize = params?.pageSize ?? null;
+    const status = params?.status ?? null;
+    const q = params?.q ?? null;
+
+    const key = `serviceRequests-list-${JSON.stringify({ view, page, pageSize, status, q })}`;
+
+    return dedupeRequest(key, async () => {
+      const queryParams = {};
+      if (view) queryParams.view = view;
+      if (page) queryParams.page = page;
+      if (pageSize) queryParams.pageSize = pageSize;
+      if (status) queryParams.status = Array.isArray(status) ? status.join(',') : status;
+      if (q) queryParams.q = q;
+
+      const response = await api.get('/service-requests', { params: queryParams, cache: false });
+      return response.data;
+    });
+  },
+
+  getAll: async (view) => {
+    const key = `serviceRequests-getAll-${view || 'default'}`;
+    return dedupeRequest(key, async () => {
+      const pageSize = 100;
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+
+      while (all.length < total) {
+        const response = await api.get('/service-requests', {
+          params: { ...(view ? { view } : {}), page, pageSize },
+          cache: false
+        });
+
+        const payload = response.data || {};
+        const serviceRequests = Array.isArray(payload.serviceRequests) ? payload.serviceRequests : [];
+        total = Number.isFinite(payload.total) ? payload.total : serviceRequests.length;
+
+        all.push(...serviceRequests);
+        if (serviceRequests.length < pageSize) break;
+
+        page += 1;
+        if (page > 1000) break; // safety guard
+      }
+
+      const unique = new Map();
+      for (const sr of all) {
+        if (sr?.id == null) continue;
+        unique.set(sr.id, sr);
+      }
+
+      return Array.from(unique.values());
     });
   },
 

@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
@@ -113,11 +114,32 @@ const ServiceTypeBadge = ({ type }) => {
   );
 };
 
+const STATUS_FILTER_OPTIONS = [
+  'Draft',
+  'For Procurement Review',
+  'For Super Admin Final Approval',
+  'Approved',
+  'Rejected',
+  'Cancelled',
+  'PO Created',
+  'Paid'
+];
+
 const ServiceRequestsManagement = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const page = Math.max(parseInt(searchParams.get('page') || '1', 10) || 1, 1);
+  const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10) || 20, 1), 100);
+  const urlStatus = searchParams.get('status') || 'ALL';
+  const urlQ = searchParams.get('q') || '';
+  const urlView = searchParams.get('view') || '';
+
   const [serviceRequests, setServiceRequests] = useState([]);
+  const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(urlQ);
+  const [statusFilter, setStatusFilter] = useState(urlStatus);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedSR, setSelectedSR] = useState(null);
@@ -156,8 +178,28 @@ const ServiceRequestsManagement = () => {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  const updateQueryParams = useCallback((updater, { replace = false } = {}) => {
+    const next = new URLSearchParams(searchParams);
+    updater(next);
+    setSearchParams(next, { replace });
+  }, [searchParams, setSearchParams]);
+
   useEffect(() => {
-    fetchServiceRequests();
+    setSearchTerm(urlQ);
+    setStatusFilter(urlStatus);
+  }, [urlQ, urlStatus]);
+
+  // Only engineers can use view=all; clean up URL for other roles.
+  useEffect(() => {
+    if (user?.role && user.role !== 'engineer' && urlView) {
+      updateQueryParams((p) => {
+        p.delete('view');
+      }, { replace: true });
+    }
+  }, [user?.role, urlView, updateQueryParams]);
+
+  useEffect(() => {
+    fetchRef.current?.();
     fetchSuppliers();
     fetchBranches();
   }, []);
@@ -168,12 +210,12 @@ const ServiceRequestsManagement = () => {
     
     const handleSRUpdate = (data) => {
       console.log('SR updated (real-time):', data);
-      fetchServiceRequests();
+      fetchRef.current?.();
     };
 
     const handleSRStatusChange = (data) => {
       console.log('SR status changed (real-time):', data);
-      fetchServiceRequests();
+      fetchRef.current?.();
     };
 
     socketService.on('sr_updated', handleSRUpdate);
@@ -233,17 +275,106 @@ const ServiceRequestsManagement = () => {
     }))
   }
 
-  const fetchServiceRequests = async () => {
+  const fetchServiceRequests = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await serviceRequestService.getAll();
-      setServiceRequests(data);
+      setError('');
+
+      const view = user?.role === 'engineer' && urlView === 'all' ? 'all' : null;
+      const payload = await serviceRequestService.list({
+        view,
+        page,
+        pageSize,
+        status: urlStatus !== 'ALL' ? urlStatus : null,
+        q: urlQ.trim() ? urlQ.trim() : null
+      });
+
+      const rows = Array.isArray(payload?.serviceRequests) ? payload.serviceRequests : [];
+      setServiceRequests(rows);
+      setTotal(Number.isFinite(payload?.total) ? payload.total : rows.length);
+      setExpandedSRId(null);
     } catch (err) {
       setError('Failed to fetch service requests');
       console.error('Failed to fetch service requests', err);
     } finally {
       setLoading(false);
     }
+  }, [user?.role, urlView, page, pageSize, urlStatus, urlQ]);
+
+  const fetchRef = useRef(null);
+  useEffect(() => {
+    fetchRef.current = fetchServiceRequests;
+  }, [fetchServiceRequests]);
+
+  useEffect(() => {
+    fetchServiceRequests();
+  }, [fetchServiceRequests]);
+
+  // Debounced URL update for search input
+  useEffect(() => {
+    if (searchTerm === urlQ) return;
+    const timer = setTimeout(() => {
+      const trimmed = searchTerm.trim();
+      updateQueryParams((p) => {
+        if (trimmed) p.set('q', trimmed);
+        else p.delete('q');
+        p.set('page', '1');
+      }, { replace: true });
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm, urlQ, updateQueryParams]);
+
+  const totalPages = Math.max(Math.ceil((total || 0) / pageSize) || 1, 1);
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endItem = total === 0 ? 0 : Math.min(page * pageSize, total);
+
+  useEffect(() => {
+    if (total > 0 && page > totalPages) {
+      updateQueryParams((p) => {
+        p.set('page', String(totalPages));
+      }, { replace: true });
+    }
+  }, [total, page, totalPages, updateQueryParams]);
+
+  const commitSearchToUrl = ({ replace } = {}) => {
+    const trimmed = searchTerm.trim();
+    updateQueryParams((p) => {
+      if (trimmed) p.set('q', trimmed);
+      else p.delete('q');
+      p.set('page', '1');
+    }, { replace: replace ?? false });
+  };
+
+  const handleStatusFilterChange = (nextStatus) => {
+    setStatusFilter(nextStatus);
+    updateQueryParams((p) => {
+      if (nextStatus && nextStatus !== 'ALL') p.set('status', nextStatus);
+      else p.delete('status');
+      p.set('page', '1');
+    }, { replace: false });
+  };
+
+  const handlePageSizeChange = (nextPageSize) => {
+    updateQueryParams((p) => {
+      if (nextPageSize === 20) p.delete('pageSize');
+      else p.set('pageSize', String(nextPageSize));
+      p.set('page', '1');
+    }, { replace: false });
+  };
+
+  const handleViewAllChange = (checked) => {
+    updateQueryParams((p) => {
+      if (checked) p.set('view', 'all');
+      else p.delete('view');
+      p.set('page', '1');
+    }, { replace: false });
+  };
+
+  const goToPage = (nextPage) => {
+    const clamped = Math.min(Math.max(nextPage, 1), totalPages);
+    updateQueryParams((p) => {
+      p.set('page', String(clamped));
+    }, { replace: false });
   };
 
   const fetchSuppliers = async () => {
@@ -400,12 +531,6 @@ const ServiceRequestsManagement = () => {
     }
   };
 
-  const filteredSRs = serviceRequests.filter(sr =>
-    sr.purpose?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sr.sr_number?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    sr.service_type?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
   const canCreate = ['engineer', 'admin'].includes(user?.role);
   const canProcurementApprove = ['procurement', 'admin', 'super_admin'].includes(user?.role);
   const canSuperAdminApprove = ['super_admin'].includes(user?.role);
@@ -434,17 +559,64 @@ const ServiceRequestsManagement = () => {
         )}
       </div>
 
-      {/* Search */}
+      {/* Filters */}
       <Card className="p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search service requests..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-          />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search service requests..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitSearchToUrl({ replace: false });
+                }}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+            <select
+              value={statusFilter}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
+              className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value="ALL">All statuses</option>
+              {STATUS_FILTER_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="w-full sm:w-28 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              title="Page size"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            {user?.role === 'engineer' && (
+              <label className="inline-flex items-center gap-2 text-sm text-gray-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={urlView === 'all'}
+                  onChange={(e) => handleViewAllChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                />
+                View all
+              </label>
+            )}
+
+            <div className="text-sm text-gray-500 sm:ml-2">
+              {total === 0 ? '0 Requests' : `Showing ${startItem}-${endItem} of ${total}`}
+            </div>
+          </div>
         </div>
       </Card>
 
@@ -458,7 +630,7 @@ const ServiceRequestsManagement = () => {
       {/* Service Requests List */}
       <Card>
         <div className="divide-y divide-gray-200">
-          {filteredSRs.map((sr) => (
+          {serviceRequests.map((sr) => (
             <div key={sr.id} className="p-4 hover:bg-gray-50">
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
@@ -602,11 +774,61 @@ const ServiceRequestsManagement = () => {
             </div>
           ))}
           
-          {filteredSRs.length === 0 && (
+          {serviceRequests.length === 0 && (
             <div className="p-8 text-center text-gray-500">
               No service requests found
             </div>
           )}
+        </div>
+
+        {/* Pagination */}
+        <div className="border-t border-gray-200 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-sm text-gray-500">
+              {total === 0 ? '0 Requests' : `Showing ${startItem}-${endItem} of ${total}`}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => goToPage(page - 1)}
+                >
+                  Prev
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => page - 2 + i)
+                    .filter((p) => p >= 1 && p <= totalPages)
+                    .map((p) => (
+                      <Button
+                        key={p}
+                        variant={p === page ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={() => goToPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    ))}
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => goToPage(page + 1)}
+                >
+                  Next
+                </Button>
+
+                <span className="text-sm text-gray-500 ml-2">
+                  Page {page} of {totalPages}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
 

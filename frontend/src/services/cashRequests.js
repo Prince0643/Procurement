@@ -1,9 +1,54 @@
 import api from './api';
 
 export const cashRequestService = {
-  getAll: async () => {
-    const response = await api.get('/cash-requests');
-    return response.data.cashRequests || [];
+  list: async (params = {}) => {
+    const view = params?.view ?? null;
+    const page = params?.page ?? null;
+    const pageSize = params?.pageSize ?? null;
+    const status = params?.status ?? null;
+    const q = params?.q ?? null;
+
+    const queryParams = {};
+    if (view) queryParams.view = view;
+    if (page) queryParams.page = page;
+    if (pageSize) queryParams.pageSize = pageSize;
+    if (status) queryParams.status = Array.isArray(status) ? status.join(',') : status;
+    if (q) queryParams.q = q;
+
+    const response = await api.get('/cash-requests', { params: queryParams, cache: false });
+    return response.data;
+  },
+
+  getAll: async (view) => {
+    const pageSize = 100;
+    const all = [];
+    let page = 1;
+    let total = Infinity;
+
+    while (all.length < total) {
+      const response = await api.get('/cash-requests', {
+        params: { ...(view ? { view } : {}), page, pageSize },
+        cache: false
+      });
+
+      const payload = response.data || {};
+      const cashRequests = Array.isArray(payload.cashRequests) ? payload.cashRequests : [];
+      total = Number.isFinite(payload.total) ? payload.total : cashRequests.length;
+
+      all.push(...cashRequests);
+      if (cashRequests.length < pageSize) break;
+
+      page += 1;
+      if (page > 1000) break; // safety guard
+    }
+
+    const unique = new Map();
+    for (const cr of all) {
+      if (cr?.id == null) continue;
+      unique.set(cr.id, cr);
+    }
+
+    return Array.from(unique.values());
   },
 
   getById: async (id) => {

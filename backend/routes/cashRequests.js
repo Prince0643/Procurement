@@ -37,29 +37,84 @@ const generateCRNumber = async (user) => {
 // Get all Cash Requests
 router.get('/', authenticate, async (req, res) => {
   try {
-    let query = `
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
+    const { view } = req.query;
+    const q = String(req.query.q || '').trim();
+
+    const statusesRaw = req.query.status;
+    const statuses = Array.isArray(statusesRaw)
+      ? statusesRaw
+      : (typeof statusesRaw === 'string' && statusesRaw.length > 0)
+        ? statusesRaw.split(',')
+        : [];
+    const normalizedStatuses = statuses
+      .map((s) => String(s || '').trim())
+      .filter(Boolean);
+
+    const baseFrom = `
+      FROM cash_requests cr
+      JOIN employees e ON cr.requested_by = e.id
+      LEFT JOIN employees approver ON cr.approved_by = approver.id
+    `;
+
+    const whereClauses = [];
+    const whereParams = [];
+
+    // Engineers see only their own CRs by default, but can view all with ?view=all
+    if (req.user.role === 'engineer' && view !== 'all') {
+      whereClauses.push('cr.requested_by = ?');
+      whereParams.push(req.user.id);
+    }
+
+    if (normalizedStatuses.length > 0) {
+      whereClauses.push(`cr.status IN (${normalizedStatuses.map(() => '?').join(', ')})`);
+      whereParams.push(...normalizedStatuses);
+    }
+
+    if (q) {
+      const like = `%${q}%`;
+      whereClauses.push(`(
+        cr.cr_number LIKE ?
+        OR cr.purpose LIKE ?
+        OR cr.project LIKE ?
+        OR cr.supplier_name LIKE ?
+        OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+      )`);
+      whereParams.push(like, like, like, like, like);
+    }
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const listQuery = `
       SELECT cr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name
-      FROM cash_requests cr
-      JOIN employees e ON cr.requested_by = e.id
-      LEFT JOIN employees approver ON cr.approved_by = approver.id
+      ${baseFrom}
+      ${whereSql}
+      ORDER BY cr.created_at DESC
+      LIMIT ? OFFSET ?
     `;
-    
-    const params = [];
-    
-    // Engineers see only their own CRs
-    if (req.user.role === 'engineer') {
-      query += ' WHERE cr.requested_by = ?';
-      params.push(req.user.id);
-    }
-    
-    query += ' ORDER BY cr.created_at DESC';
-    
-    const [crs] = await db.query(query, params);
-    res.json({ cashRequests: crs });
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      ${baseFrom}
+      ${whereSql}
+    `;
+
+    const [crs] = await db.query(listQuery, [...whereParams, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, whereParams);
+
+    res.json({
+      cashRequests: crs,
+      page,
+      pageSize,
+      total: countRows?.[0]?.total ?? 0
+    });
   } catch (error) {
     console.error('Fetch cash requests error:', error);
     res.status(500).json({ message: 'Failed to fetch cash requests: ' + error.message });

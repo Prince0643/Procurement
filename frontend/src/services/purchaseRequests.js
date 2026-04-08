@@ -16,12 +16,61 @@ const dedupeRequest = async (key, requestFn) => {
 };
 
 export const purchaseRequestService = {
+  list: async (params = {}) => {
+    const view = params?.view ?? null;
+    const page = params?.page ?? null;
+    const pageSize = params?.pageSize ?? null;
+    const status = params?.status ?? null;
+    const q = params?.q ?? null;
+
+    const key = `list-${JSON.stringify({ view, page, pageSize, status, q })}`;
+
+    return dedupeRequest(key, async () => {
+      const queryParams = {};
+      if (view) queryParams.view = view;
+      if (page) queryParams.page = page;
+      if (pageSize) queryParams.pageSize = pageSize;
+      if (status) queryParams.status = Array.isArray(status) ? status.join(',') : status;
+      if (q) queryParams.q = q;
+
+      const response = await api.get('/purchase-requests', { params: queryParams, cache: false });
+      return response.data;
+    });
+  },
+
   getAll: async (view) => {
     const key = `getAll-${view || 'default'}`;
     return dedupeRequest(key, async () => {
-      const params = view ? { view } : {};
-      const response = await api.get('/purchase-requests', { params });
-      return response.data.purchaseRequests;
+      const pageSize = 100;
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+
+      while (all.length < total) {
+        const response = await api.get('/purchase-requests', {
+          params: { ...(view ? { view } : {}), page, pageSize },
+          cache: false
+        });
+
+        const payload = response.data || {};
+        const purchaseRequests = Array.isArray(payload.purchaseRequests) ? payload.purchaseRequests : [];
+        total = Number.isFinite(payload.total) ? payload.total : purchaseRequests.length;
+
+        all.push(...purchaseRequests);
+        if (purchaseRequests.length < pageSize) break;
+
+        page += 1;
+        if (page > 1000) break; // safety guard
+      }
+
+      // De-dupe by id (in case data changes mid-pagination)
+      const unique = new Map();
+      for (const pr of all) {
+        if (pr?.id == null) continue;
+        unique.set(pr.id, pr);
+      }
+
+      return Array.from(unique.values());
     });
   },
 

@@ -38,30 +38,80 @@ const generateSRNumber = async (user) => {
 // Get all Service Requests
 router.get('/', authenticate, async (req, res) => {
   try {
-    let query = `
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
+    const offset = (page - 1) * pageSize;
+
+    const { view } = req.query;
+    const q = String(req.query.q || '').trim();
+
+    const statusesRaw = req.query.status;
+    const statuses = Array.isArray(statusesRaw)
+      ? statusesRaw
+      : (typeof statusesRaw === 'string' && statusesRaw.length > 0)
+        ? statusesRaw.split(',')
+        : [];
+    const normalizedStatuses = statuses
+      .map((s) => String(s || '').trim())
+      .filter(Boolean);
+
+    const baseFrom = `
+      FROM service_requests sr
+      JOIN employees e ON sr.requested_by = e.id
+      LEFT JOIN suppliers s ON sr.supplier_id = s.id
+      LEFT JOIN employees approver ON sr.approved_by = approver.id
+    `;
+
+    const whereClauses = [];
+    const whereParams = [];
+
+    // Engineers see only their own SRs by default, but can view all with ?view=all
+    if (req.user.role === 'engineer' && view !== 'all') {
+      whereClauses.push('sr.requested_by = ?');
+      whereParams.push(req.user.id);
+    }
+
+    if (normalizedStatuses.length > 0) {
+      whereClauses.push(`sr.status IN (${normalizedStatuses.map(() => '?').join(', ')})`);
+      whereParams.push(...normalizedStatuses);
+    }
+
+    if (q) {
+      const like = `%${q}%`;
+      whereClauses.push(`(
+        sr.sr_number LIKE ?
+        OR sr.purpose LIKE ?
+        OR sr.service_type LIKE ?
+        OR sr.project LIKE ?
+        OR s.supplier_name LIKE ?
+        OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+      )`);
+      whereParams.push(like, like, like, like, like, like);
+    }
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const listQuery = `
       SELECT sr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
              s.supplier_name,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name
-      FROM service_requests sr
-      JOIN employees e ON sr.requested_by = e.id
-      LEFT JOIN suppliers s ON sr.supplier_id = s.id
-      LEFT JOIN employees approver ON sr.approved_by = approver.id
+      ${baseFrom}
+      ${whereSql}
+      ORDER BY sr.created_at DESC
+      LIMIT ? OFFSET ?
     `;
-    
-    const params = [];
-    
-    // Engineers see only their own SRs
-    if (req.user.role === 'engineer') {
-      query += ' WHERE sr.requested_by = ?';
-      params.push(req.user.id);
-    }
-    
-    query += ' ORDER BY sr.created_at DESC';
-    
-    const [srs] = await db.query(query, params);
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      ${baseFrom}
+      ${whereSql}
+    `;
+
+    const [srs] = await db.query(listQuery, [...whereParams, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, whereParams);
     
     // Add items for service requests that have quantity (payment_order type)
     for (const sr of srs) {
@@ -80,7 +130,12 @@ router.get('/', authenticate, async (req, res) => {
       }
     }
     
-    res.json({ serviceRequests: srs });
+    res.json({
+      serviceRequests: srs,
+      page,
+      pageSize,
+      total: countRows?.[0]?.total ?? 0
+    });
   } catch (error) {
     console.error('Fetch service requests error:', error);
     res.status(500).json({ message: 'Failed to fetch service requests: ' + error.message });

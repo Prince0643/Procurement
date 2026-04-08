@@ -106,10 +106,32 @@ const ServiceRequestApproval = () => {
   const fetchServiceRequestsForReview = async () => {
     try {
       setLoading(true);
-      const data = await serviceRequestService.getAll();
-      // Filter only SRs that are For Procurement Review
-      const forReview = data.filter(sr => sr.status === 'For Procurement Review');
-      setServiceRequests(forReview);
+      const pageSize = 100;
+      const all = [];
+      let page = 1;
+      let total = Infinity;
+
+      while (all.length < total) {
+        const payload = await serviceRequestService.list({
+          page,
+          pageSize,
+          status: 'For Procurement Review'
+        });
+
+        const rows = Array.isArray(payload?.serviceRequests) ? payload.serviceRequests : [];
+        total = Number.isFinite(payload?.total) ? payload.total : rows.length;
+        all.push(...rows);
+
+        if (rows.length < pageSize) break;
+        page += 1;
+        if (page > 1000) break;
+      }
+
+      // De-dupe by id (in case data changes mid-pagination)
+      const unique = new Map();
+      for (const sr of all) unique.set(sr.id, sr);
+
+      setServiceRequests(Array.from(unique.values()));
     } catch (err) {
       setError('Failed to fetch service requests');
       console.error('Failed to fetch service requests', err);

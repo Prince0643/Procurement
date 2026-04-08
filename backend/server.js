@@ -44,13 +44,25 @@ app.set('trust proxy', 1);
 const io = initSocket(httpServer);
 
 // Middleware - CORS with dynamic origin checking
+const envAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
+  .split(',')
+  .map((o) => o.trim())
+  .filter(Boolean);
+
+const defaultAllowedOrigins = [
+  'https://procurement.xandree.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+
+const allowedOrigins = envAllowedOrigins.length ? envAllowedOrigins : defaultAllowedOrigins;
+
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
     
-    const allowedOrigins = ['https://procurement.xandree.com', 'http://localhost:5173', 'http://127.0.0.1:5173'];
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
       console.log('CORS blocked origin:', origin);
@@ -69,7 +81,6 @@ app.use(cors(corsOptions));
 // Explicitly handle OPTIONS requests for all routes
 app.options('*', (req, res) => {
   const origin = req.headers.origin;
-  const allowedOrigins = ['https://procurement.xandree.com', 'http://localhost:5173', 'http://127.0.0.1:5173'];
   
   if (origin && allowedOrigins.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);

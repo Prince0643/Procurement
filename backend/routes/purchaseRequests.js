@@ -19,45 +19,80 @@ router.get('/', authenticate, async (req, res) => {
     const pageSize = Math.min(Math.max(parseInt(req.query.pageSize, 10) || 20, 1), 100);
     const offset = (page - 1) * pageSize;
 
-    let query = `
-      SELECT pr.*, 
-             e.first_name as requester_first_name, 
-             e.last_name as requester_last_name,
-             s.supplier_name,
-             s.supplier_name as payee_name
+    const { view } = req.query;
+    const q = String(req.query.q || '').trim();
+
+    const statusesRaw = req.query.status;
+    const statuses = Array.isArray(statusesRaw)
+      ? statusesRaw
+      : (typeof statusesRaw === 'string' && statusesRaw.length > 0)
+        ? statusesRaw.split(',')
+        : [];
+    const normalizedStatuses = statuses
+      .map((s) => String(s || '').trim())
+      .filter(Boolean);
+
+    const baseFrom = `
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
     `;
-    
-    const params = [];
-    const { view } = req.query;
-    
+
+    const whereClauses = [];
+    const whereParams = [];
+
     // Engineers see only their own PRs by default, but can view all with ?view=all
-    if (req.user.role === 'engineer') {
-      if (view !== 'all') {
-        query += ' WHERE pr.requested_by = ?';
-        params.push(req.user.id);
-      }
+    if (req.user.role === 'engineer' && view !== 'all') {
+      whereClauses.push('pr.requested_by = ?');
+      whereParams.push(req.user.id);
     }
-    
+
+    if (normalizedStatuses.length > 0) {
+      whereClauses.push(`pr.status IN (${normalizedStatuses.map(() => '?').join(', ')})`);
+      whereParams.push(...normalizedStatuses);
+    }
+
+    if (q) {
+      const like = `%${q}%`;
+      whereClauses.push(`(
+        pr.pr_number LIKE ?
+        OR pr.project LIKE ?
+        OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+        OR s.supplier_name LIKE ?
+      )`);
+      whereParams.push(like, like, like, like);
+    }
+
+    const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const listQuery = `
+      SELECT pr.*, 
+             e.first_name as requester_first_name, 
+             e.last_name as requester_last_name,
+             s.supplier_name,
+             s.supplier_name as payee_name,
+             COALESCE(pr.supplier_address, s.address) as payee_address
+      ${baseFrom}
+      ${whereSql}
+      ORDER BY pr.created_at DESC
+      LIMIT ? OFFSET ?
+    `;
+
     const countQuery = `
       SELECT COUNT(*) as total
-      FROM purchase_requests pr
-      ${req.user.role === 'engineer' && view !== 'all' ? 'WHERE pr.requested_by = ?' : ''}
+      ${baseFrom}
+      ${whereSql}
     `;
- 
-    const countParams = [];
-    if (req.user.role === 'engineer' && view !== 'all') {
-      countParams.push(req.user.id);
-    }
- 
-    query += ' ORDER BY pr.created_at DESC LIMIT ? OFFSET ?';
- 
-    const [prs] = await db.query(query, [...params, pageSize, offset]);
-    const [countRows] = await db.query(countQuery, countParams);
- 
-    res.json({ purchaseRequests: prs, page, pageSize, total: countRows?.[0]?.total ?? 0 });
+
+    const [prs] = await db.query(listQuery, [...whereParams, pageSize, offset]);
+    const [countRows] = await db.query(countQuery, whereParams);
+
+    res.json({
+      purchaseRequests: prs,
+      page,
+      pageSize,
+      total: countRows?.[0]?.total ?? 0
+    });
   } catch (error) {
     console.error('Fetch purchase requests error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase requests: ' + error.message });
@@ -65,23 +100,27 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Get single PR with items
-router.get('/:id', authenticate, async (req, res) => {
-  try {
-    const [prs] = await db.query(`
-      SELECT pr.*, 
-             e.first_name as requester_first_name, 
-             e.last_name as requester_last_name,
-             approver.first_name as approver_first_name,
-             approver.last_name as approver_last_name,
-             s.supplier_name,
-             engineer_selected.supplier_name as engineer_supplier_name
-      FROM purchase_requests pr
-      JOIN employees e ON pr.requested_by = e.id
-      LEFT JOIN employees approver ON pr.approved_by = approver.id
-      LEFT JOIN suppliers s ON pr.supplier_id = s.id
-      LEFT JOIN suppliers engineer_selected ON pr.supplier_id = engineer_selected.id
-      WHERE pr.id = ?
-    `, [req.params.id]);
+	router.get('/:id', authenticate, async (req, res) => {
+	  try {
+	    // 70-84
+	    const [prs] = await db.query(`
+	      SELECT pr.*, 
+	             e.first_name as requester_first_name, 
+	             e.last_name as requester_last_name,
+	             approver.first_name as approver_first_name,
+	             approver.last_name as approver_last_name,
+	             s.supplier_name,
+	             s.supplier_name as payee_name,
+	             COALESCE(pr.supplier_address, s.address) as payee_address,
+	             s.address as supplier_address,
+	             engineer_selected.supplier_name as engineer_supplier_name
+	      FROM purchase_requests pr
+	      JOIN employees e ON pr.requested_by = e.id
+	      LEFT JOIN employees approver ON pr.approved_by = approver.id
+	      LEFT JOIN suppliers s ON pr.supplier_id = s.id
+	      LEFT JOIN suppliers engineer_selected ON pr.supplier_id = engineer_selected.id
+	      WHERE pr.id = ?
+	    `, [req.params.id]);
 
     if (prs.length === 0) {
       return res.status(404).json({ message: 'Purchase request not found' });
@@ -146,6 +185,7 @@ router.post('/', authenticate, async (req, res) => {
 
     conn = await db.getConnection();
     await conn.beginTransaction();
+    // 147-148
 
     const now = new Date();
     const year = now.getFullYear();
@@ -197,10 +237,26 @@ router.post('/', authenticate, async (req, res) => {
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
+    let supplierAddress = null;
+
+    if (supplier_id) {
+      const [supRows] = await conn.query(
+        'SELECT address from suppliers WHERE id = ? LIMIT 1',
+        [supplier_id]
+      );
+
+      if (supRows.length === 0) {
+        throw new Error('Invalid supplier_id; supplier not found');
+      }
+
+      supplierAddress = supRows[0].address ?? null;
+    }
+    
+    // 200-218
     const [result] = await conn.query(
       `INSERT INTO purchase_requests
-      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id, total_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id, supplier_address, total_amount)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         prNumber,
         req.user.id,
@@ -213,6 +269,7 @@ router.post('/', authenticate, async (req, res) => {
         order_number || null,
         paymentBasis,
         supplier_id || null,
+        supplierAddress,
         totalAmount
       ]
     );
@@ -317,10 +374,26 @@ router.put('/:id/draft', authenticate, async (req, res) => {
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
+    let supplierAddress = null;
+    const effectiveSupplierId = supplier_id ?? pr.supplier_id;
+
+    if (effectiveSupplierId) {
+      const [supRows] = await conn.query(
+        'SELECT address FROM suppliers WHERE id = ? LIMIT 1',
+        [effectiveSupplierId]
+      );
+
+      if (supRows.length === 0) {
+        throw new Error('Invalid supplier_id: supplier not found');
+      }
+
+      supplierAddress = supRows[0].address ?? null;
+    }
+
     // Update PR details
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, total_amount = ?, updated_at = NOW()
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, supplier_address = ?, total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         purpose ?? pr.purpose,
@@ -331,6 +404,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
         order_number || pr.order_number,
         payment_basis ?? pr.payment_basis,
         supplier_id ?? pr.supplier_id,
+        supplierAddress,
         totalAmount,
         req.params.id
       ]
@@ -342,7 +416,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
 
       for (const item of normalizedItems) {
         await conn.query(
-          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ? , ?, ?)',
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
           [req.params.id, item.itemId, item.quantity, item.unitPrice, item.totalPrice, item.remarks]
         );
       }
@@ -919,13 +993,29 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
 
+    let supplierAddress = null;
+    const effectiveSupplierId = supplier_id ?? pr.supplier_id;
+
+    if (effectiveSupplierId) {
+      const [supRows] = await conn.query(
+        'SELECT address FROM suppliers WHERE id = ? LIMIT 1',
+        [effectiveSupplierId]
+      );
+
+      if (supRows.length === 0) {
+        throw new Error('Invalid supplier_id: supplier not found');
+      }
+
+      supplierAddress = supRows[0].address ?? null;
+    }
+
     // Update PR details and reset status to For Procurement Review, clear all pricing data
     await conn.query(
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
            payment_basis = ?, supplier_id = ?,
            status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
-           supplier_address = NULL, rejection_reason = NULL, 
+           supplier_address = ?, rejection_reason = NULL, 
            total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
 
@@ -937,6 +1027,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
         order_number || pr.order_number,
         payment_basis ?? pr.payment_basis,
         supplier_id ?? pr.supplier_id,
+        supplierAddress,
         totalAmount,
         req.params.id
       ]

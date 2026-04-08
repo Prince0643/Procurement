@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { supplierService } from '../../services/suppliers'
 import { socketService } from '../../services/socket'
 import PRPreviewModal from './PRPreviewModal'
-import { ChevronUp, ChevronDown, Plus, FileSpreadsheet, Edit, Trash2, X, Eye, CheckCircle, XCircle, Pause } from 'lucide-react'
+import { ChevronUp, ChevronDown, Plus, FileSpreadsheet, Edit, Trash2, X, Eye, CheckCircle, XCircle, Pause, Search } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 
 // UI Components
@@ -116,14 +117,40 @@ const StatusBadge = ({ status }) => {
   )
 }
 
+const STATUS_FILTER_OPTIONS = [
+  'For Procurement Review',
+  'For Super Admin Final Approval',
+  'For Purchase',
+  'Received',
+  'Completed',
+  'Rejected',
+  'Draft',
+  'Cancelled',
+  'Pending',
+  'For Approval',
+  'Approved',
+  'PO Created',
+  'Paid'
+]
+
 const PurchaseRequests = () => {
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const page = Math.max(parseInt(searchParams.get('page') || '1', 10) || 1, 1)
+  const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10) || 20, 1), 100)
+  const urlStatus = searchParams.get('status') || 'ALL'
+  const urlQ = searchParams.get('q') || ''
+
   const [purchaseRequests, setPurchaseRequests] = useState([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [expandedId, setExpandedId] = useState(null)
   const [expandedPRDetails, setExpandedPRDetails] = useState({})
   const [loadingExpanded, setLoadingExpanded] = useState(null)
   const { user } = useAuth()
+  const [statusFilter, setStatusFilter] = useState(urlStatus)
+  const [searchQuery, setSearchQuery] = useState(urlQ)
 
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -167,9 +194,17 @@ const PurchaseRequests = () => {
   const [remarks, setRemarks] = useState('')
   const [items, setItems] = useState([{ item_id: '', quantity: 1, unit_price: 0 }])
 
+  const updateQueryParams = useCallback((updater, { replace = false } = {}) => {
+    const next = new URLSearchParams(searchParams)
+    updater(next)
+    setSearchParams(next, { replace })
+  }, [searchParams, setSearchParams])
+
+  // Keep inputs in sync with URL state (back/forward + manual edits)
   useEffect(() => {
-    fetchPurchaseRequests()
-  }, [])
+    setStatusFilter(urlStatus)
+    setSearchQuery(urlQ)
+  }, [urlStatus, urlQ])
 
   // Listen for real-time updates
   useEffect(() => {
@@ -177,7 +212,7 @@ const PurchaseRequests = () => {
     
     const handleStatusChange = (data) => {
       console.log('PR status changed (real-time):', data)
-      fetchPurchaseRequests()
+      fetchRef.current?.()
     }
 
     socketService.on('pr_status_changed', handleStatusChange)
@@ -185,7 +220,7 @@ const PurchaseRequests = () => {
     // Also listen to general pr_updated event
     const handlePRUpdate = (data) => {
       console.log('PR updated (real-time):', data)
-      fetchPurchaseRequests()
+      fetchRef.current?.()
     }
     socketService.on('pr_updated', handlePRUpdate)
 
@@ -195,22 +230,55 @@ const PurchaseRequests = () => {
     }
   }, [])
 
-  const fetchPurchaseRequests = async () => {
+  const fetchPurchaseRequests = useCallback(async () => {
     try {
       console.log('Fetching purchase requests...');
       setLoading(true)
+      setError('')
       const view = user?.role === 'admin' || user?.role === 'super_admin' ? 'all' : null
-      console.log('Fetching with view:', view, 'user role:', user?.role);
-      const data = await purchaseRequestService.getAll(view)
-      console.log('Fetched data:', data);
-      setPurchaseRequests(data)
+      console.log('Fetching with view:', view, 'user role:', user?.role)
+      const payload = await purchaseRequestService.list({
+        view,
+        page,
+        pageSize,
+        status: urlStatus !== 'ALL' ? urlStatus : null,
+        q: urlQ.trim() ? urlQ.trim() : null
+      })
+      const rows = Array.isArray(payload?.purchaseRequests) ? payload.purchaseRequests : []
+      setPurchaseRequests(rows)
+      setTotal(Number.isFinite(payload?.total) ? payload.total : rows.length)
+      setExpandedId(null)
     } catch (err) {
       console.error('Failed to fetch:', err);
       setError('Failed to fetch purchase requests')
     } finally {
       setLoading(false)
     }
-  }
+  }, [user?.role, page, pageSize, urlStatus, urlQ])
+
+  const fetchRef = useRef(null)
+  useEffect(() => {
+    fetchRef.current = fetchPurchaseRequests
+  }, [fetchPurchaseRequests])
+
+  // Fetch whenever URL state changes
+  useEffect(() => {
+    fetchPurchaseRequests()
+  }, [fetchPurchaseRequests])
+
+  // Debounced URL update for search input
+  useEffect(() => {
+    if (searchQuery === urlQ) return
+    const timer = setTimeout(() => {
+      const trimmed = searchQuery.trim()
+      updateQueryParams((p) => {
+        if (trimmed) p.set('q', trimmed)
+        else p.delete('q')
+        p.set('page', '1')
+      }, { replace: true })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, urlQ, updateQueryParams])
 
   const openProcurementApproval = async (prRow) => {
     try {
@@ -270,6 +338,61 @@ const PurchaseRequests = () => {
     } finally {
       setProcurementLoading(false)
     }
+  }
+
+  const totalPages = Math.max(Math.ceil((total || 0) / pageSize) || 1, 1)
+  const startItem = total === 0 ? 0 : (page - 1) * pageSize + 1
+  const endItem = total === 0 ? 0 : Math.min(page * pageSize, total)
+
+  useEffect(() => {
+    if (total > 0 && page > totalPages) {
+      updateQueryParams((p) => {
+        p.set('page', String(totalPages))
+      }, { replace: true })
+    }
+  }, [total, page, totalPages, updateQueryParams])
+
+  const commitSearchToUrl = ({ replace } = {}) => {
+    const trimmed = searchQuery.trim()
+    updateQueryParams((p) => {
+      if (trimmed) p.set('q', trimmed)
+      else p.delete('q')
+      p.set('page', '1')
+    }, { replace: replace ?? false })
+  }
+
+  const handleStatusFilterChange = (nextStatus) => {
+    setStatusFilter(nextStatus)
+    updateQueryParams((p) => {
+      if (nextStatus && nextStatus !== 'ALL') p.set('status', nextStatus)
+      else p.delete('status')
+      p.set('page', '1')
+    }, { replace: false })
+  }
+
+  const handlePageSizeChange = (nextPageSize) => {
+    updateQueryParams((p) => {
+      if (nextPageSize === 20) p.delete('pageSize')
+      else p.set('pageSize', String(nextPageSize))
+      p.set('page', '1')
+    }, { replace: false })
+  }
+
+  const goToPage = (nextPage) => {
+    const clamped = Math.min(Math.max(nextPage, 1), totalPages)
+    updateQueryParams((p) => {
+      p.set('page', String(clamped))
+    }, { replace: false })
+  }
+
+  const clearFilters = () => {
+    setStatusFilter('ALL')
+    setSearchQuery('')
+    updateQueryParams((p) => {
+      p.delete('status')
+      p.delete('q')
+      p.set('page', '1')
+    }, { replace: false })
   }
 
   const closeProcurementReject = () => {
@@ -633,10 +756,67 @@ const PurchaseRequests = () => {
         <h2 className="text-lg font-semibold text-gray-900">Purchase Requests</h2>
         <div className="flex items-center gap-3">
           <div className="text-sm text-gray-500">
-            {purchaseRequests.length} Request{purchaseRequests.length !== 1 ? 's' : ''}
+            {total === 0
+              ? '0 Requests'
+              : `Showing ${startItem}-${endItem} of ${total} Request${total !== 1 ? 's' : ''}`
+            }
           </div>
         </div>
       </div>
+
+      <Card className="p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search PR number, project, requester, supplier..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitSearchToUrl({ replace: false })
+                  }}
+                  className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2
+  focus:ring-yellow-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+              <select
+                value={statusFilter}
+                onChange={(e) => handleStatusFilterChange(e.target.value)}
+                className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
+  focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="ALL">All statuses</option>
+                {STATUS_FILTER_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
+              {(searchQuery.trim() || statusFilter !== 'ALL') && (
+                <Button variant="secondary" size="sm" onClick={clearFilters}>
+                  <X className="w-4 h-4 mr-2" />
+                  Clear
+                </Button>
+              )}
+
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
+  focus:ring-2 focus:ring-yellow-500"
+                title="Page size"
+              >
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+        </Card>
 
       <Card>
         {/* Desktop Table View */}
@@ -930,6 +1110,56 @@ const PurchaseRequests = () => {
             ))}
             {purchaseRequests.length === 0 && (
               <p className="text-center text-gray-500 py-8">No purchase requests found</p>
+            )}
+          </div>
+        </div>
+
+        {/* Pagination */}
+        <div className="border-t border-gray-200 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div className="text-sm text-gray-500">
+              {total === 0 ? '0 Requests' : `Showing ${startItem}-${endItem} of ${total}`}
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => goToPage(page - 1)}
+                >
+                  Prev
+                </Button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }, (_, i) => page - 2 + i)
+                    .filter((p) => p >= 1 && p <= totalPages)
+                    .map((p) => (
+                      <Button
+                        key={p}
+                        variant={p === page ? 'primary' : 'secondary'}
+                        size="sm"
+                        onClick={() => goToPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    ))}
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  disabled={page >= totalPages}
+                  onClick={() => goToPage(page + 1)}
+                >
+                  Next
+                </Button>
+
+                <span className="text-sm text-gray-500 ml-2">
+                  Page {page} of {totalPages}
+                </span>
+              </div>
             )}
           </div>
         </div>
