@@ -5,6 +5,7 @@ import { createNotification, getProcurementOfficers, getSuperAdmins } from '../u
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { devNull } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -173,30 +174,57 @@ router.post('/', authenticate, async (req, res) => {
     const status = isDraft ? 'Draft' : 'For Procurement Review';
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
 
-    const [result] = await conn.query(
-      "INSERT INTO purchase_requests (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-      [prNumber, req.user.id, purpose || '', remarks ?? '', status, date_needed || null, project || null, project_address || null, order_number || null, paymentBasis, supplier_id || null]
-    );
-
-    const prId = result.insertId;
-
-    // Insert items if provided (required for submit, optional for draft)
-    if (items && Array.isArray(items) && items.length > 0) {
-      for (const item of items) {
+    const normalizedItems = Array.isArray(items)
+      ? items.map((item) => {
         const itemId = item.item_id ?? item.id;
         const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        const totalPrice = quantity * unitPrice;
 
         if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
           throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
         }
 
-        const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
-        const totalPrice = unitPrice * quantity;
+        return {
+          itemId,
+          quantity,
+          unitPrice,
+          totalPrice,
+          remarks: item.remarks ?? item.notes ?? null
+        }
+      })
+    : [];
 
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+
+    const [result] = await conn.query(
+      `INSERT INTO purchase_requests
+      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id, total_amount)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        prNumber,
+        req.user.id,
+        purpose || '',
+        remarks ?? '',
+        status,
+        date_needed || null,
+        project || null,
+        project_address || null,
+        order_number || null,
+        paymentBasis,
+        supplier_id || null,
+        totalAmount
+      ]
+    );
+
+    const prId = result.insertId;
+
+    if (normalizedItems.length > 0) {
+      for (const item of normalizedItems) {
         await conn.query(
           'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
-          [prId, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
-        );
+          [prId, item.itemId, item.quantity, item.unitPrice, item.totalPrice, item.remarks]
+        ); 
       }
     }
 
@@ -266,34 +294,56 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
+    const normalizedItems = Array.isArray(items)
+      ? items.map((item) => {
+          const itemId = item.item_id ?? item.id;
+          const quantity = Number(item.quantity);
+          const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+          const totalPrice = quantity * unitPrice;
+
+          if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+          }
+
+          return {
+            itemId,
+            quantity,
+            unitPrice,
+            totalPrice,
+            remarks: item.remarks ?? item.notes ?? null
+          };
+        })
+      : [];
+
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+
     // Update PR details
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, updated_at = NOW()
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
-      [purpose ?? pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, payment_basis ?? pr.payment_basis, supplier_id ?? pr.supplier_id, req.params.id]
+      [
+        purpose ?? pr.purpose,
+        remarks ?? pr.remarks,
+        date_needed || pr.date_needed,
+        project || pr.project,
+        project_address || pr.project_address,
+        order_number || pr.order_number,
+        payment_basis ?? pr.payment_basis,
+        supplier_id ?? pr.supplier_id,
+        totalAmount,
+        req.params.id
+      ]
     );
 
     // Update items if provided
-    if (items && items.length > 0) {
-      // Delete existing items
+    if (normalizedItems.length > 0) {
       await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
 
-      // Insert new items
-      for (const item of items) {
-        const itemId = item.item_id ?? item.id;
-        const quantity = Number(item.quantity);
-
-        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
-        }
-
-        const unitPrice = Number(item.unit_price ?? 0);
-        const totalPrice = unitPrice * quantity;
-
+      for (const item of normalizedItems) {
         await conn.query(
-          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
-          [req.params.id, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
+          'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ? , ?, ?)',
+          [req.params.id, item.itemId, item.quantity, item.unitPrice, item.totalPrice, item.remarks]
         );
       }
     }
@@ -846,6 +896,29 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
+    const normalizedItems = Array.isArray(items)
+      ? items.map((item) => {
+          const itemId = item.item_id ?? item.id;
+          const quantity = Number(item.quantity);
+          const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+          const totalPrice = quantity * unitPrice;
+
+          if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+            throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+          }
+
+          return {
+            itemId,
+            quantity,
+            unitPrice,
+            totalPrice,
+            remarks: item.remarks ?? item.notes ?? null
+          }
+      })
+    : [];
+
+    const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+
     // Update PR details and reset status to For Procurement Review, clear all pricing data
     await conn.query(
       `UPDATE purchase_requests 
@@ -853,30 +926,30 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
            payment_basis = ?, supplier_id = ?,
            status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
            supplier_address = NULL, rejection_reason = NULL, 
-           total_amount = NULL, updated_at = NOW()
+           total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
-      [purpose || pr.purpose, remarks ?? pr.remarks, date_needed || pr.date_needed, project || pr.project, project_address || pr.project_address, order_number || pr.order_number, payment_basis ?? pr.payment_basis, supplier_id ?? pr.supplier_id, req.params.id]
+
+      [purpose || pr.purpose,
+        remarks ?? pr.remarks,
+        date_needed || pr.date_needed,
+        project || pr.project,
+        project_address || pr.project_address,
+        order_number || pr.order_number,
+        payment_basis ?? pr.payment_basis,
+        supplier_id ?? pr.supplier_id,
+        totalAmount,
+        req.params.id
+      ]
     );
 
     // Update items if provided
-    if (items && items.length > 0) {
-      // Delete existing items
+    if (normalizedItems.length > 0) {
       await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
 
-      // Insert new items with unit_price and total_price from frontend
-      for (const item of items) {
-        const itemId = item.item_id ?? item.id;
-        const quantity = Number(item.quantity);
-        const unitPrice = item.unit_price != null ? Number(item.unit_price) : null;
-        const totalPrice = unitPrice != null ? unitPrice * quantity : null;
-
-        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
-        }
-
+      for (const item of normalizedItems) {
         await conn.query(
           'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
-          [req.params.id, itemId, quantity, unitPrice, totalPrice, item.remarks ?? item.notes ?? null]
+          [req.params.id, item.itemId, item.quantity, item.unitPrice, item.totalPrice, item.remarks]
         );
       }
     }
