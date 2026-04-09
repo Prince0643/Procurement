@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { reimbursementService } from '../../services/reimbursements';
 import { useAuth } from '../../contexts/AuthContext';
+import ReimbursementPreviewModal from './ReimbursementPreviewModal';
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>{children}</div>
@@ -45,10 +46,13 @@ const StatusBadge = ({ status }) => {
     Draft: 'bg-gray-100 text-gray-800',
     Pending: 'bg-yellow-100 text-yellow-800',
     'For Approval': 'bg-blue-100 text-blue-800',
+    'For Purchase': 'bg-purple-100 text-purple-800',
+    'Payment Order Created': 'bg-indigo-100 text-indigo-800',
     Approved: 'bg-green-100 text-green-800',
     Rejected: 'bg-red-100 text-red-800',
     Cancelled: 'bg-gray-100 text-gray-500',
-    Paid: 'bg-green-100 text-green-800'
+    Paid: 'bg-green-100 text-green-800',
+    Received: 'bg-teal-100 text-teal-800'
   };
   return (
     <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${styles[status] || 'bg-gray-100 text-gray-800'}`}>
@@ -127,10 +131,13 @@ const ReimbursementsManagement = () => {
   };
 
   const canCreate = ['engineer', 'procurement', 'admin', 'super_admin'].includes(user?.role);
-  const canApprove = ['procurement', 'admin', 'super_admin'].includes(user?.role);
 
   const [uploadingForId, setUploadingForId] = useState(null);
   const [previewAttachment, setPreviewAttachment] = useState(null);
+
+  const [previewReimbursement, setPreviewReimbursement] = useState(null);
+  const [previewReimbursementDetails, setPreviewReimbursementDetails] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   const fetchReimbursements = async () => {
     try {
@@ -149,6 +156,25 @@ const ReimbursementsManagement = () => {
   useEffect(() => {
     fetchReimbursements();
   }, []);
+
+  const openPreview = async (r) => {
+    setPreviewReimbursement(r);
+    setLoadingPreview(true);
+    try {
+      const details = await reimbursementService.getById(r.id);
+      setPreviewReimbursementDetails(details);
+    } catch (err) {
+      console.error('Failed to fetch reimbursement details:', err);
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const closePreview = () => {
+    setPreviewReimbursement(null);
+    setPreviewReimbursementDetails(null);
+    setLoadingPreview(false);
+  };
 
   const filtered = useMemo(() => {
     const q = searchTerm.trim().toLowerCase();
@@ -229,6 +255,16 @@ const ReimbursementsManagement = () => {
       await fetchReimbursements();
     } catch (e) {
       alert(e?.response?.data?.message || 'Failed to delete');
+    }
+  };
+
+  const handleMarkAsReceived = async (r) => {
+    if (!confirm('Mark this reimbursement as received?')) return;
+    try {
+      await reimbursementService.markAsReceived(r.id);
+      await fetchReimbursements();
+    } catch (e) {
+      alert(e?.response?.data?.message || 'Failed to mark reimbursement as received');
     }
   };
 
@@ -318,7 +354,13 @@ const ReimbursementsManagement = () => {
         <div className="divide-y divide-gray-200">
           {filtered.map((r) => (
             <div key={r.id} className="p-4 hover:bg-gray-50">
-              <div className="flex items-start justify-between">
+              <div
+                className="flex items-start justify-between cursor-pointer"
+                onClick={(e) => {
+                  if (e.target.closest('[data-no-row-toggle="true"]')) return;
+                  toggleExpand(r.id);
+                }}
+              >
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3">
                     <p className="text-sm font-medium text-gray-900">{r.rmb_number}</p>
@@ -332,7 +374,15 @@ const ReimbursementsManagement = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-2 ml-4" data-no-row-toggle="true">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openPreview(r)}
+                    title="Preview"
+                  >
+                    <Eye className="w-4 h-4 text-blue-600" />
+                  </Button>
                   {user?.role === 'engineer' && r.status === 'Draft' && r.requested_by === user?.id && (
                     <>
                       <Button variant="ghost" size="sm" onClick={() => handleSubmit(r)}>
@@ -342,6 +392,14 @@ const ReimbursementsManagement = () => {
                         <Trash2 className="w-4 h-4 text-red-600" />
                       </Button>
                     </>
+                  )}
+
+                  {user?.role === 'engineer' &&
+                    r.requested_by === user?.id &&
+                    ['Payment Order Created', 'Paid'].includes(r.status) && (
+                    <Button variant="ghost" size="sm" onClick={() => handleMarkAsReceived(r)} title="Mark as Received">
+                      <CheckCircle className="w-4 h-4 text-teal-600" />
+                    </Button>
                   )}
 
                   {/* Procurement can approve when status is 'For Procurement Review' */}
@@ -624,6 +682,15 @@ const ReimbursementsManagement = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Reimbursement Preview Modal */}
+      {previewReimbursement && (
+        <ReimbursementPreviewModal
+          reimbursement={previewReimbursementDetails || previewReimbursement}
+          loading={loadingPreview}
+          onClose={closePreview}
+        />
       )}
     </div>
   );

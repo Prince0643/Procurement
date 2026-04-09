@@ -570,6 +570,47 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
   }
 });
 
+// Mark Service Request as Received (requester only, fulfilled statuses only)
+router.put('/:id/received', authenticate, async (req, res) => {
+  try {
+    const [srs] = await db.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
+    if (srs.length === 0) {
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+
+    const sr = srs[0];
+
+    if (sr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can mark this service request as received' });
+    }
+
+    const allowedStatuses = ['PO Created', 'Payment Request Created', 'Payment Order Created', 'Paid'];
+    if (!allowedStatuses.includes(sr.status)) {
+      return res.status(400).json({
+        message: 'Only fulfilled service requests can be marked as received'
+      });
+    }
+
+    await db.query(
+      'UPDATE service_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+      ['Received', req.params.id]
+    );
+
+    req.io.emit('sr_status_changed', {
+      id: Number(req.params.id),
+      sr_number: sr.sr_number,
+      status: 'Received',
+      type: 'status_update',
+      updated_by: 'engineer'
+    });
+
+    res.json({ message: 'Service request marked as received successfully', status: 'Received' });
+  } catch (error) {
+    console.error('Mark service request received error:', error);
+    res.status(500).json({ message: 'Failed to mark service request as received' });
+  }
+});
+
 // Delete Service Request (Draft only, engineer only)
 router.delete('/:id', authenticate, async (req, res) => {
   try {

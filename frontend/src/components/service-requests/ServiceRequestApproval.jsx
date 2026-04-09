@@ -54,7 +54,10 @@ const StatusBadge = ({ status }) => {
     'Rejected': 'bg-red-100 text-red-800',
     'Cancelled': 'bg-gray-100 text-gray-500',
     'PO Created': 'bg-purple-100 text-purple-800',
-    'Paid': 'bg-green-100 text-green-800'
+    'Payment Request Created': 'bg-indigo-100 text-indigo-800',
+    'Payment Order Created': 'bg-indigo-100 text-indigo-800',
+    'Paid': 'bg-green-100 text-green-800',
+    'Received': 'bg-teal-100 text-teal-800'
   };
   
   return (

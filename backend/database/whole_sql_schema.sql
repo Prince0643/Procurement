@@ -598,7 +598,7 @@ CREATE TABLE `pr_item_rejection_remarks` (
 CREATE TABLE `purchase_orders` (
   `id` int(11) NOT NULL,
   `po_number` varchar(50) NOT NULL,
-  `purchase_request_id` int(11) NOT NULL,
+  `purchase_request_id` int(11) DEFAULT NULL,
   `service_request_id` int(11) DEFAULT NULL,
   `supplier_id` int(11) DEFAULT NULL,
   `prepared_by` int(11) NOT NULL,
@@ -636,7 +636,7 @@ INSERT INTO `purchase_orders` (`id`, `po_number`, `purchase_request_id`, `servic
 CREATE TABLE `purchase_order_items` (
   `id` int(11) NOT NULL,
   `purchase_order_id` int(11) NOT NULL,
-  `purchase_request_item_id` int(11) NOT NULL,
+  `purchase_request_item_id` int(11) DEFAULT NULL,
   `item_id` int(11) NOT NULL,
   `quantity` int(11) NOT NULL,
   `unit_price` decimal(10,2) NOT NULL,

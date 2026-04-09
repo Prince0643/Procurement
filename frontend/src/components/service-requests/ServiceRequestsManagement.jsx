@@ -72,7 +72,10 @@ const StatusBadge = ({ status }) => {
     'Rejected': 'bg-red-100 text-red-800',
     'Cancelled': 'bg-gray-100 text-gray-500',
     'PO Created': 'bg-purple-100 text-purple-800',
-    'Paid': 'bg-green-100 text-green-800'
+    'Payment Request Created': 'bg-indigo-100 text-indigo-800',
+    'Payment Order Created': 'bg-indigo-100 text-indigo-800',
+    'Paid': 'bg-green-100 text-green-800',
+    'Received': 'bg-teal-100 text-teal-800'
   };
   
   return (
@@ -122,7 +125,10 @@ const STATUS_FILTER_OPTIONS = [
   'Rejected',
   'Cancelled',
   'PO Created',
-  'Paid'
+  'Payment Request Created',
+  'Payment Order Created',
+  'Paid',
+  'Received'
 ];
 
 const ServiceRequestsManagement = () => {
@@ -438,6 +444,18 @@ const ServiceRequestsManagement = () => {
     }
   };
 
+  const handleMarkAsReceived = async (sr) => {
+    if (!confirm('Mark this service request as received?')) return;
+
+    try {
+      await serviceRequestService.markAsReceived(sr.id);
+      fetchServiceRequests();
+      alert('Service request marked as received!');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to mark service request as received');
+    }
+  };
+
   // Procurement approval handler
   const handleProcurementApproveClick = (sr) => {
     setSelectedSRForApproval(sr);
@@ -631,7 +649,14 @@ const ServiceRequestsManagement = () => {
       <Card>
         <div className="divide-y divide-gray-200">
           {serviceRequests.map((sr) => (
-            <div key={sr.id} className="p-4 hover:bg-gray-50">
+            <div
+              key={sr.id}
+              className="p-4 hover:bg-gray-50 cursor-pointer"
+              onClick={(e) => {
+                if (e.target.closest('[data-no-row-toggle="true"]')) return;
+                toggleExpand(sr.id);
+              }}
+            >
               <div className="flex items-start justify-between">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3">
@@ -650,7 +675,7 @@ const ServiceRequestsManagement = () => {
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-4">
+                <div className="flex items-center gap-2 ml-4" data-no-row-toggle="true">
                   {/* Preview button - visible to all roles */}
                   <Button 
                     variant="ghost" 
@@ -687,6 +712,20 @@ const ServiceRequestsManagement = () => {
                         <Trash2 className="w-4 h-4 text-red-600" />
                       </Button>
                     </>
+                  )}
+
+                  {/* Requester receive action */}
+                  {user?.role === 'engineer' &&
+                    sr.requested_by === user?.id &&
+                    ['PO Created', 'Payment Request Created', 'Payment Order Created', 'Paid'].includes(sr.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMarkAsReceived(sr)}
+                      title="Mark as Received"
+                    >
+                      <CheckCircle className="w-4 h-4 text-teal-600" />
+                    </Button>
                   )}
                   
                   {/* Procurement approval actions */}

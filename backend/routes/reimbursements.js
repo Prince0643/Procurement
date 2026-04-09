@@ -554,6 +554,37 @@ router.put('/:id/approve', authenticate, async (req, res) => {
   }
 });
 
+// Mark reimbursement as Received (requester only, fulfilled statuses only)
+router.put('/:id/received', authenticate, async (req, res) => {
+  try {
+    const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Reimbursement not found' });
+    }
+
+    const r = rows[0];
+
+    if (r.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can mark this reimbursement as received' });
+    }
+
+    const allowedStatuses = ['Payment Order Created', 'Paid'];
+    if (!allowedStatuses.includes(r.status)) {
+      return res.status(400).json({ message: 'Only fulfilled reimbursements can be marked as received' });
+    }
+
+    await db.query(
+      'UPDATE reimbursements SET status = ?, updated_at = NOW() WHERE id = ?',
+      ['Received', req.params.id]
+    );
+
+    res.json({ message: 'Reimbursement marked as received successfully', status: 'Received' });
+  } catch (error) {
+    console.error('Mark reimbursement received error:', error);
+    res.status(500).json({ message: 'Failed to mark reimbursement as received' });
+  }
+});
+
 // List attachments
 router.get('/:id/attachments', authenticate, async (req, res) => {
   try {

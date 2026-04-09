@@ -37,7 +37,7 @@ export const navigationItems = [
     path: '/dashboard/service-requests',
     label: 'Service Requests',
     icon: ClipboardCheck,
-    roles: ['engineer', 'procurement', 'admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
   
   // Approvals - for super admin

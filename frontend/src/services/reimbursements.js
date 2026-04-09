@@ -34,6 +34,11 @@ export const reimbursementService = {
     return response.data;
   },
 
+  markAsReceived: async (id) => {
+    const response = await api.put(`/reimbursements/${id}/received`);
+    return response.data;
+  },
+
   listAttachments: async (id) => {
     const response = await api.get(`/reimbursements/${id}/attachments`);
     return response.data.attachments || [];

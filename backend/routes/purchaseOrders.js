@@ -24,30 +24,34 @@ router.get('/', authenticate, async (req, res) => {
       SELECT po.*, 
              s.supplier_name as supplier_name,
              pr.pr_number,
+             sr.sr_number,
+             COALESCE(pr.pr_number, sr.sr_number) as source_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
+      LEFT JOIN service_requests sr ON po.service_request_id = sr.id
       LEFT JOIN employees e ON po.prepared_by = e.id
     `;
     
     const params = [];
     
     if (req.user.role === 'engineer') {
-      query += ' WHERE pr.requested_by = ?';
-      params.push(req.user.id);
+      query += ' WHERE (pr.requested_by = ? OR sr.requested_by = ?)';
+      params.push(req.user.id, req.user.id);
     }
 
     const countQuery = `
       SELECT COUNT(*) as total
       FROM purchase_orders po
       LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
-      ${req.user.role === 'engineer' ? 'WHERE pr.requested_by = ?' : ''}
+      LEFT JOIN service_requests sr ON po.service_request_id = sr.id
+      ${req.user.role === 'engineer' ? 'WHERE (pr.requested_by = ? OR sr.requested_by = ?)' : ''}
     `;
     const countParams = [];
     if (req.user.role === 'engineer') {
-      countParams.push(req.user.id);
+      countParams.push(req.user.id, req.user.id);
     }
     
     query += ' ORDER BY po.created_at DESC LIMIT ? OFFSET ?';
@@ -69,11 +73,14 @@ router.get('/:id', authenticate, async (req, res) => {
       SELECT po.*, 
              s.supplier_name as supplier_name, s.address as supplier_address, s.contact_person, s.phone, s.email,
              pr.pr_number, pr.remarks as pr_remarks,
+             sr.sr_number,
+             COALESCE(pr.pr_number, sr.sr_number) as source_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name
       FROM purchase_orders po
       LEFT JOIN suppliers s ON po.supplier_id = s.id
       LEFT JOIN purchase_requests pr ON po.purchase_request_id = pr.id
+      LEFT JOIN service_requests sr ON po.service_request_id = sr.id
       LEFT JOIN employees e ON po.prepared_by = e.id
       WHERE po.id = ?
     `, [req.params.id]);
@@ -108,7 +115,44 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create PO (admin only)
 router.post('/', authenticate, requireAdminOnly, async (req, res) => {
   try {
-    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, items, service_request_id, save_as_draft } = req.body;
+    const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items, service_request_id, save_as_draft } = req.body;
+    const hasPRSource = Boolean(purchase_request_id);
+    const hasSRSource = Boolean(service_request_id);
+
+    if ((hasPRSource && hasSRSource) || (!hasPRSource && !hasSRSource)) {
+      return res.status(400).json({ message: 'Provide exactly one source: purchase_request_id or service_request_id' });
+    }
+
+    const rawItems = Array.isArray(items) ? items : [];
+    if (hasPRSource && rawItems.length === 0) {
+      return res.status(400).json({ message: 'At least one item is required for Purchase Request source' });
+    }
+
+    const normalizedItems = rawItems.map((item, index) => {
+      const itemId = Number(item.item_id);
+      const quantity = Number(item.quantity);
+      const unitPrice = Number(item.unit_price);
+      const prItemId = item.purchase_request_item_id ? Number(item.purchase_request_item_id) : null;
+
+      return {
+        index,
+        item_id: Number.isInteger(itemId) && itemId > 0 ? itemId : null,
+        quantity: Number.isFinite(quantity) && quantity > 0 ? quantity : null,
+        unit_price: Number.isFinite(unitPrice) && unitPrice >= 0 ? unitPrice : null,
+        purchase_request_item_id: Number.isInteger(prItemId) && prItemId > 0 ? prItemId : null
+      };
+    });
+
+    if (normalizedItems.length > 0) {
+      const invalidItem = normalizedItems.find(
+        (item) => item.item_id === null || item.quantity === null || item.unit_price === null
+      );
+      if (invalidItem) {
+        return res.status(400).json({
+          message: `Invalid item on row ${invalidItem.index + 1}. Item ID, quantity (> 0), and unit price (>= 0) are required.`
+        });
+      }
+    }
     
     // Determine status based on save_as_draft flag
     const status = save_as_draft ? 'Draft' : 'Pending Approval';
@@ -118,11 +162,12 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     let srDetails = null;
     let poType = 'purchase_order'; // default
     let finalSupplierId = supplier_id;
+    let sourceOrderNumber = null;
     
-    if (purchase_request_id) {
+    if (hasPRSource) {
       // Get PR details including payment_basis
       const [prs] = await db.query(
-        'SELECT pr_number, payment_basis, supplier_id as pr_supplier_id FROM purchase_requests WHERE id = ?',
+        'SELECT pr_number, payment_basis, supplier_id as pr_supplier_id, order_number FROM purchase_requests WHERE id = ?',
         [purchase_request_id]
       );
       if (prs.length === 0) {
@@ -142,10 +187,11 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
       if (!finalSupplierId && prDetails.pr_supplier_id) {
         finalSupplierId = prDetails.pr_supplier_id;
       }
-    } else if (service_request_id) {
+      sourceOrderNumber = prDetails.order_number || null;
+    } else if (hasSRSource) {
       // Service Requests always create Payment Orders
       const [srs] = await db.query(
-        'SELECT sr_number, supplier_id as sr_supplier_id FROM service_requests WHERE id = ?',
+        'SELECT sr_number, supplier_id as sr_supplier_id, order_number, amount FROM service_requests WHERE id = ?',
         [service_request_id]
       );
       if (srs.length === 0) {
@@ -156,11 +202,18 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
       if (!finalSupplierId && srDetails.sr_supplier_id) {
         finalSupplierId = srDetails.sr_supplier_id;
       }
+      sourceOrderNumber = srDetails.order_number || null;
     }
     
     // Validate supplier is provided
     if (!finalSupplierId) {
       return res.status(400).json({ message: 'Supplier is required' });
+    }
+
+    if (!sourceOrderNumber || !String(sourceOrderNumber).trim()) {
+      return res.status(400).json({
+        message: 'Selected source has no order number. Update the source document first.'
+      });
     }
     
     // Generate PO number (MTN-YYYY-MM-### format - same as PR)
@@ -182,32 +235,34 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     const poNumber = `${initials}-${year}-${month}-${sequence}`;
 
     // Calculate total amount
-    const totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+    const totalAmount = hasSRSource && normalizedItems.length === 0
+      ? Number(srDetails?.amount || 0)
+      : normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 
     // Create PO with po_type and service_request_id support
     const [result] = await db.query(
       `INSERT INTO purchase_orders (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type) 
        VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, order_number || null, delivery_term || 'COD', payment_term || 'CASH', notes || null, status, poType]
+      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, sourceOrderNumber, delivery_term || 'COD', payment_term || 'CASH', notes || null, status, poType]
     );
 
     const poId = result.insertId;
 
     // Insert items
-    for (const item of items) {
+    for (const item of normalizedItems) {
       await db.query(
         'INSERT INTO purchase_order_items (purchase_order_id, purchase_request_item_id, item_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)',
-        [poId, item.purchase_request_item_id, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
+        [poId, item.purchase_request_item_id || null, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
       );
     }
 
     // Update PR status to 'PO Created' or Service Request status
-    if (purchase_request_id) {
+    if (hasPRSource) {
       await db.query(
         "UPDATE purchase_requests SET status = 'PO Created' WHERE id = ?",
         [purchase_request_id]
       );
-    } else if (service_request_id) {
+    } else if (hasSRSource) {
       await db.query(
         "UPDATE service_requests SET status = 'PO Created' WHERE id = ?",
         [service_request_id]
@@ -461,7 +516,7 @@ router.put('/:id/resubmit', authenticate, requireAdmin, async (req, res) => {
       for (const item of items) {
         await conn.query(
           'INSERT INTO purchase_order_items (purchase_order_id, purchase_request_item_id, item_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)',
-          [req.params.id, item.purchase_request_item_id, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
+          [req.params.id, item.purchase_request_item_id || null, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
         );
       }
     }

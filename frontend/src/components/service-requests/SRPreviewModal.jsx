@@ -29,6 +29,9 @@ const StatusBadge = ({ status }) => {
       'Completed': 'bg-green-100 text-green-800',
       'Paid': 'bg-blue-100 text-blue-800',
       'PO Created': 'bg-purple-100 text-purple-800',
+      'Payment Request Created': 'bg-indigo-100 text-indigo-800',
+      'Payment Order Created': 'bg-indigo-100 text-indigo-800',
+      'Received': 'bg-teal-100 text-teal-800',
       'In Progress': 'bg-blue-100 text-blue-800'
     };
     return colors[status] || 'bg-gray-100 text-gray-800';

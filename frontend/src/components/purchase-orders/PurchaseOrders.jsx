@@ -250,6 +250,28 @@ const PurchaseOrders = () => {
     if (!selectedSupplier) { alert('Please select a supplier'); return }
     if (sourceType === 'pr' && !selectedPR) { alert('Please select a Purchase Request'); return }
     if (sourceType === 'sr' && !selectedSR) { alert('Please select a Service Request'); return }
+    if (!orderNumber || !String(orderNumber).trim()) { alert('Order Number is required from the selected source document'); return }
+
+    let normalizedItems = []
+    if (sourceType === 'pr') {
+      normalizedItems = items.map((item) => ({
+        item_id: Number(item.item_id),
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unit_price),
+        purchase_request_item_id: item.purchase_request_item_id ? Number(item.purchase_request_item_id) : null
+      }))
+
+      const invalidItemIndex = normalizedItems.findIndex(
+        (item) =>
+          !Number.isInteger(item.item_id) || item.item_id <= 0 ||
+          !Number.isFinite(item.quantity) || item.quantity <= 0 ||
+          !Number.isFinite(item.unit_price) || item.unit_price < 0
+      )
+      if (invalidItemIndex !== -1) {
+        alert(`Item row ${invalidItemIndex + 1} is invalid. Item ID, quantity (> 0), and unit price (>= 0) are required.`)
+        return
+      }
+    }
 
     try {
       setSubmitting(true)
@@ -263,12 +285,7 @@ const PurchaseOrders = () => {
         delivery_term: deliveryTerm,
         payment_term: paymentTerm,
         notes: notes || null,
-        items: items.map(item => ({
-          item_id: parseInt(item.item_id),
-          quantity: parseFloat(item.quantity),
-          unit_price: parseFloat(item.unit_price),
-          purchase_request_item_id: item.purchase_request_item_id || null
-        })),
+        items: normalizedItems,
         save_as_draft: saveAsDraft
       }
       await purchaseOrderService.create(poData)
@@ -354,7 +371,7 @@ const PurchaseOrders = () => {
             <thead>
               <tr className="border-b border-gray-200">
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PO Number</th>
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Source Number</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Supplier</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Total Amount</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
@@ -366,7 +383,7 @@ const PurchaseOrders = () => {
                 <React.Fragment key={po.id}>
                   <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedId(expandedId === po.id ? null : po.id)}>
                     <td className="py-3 px-4 text-sm font-medium text-gray-900">{po.po_number}</td>
-                    <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{po.source_number || po.pr_number || po.sr_number || '-'}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
                     <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
@@ -495,7 +512,7 @@ const PurchaseOrders = () => {
                   </div>
                 </div>
                 <div className="mb-2">
-                  <p className="text-sm text-gray-600">PR: {po.pr_number || '-'}</p>
+                  <p className="text-sm text-gray-600">Source: {po.source_number || po.pr_number || po.sr_number || '-'}</p>
                   <p className="text-sm font-medium text-gray-700">{formatCurrency(po.total_amount)}</p>
                 </div>
                 <StatusBadge status={po.status} />
@@ -547,11 +564,43 @@ const PurchaseOrders = () => {
                   <label className="block text-sm font-medium text-gray-700 mb-2">Source Document</label>
                   <div className="flex gap-4">
                     <label className="flex items-center">
-                      <input type="radio" value="pr" checked={sourceType === 'pr'} onChange={(e) => setSourceType(e.target.value)} className="mr-2" />
+                      <input
+                        type="radio"
+                        value="pr"
+                        checked={sourceType === 'pr'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedSR('')
+                          setSelectedPR('')
+                          setPrSearchQuery('')
+                          setPrSearchResults([])
+                          setShowPrResults(false)
+                          setProject('')
+                          setOrderNumber('')
+                          setItems([{ item_id: '', quantity: 1, unit_price: 0 }])
+                        }}
+                        className="mr-2"
+                      />
                       <span className="text-sm">Purchase Request</span>
                     </label>
                     <label className="flex items-center">
-                      <input type="radio" value="sr" checked={sourceType === 'sr'} onChange={(e) => setSourceType(e.target.value)} className="mr-2" />
+                      <input
+                        type="radio"
+                        value="sr"
+                        checked={sourceType === 'sr'}
+                        onChange={(e) => {
+                          setSourceType(e.target.value)
+                          setSelectedPR('')
+                          setSelectedSR('')
+                          setPrSearchQuery('')
+                          setPrSearchResults([])
+                          setShowPrResults(false)
+                          setProject('')
+                          setOrderNumber('')
+                          setItems([])
+                        }}
+                        className="mr-2"
+                      />
                       <span className="text-sm">Service Request</span>
                     </label>
                   </div>
@@ -621,14 +670,42 @@ const PurchaseOrders = () => {
                     <input type="hidden" value={selectedPR} required />
                   </div>
                 ) : (
-                  <Select label="Service Request" value={selectedSR} onChange={(e) => { setSelectedSR(e.target.value); const sr = srs.find(s => s.id === parseInt(e.target.value)); if (sr) { setProject(sr.purpose || ''); setSelectedSupplier(sr.supplier_id || ''); } }} options={srs.map(sr => ({ value: sr.id, label: `${sr.sr_number} - ${sr.purpose} (${formatCurrency(sr.amount)})` }))} required />
+                  <Select
+                    label="Service Request"
+                    value={selectedSR}
+                    onChange={(e) => {
+                      setSelectedSR(e.target.value)
+                      const sr = srs.find(s => s.id === parseInt(e.target.value))
+                      if (sr) {
+                        setProject(sr.purpose || '')
+                        setSelectedSupplier(sr.supplier_id || '')
+                        setOrderNumber(sr.order_number || '')
+                      } else {
+                        setOrderNumber('')
+                      }
+                    }}
+                    options={srs.map(sr => ({ value: sr.id, label: `${sr.sr_number} - ${sr.purpose} (${formatCurrency(sr.amount)})` }))}
+                    required
+                  />
                 )}
 
                 <Select label="Supplier" value={selectedSupplier} onChange={(e) => setSelectedSupplier(e.target.value)} options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} required />
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Project" value={project} onChange={(e) => setProject(e.target.value)} />
-                  <Input label="Order Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Order Number <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={orderNumber}
+                      readOnly
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
+                      placeholder="Auto-filled from selected source"
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -646,38 +723,43 @@ const PurchaseOrders = () => {
                   <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows="2" className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500" />
                 </div>
 
-                {/* Items */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">Items</label>
-                    <Button type="button" variant="secondary" size="sm" onClick={addItem}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Item
-                    </Button>
-                  </div>
-                  {items.map((item, index) => (
-                    <div key={index} className="flex gap-2 mb-2 items-end">
-                      <div className="flex-1">
-                        {item.item_name ? (
-                          <div className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50">
-                            <span className="text-gray-500">ID: {item.item_id}</span> - <span className="font-medium">{item.item_name}</span>
-                          </div>
-                        ) : (
-                          <input type="text" placeholder="Item ID" value={item.item_id} onChange={(e) => updateItem(index, 'item_id', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
-                        )}
-                        <input type="hidden" value={item.item_id} />
-                      </div>
-                      <div className="w-24">
-                        <input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="1" required />
-                      </div>
-                      <div className="w-32">
-                        <input type="number" placeholder="Unit Price" value={item.unit_price} onChange={(e) => updateItem(index, 'unit_price', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="0" step="0.01" required />
-                      </div>
-                      <div className="w-24 text-right text-sm font-medium">{formatCurrency(item.quantity * item.unit_price)}</div>
-                      {items.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}><X className="w-4 h-4 text-red-500" /></Button>}
+                {sourceType === 'pr' ? (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Items</label>
+                      <Button type="button" variant="secondary" size="sm" onClick={addItem}>
+                        <Plus className="w-4 h-4 mr-1" /> Add Item
+                      </Button>
                     </div>
-                  ))}
-                  <div className="text-right font-semibold text-lg mt-2">Total: {formatCurrency(calculateTotal())}</div>
-                </div>
+                    {items.map((item, index) => (
+                      <div key={index} className="flex gap-2 mb-2 items-end">
+                        <div className="flex-1">
+                          {item.item_name ? (
+                            <div className="px-3 py-2 border border-gray-300 rounded-md text-sm bg-gray-50">
+                              <span className="text-gray-500">ID: {item.item_id}</span> - <span className="font-medium">{item.item_name}</span>
+                            </div>
+                          ) : (
+                            <input type="text" placeholder="Item ID" value={item.item_id} onChange={(e) => updateItem(index, 'item_id', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
+                          )}
+                          <input type="hidden" value={item.item_id} />
+                        </div>
+                        <div className="w-24">
+                          <input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="1" required />
+                        </div>
+                        <div className="w-32">
+                          <input type="number" placeholder="Unit Price" value={item.unit_price} onChange={(e) => updateItem(index, 'unit_price', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="0" step="0.01" required />
+                        </div>
+                        <div className="w-24 text-right text-sm font-medium">{formatCurrency(item.quantity * item.unit_price)}</div>
+                        {items.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}><X className="w-4 h-4 text-red-500" /></Button>}
+                      </div>
+                    ))}
+                    <div className="text-right font-semibold text-lg mt-2">Total: {formatCurrency(calculateTotal())}</div>
+                  </div>
+                ) : (
+                  <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                    Line items are not required for Service Request source. Amount will be taken from the selected service request.
+                  </div>
+                )}
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeCreateModal}>Cancel</Button>

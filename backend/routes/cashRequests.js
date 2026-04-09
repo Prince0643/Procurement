@@ -631,6 +631,47 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
   }
 });
 
+// Mark Cash Request as Received (requester only, fulfilled statuses only)
+router.put('/:id/received', authenticate, async (req, res) => {
+  try {
+    const [crs] = await db.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
+    if (crs.length === 0) {
+      return res.status(404).json({ message: 'Cash request not found' });
+    }
+
+    const cr = crs[0];
+
+    if (cr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can mark this cash request as received' });
+    }
+
+    const allowedStatuses = ['Payment Request Created', 'Payment Order Created', 'Paid'];
+    if (!allowedStatuses.includes(cr.status)) {
+      return res.status(400).json({ message: 'Only fulfilled cash requests can be marked as received' });
+    }
+
+    await db.query(
+      'UPDATE cash_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+      ['Received', req.params.id]
+    );
+
+    if (req.io) {
+      req.io.emit('cr_status_changed', {
+        id: Number(req.params.id),
+        cr_number: cr.cr_number,
+        status: 'Received',
+        type: 'status_update',
+        updated_by: 'engineer'
+      });
+    }
+
+    res.json({ message: 'Cash request marked as received successfully', status: 'Received' });
+  } catch (error) {
+    console.error('Mark cash request received error:', error);
+    res.status(500).json({ message: 'Failed to mark cash request as received' });
+  }
+});
+
 // Export Cash Request to Excel
 router.get('/:id/export', authenticate, async (req, res) => {
   try {

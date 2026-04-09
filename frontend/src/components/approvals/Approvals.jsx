@@ -111,6 +111,9 @@ const StatusBadge = ({ status }) => {
       'Pending Approval': 'bg-blue-100 text-blue-800',
       'Approved': 'bg-green-100 text-green-800',
       'Ordered': 'bg-green-100 text-green-800',
+      'PO Created': 'bg-purple-100 text-purple-800',
+      'Paid': 'bg-blue-100 text-blue-800',
+      'Received': 'bg-teal-100 text-teal-800',
       'Rejected': 'bg-red-100 text-red-800',
       'Cancelled': 'bg-gray-100 text-gray-600',
       'On Hold': 'bg-orange-100 text-orange-800'
@@ -299,7 +302,7 @@ const Approvals = () => {
   );
 
   const approvedServiceRequests = serviceRequests.filter(sr => 
-    sr.status === 'Approved' || sr.status === 'PO Created' || sr.status === 'Paid'
+    sr.status === 'Approved' || sr.status === 'PO Created' || sr.status === 'Paid' || sr.status === 'Received'
   );
 
   // Filter Cash Requests that need Super Admin final approval
@@ -312,7 +315,7 @@ const Approvals = () => {
   );
 
   const approvedCashRequests = cashRequests.filter(cr => 
-    cr.status === 'Approved' || cr.status === 'DV Created'
+    cr.status === 'Approved' || cr.status === 'DV Created' || cr.status === 'Received'
   );
 
   // Filter Payment Orders by status
@@ -338,7 +341,7 @@ const Approvals = () => {
   );
   
   const approvedReimbursements = reimbursements.filter(r => 
-    r.status === 'For Purchase' || r.status === 'Paid'
+    r.status === 'For Purchase' || r.status === 'Paid' || r.status === 'Received'
   );
 
   const handleApprovePO = async (id) => {

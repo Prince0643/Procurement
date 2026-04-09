@@ -95,6 +95,11 @@ export const cashRequestService = {
     return response.data;
   },
 
+  markAsReceived: async (id) => {
+    const response = await api.put(`/cash-requests/${id}/received`);
+    return response.data;
+  },
+
   delete: async (id) => {
     const response = await api.delete(`/cash-requests/${id}`);
     return response.data;

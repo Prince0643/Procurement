@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { cashRequestService } from '../services/cashRequests'
 import { supplierService } from '../services/suppliers'
-import { ChevronUp, ChevronDown, Plus, X, Download, Edit, Trash2, Send, CheckCircle, Clock, Search } from 'lucide-react'
+import { ChevronUp, ChevronDown, Plus, X, Download, Edit, Trash2, Send, CheckCircle, Clock, Search, Eye } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import CRPreviewModal from './cash-requests/CRPreviewModal'
 
 // Local Card component
 const Card = ({ children, className = '' }) => (
@@ -120,6 +121,10 @@ const StatusBadge = ({ status }) => {
       'For Super Admin Final Approval': 'bg-purple-100 text-purple-800',
       'Approved': 'bg-green-100 text-green-800',
       'Cash Request Created': 'bg-indigo-100 text-indigo-800',
+      'Payment Request Created': 'bg-indigo-100 text-indigo-800',
+      'Payment Order Created': 'bg-indigo-100 text-indigo-800',
+      'Paid': 'bg-green-100 text-green-800',
+      'Received': 'bg-teal-100 text-teal-800',
       'On Hold': 'bg-orange-100 text-orange-800',
       'Rejected': 'bg-red-100 text-red-800'
     }
@@ -146,7 +151,8 @@ const STATUS_FILTER_OPTIONS = [
   'Payment Request Created',
   'Payment Order Created',
   'DV Created',
-  'Paid'
+  'Paid',
+  'Received'
 ]
 
 const CashRequests = () => {
@@ -167,6 +173,11 @@ const CashRequests = () => {
 
   const [statusFilter, setStatusFilter] = useState(urlStatus)
   const [searchQuery, setSearchQuery] = useState(urlQ)
+
+  // Preview modal state
+  const [previewCR, setPreviewCR] = useState(null)
+  const [previewCRDetails, setPreviewCRDetails] = useState(null)
+  const [loadingPreview, setLoadingPreview] = useState(false)
   
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -191,7 +202,6 @@ const CashRequests = () => {
   const [remarks, setRemarks] = useState('')
   const [orderNumber, setOrderNumber] = useState('')
   const [branches, setBranches] = useState([])
-  const [loadingBranches, setLoadingBranches] = useState(false)
   const [crType, setCrType] = useState('payment_request')
 
   const updateQueryParams = useCallback((updater, { replace = false } = {}) => {
@@ -233,7 +243,7 @@ const CashRequests = () => {
       setCashRequests(rows)
       setTotal(Number.isFinite(payload?.total) ? payload.total : rows.length)
       setExpandedId(null)
-    } catch (err) {
+    } catch {
       setError('Failed to fetch cash requests')
     } finally {
       setLoading(false)
@@ -248,6 +258,25 @@ const CashRequests = () => {
   useEffect(() => {
     fetchCashRequests()
   }, [fetchCashRequests])
+
+  const openPreviewCR = async (cr) => {
+    setPreviewCR(cr)
+    setLoadingPreview(true)
+    try {
+      const details = await cashRequestService.getById(cr.id)
+      setPreviewCRDetails(details)
+    } catch (err) {
+      console.error('Failed to fetch CR details:', err)
+    } finally {
+      setLoadingPreview(false)
+    }
+  }
+
+  const closePreviewCR = () => {
+    setPreviewCR(null)
+    setPreviewCRDetails(null)
+    setLoadingPreview(false)
+  }
 
   // Debounced URL update for search input
   useEffect(() => {
@@ -501,6 +530,17 @@ const CashRequests = () => {
     }
   }
 
+  const handleMarkAsReceived = async (id) => {
+    if (!confirm('Mark this cash request as received?')) return
+    try {
+      await cashRequestService.markAsReceived(id)
+      alert('Cash Request marked as received!')
+      await fetchCashRequests()
+    } catch (err) {
+      alert('Failed to mark as received: ' + (err.message || err.response?.data?.message))
+    }
+  }
+
   const handleExport = async (id, crNumber) => {
     try {
       const blob = await cashRequestService.export(id)
@@ -659,6 +699,14 @@ const CashRequests = () => {
                     <td className="py-3 px-4"><StatusBadge status={cr.status} /></td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); openPreviewCR(cr) }}
+                          title="Preview"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleExport(cr.id, cr.cr_number); }} title="Export to Excel">
                           <Download className="w-4 h-4" />
                         </Button>
@@ -684,6 +732,13 @@ const CashRequests = () => {
                               <Clock className="w-4 h-4 text-orange-500" />
                             </Button>
                           </>
+                        )}
+                        {user?.role === 'engineer' &&
+                          cr.requested_by === user?.id &&
+                          ['Payment Request Created', 'Payment Order Created', 'Paid'].includes(cr.status) && (
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleMarkAsReceived(cr.id); }} title="Mark as Received">
+                            <CheckCircle className="w-4 h-4 text-teal-600" />
+                          </Button>
                         )}
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === cr.id ? null : cr.id); }}>
                           {expandedId === cr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -768,10 +823,35 @@ const CashRequests = () => {
                     <p className="text-xs text-gray-500 font-mono">{cr.cr_number}</p>
                     <p className="text-sm font-semibold text-gray-900">{cr.purpose}</p>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === cr.id ? null : cr.id); }}>
-                    {expandedId === cr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); openPreviewCR(cr) }}
+                      title="Preview"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === cr.id ? null : cr.id); }}>
+                      {expandedId === cr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    </Button>
+                  </div>
                 </div>
+                {user?.role === 'engineer' &&
+                  cr.requested_by === user?.id &&
+                  ['Payment Request Created', 'Payment Order Created', 'Paid'].includes(cr.status) && (
+                  <div className="mb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); handleMarkAsReceived(cr.id) }}
+                      title="Mark as Received"
+                    >
+                      <CheckCircle className="w-4 h-4 text-teal-600 mr-1" />
+                      Mark as Received
+                    </Button>
+                  </div>
+                )}
                 <div className="mb-2">
                   <p className="text-sm text-gray-600">{cr.project}</p>
                   <p className="text-sm font-medium text-gray-700">{formatCurrency(cr.amount)}</p>
@@ -923,6 +1003,16 @@ const CashRequests = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* Preview Modal */}
+      {previewCR && (
+        <CRPreviewModal
+          cr={previewCRDetails || previewCR}
+          loading={loadingPreview}
+          onClose={closePreviewCR}
+          readOnly
+        />
       )}
     </div>
   )

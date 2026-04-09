@@ -122,6 +122,11 @@ export const serviceRequestService = {
     return response.data;
   },
 
+  markAsReceived: async (id) => {
+    const response = await api.put(`/service-requests/${id}/received`);
+    return response.data;
+  },
+
   delete: async (id) => {
     const response = await api.delete(`/service-requests/${id}`);
     return response.data;
