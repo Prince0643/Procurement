@@ -102,13 +102,22 @@ const Dashboard = () => {
     try {
       setLoading(true)
       
-      // Fetch all data
-      const [prs, pos, srs, crs] = await Promise.all([
-        purchaseRequestService.getAll('all'),
-        purchaseOrderService.getAll(),
-        serviceRequestService.getAll(),
-        cashRequestService.getAll()
+      // Fetch scoped dashboard snapshots (latest 5 per module) + totals
+      const [prPayload, poPayload, srPayload, crPayload] = await Promise.all([
+        purchaseRequestService.list({ page: 1, pageSize: 5 }),
+        purchaseOrderService.list({ page: 1, pageSize: 5 }),
+        serviceRequestService.list({ page: 1, pageSize: 5 }),
+        cashRequestService.list({ page: 1, pageSize: 5 })
       ])
+
+      const prs = Array.isArray(prPayload?.purchaseRequests) ? prPayload.purchaseRequests : []
+      const pos = Array.isArray(poPayload?.purchaseOrders) ? poPayload.purchaseOrders : []
+      const srs = Array.isArray(srPayload?.serviceRequests) ? srPayload.serviceRequests : []
+      const crs = Array.isArray(crPayload?.cashRequests) ? crPayload.cashRequests : []
+      const prTotal = Number.isFinite(prPayload?.total) ? prPayload.total : prs.length
+      const poTotal = Number.isFinite(poPayload?.total) ? poPayload.total : pos.length
+      const srTotal = Number.isFinite(srPayload?.total) ? srPayload.total : srs.length
+      const crTotal = Number.isFinite(crPayload?.total) ? crPayload.total : crs.length
 
       // Store full data for tabs
       setPurchaseRequests(prs)
@@ -121,47 +130,47 @@ const Dashboard = () => {
       const pendingCRs = crs.filter(cr => cr.status === 'Pending' || cr.status === 'For Admin Approval').length
 
       setStats({
-        totalPRs: prs.length,
+        totalPRs: prTotal,
         pendingPRs,
         approvedPRs,
-        totalPOs: pos.length,
-        totalSRs: srs.length,
+        totalPOs: poTotal,
+        totalSRs: srTotal,
         pendingSRs,
-        totalCRs: crs.length,
+        totalCRs: crTotal,
         pendingCRs
       })
 
-      // Create recent activity list (combine and sort by date)
+      // Create recent activity feed: latest 5 overall across modules
       const activity = [
-        ...prs.slice(0, 5).map(pr => ({
+        ...prs.map(pr => ({
           type: 'PR',
           number: pr.pr_number,
           status: pr.status,
           date: pr.created_at,
           description: `Purchase Request ${pr.pr_number} - ${pr.status}`
         })),
-        ...pos.slice(0, 5).map(po => ({
+        ...pos.map(po => ({
           type: 'PO',
           number: po.po_number,
           status: po.status,
           date: po.created_at,
           description: `Purchase Order ${po.po_number} created`
         })),
-        ...srs.slice(0, 5).map(sr => ({
+        ...srs.map(sr => ({
           type: 'SR',
           number: sr.sr_number,
           status: sr.status,
           date: sr.created_at,
           description: `Service Request ${sr.sr_number} - ${sr.status}`
         })),
-        ...crs.slice(0, 5).map(cr => ({
+        ...crs.map(cr => ({
           type: 'CR',
           number: cr.cr_number,
           status: cr.status,
           date: cr.created_at,
           description: `Cash Request ${cr.cr_number} - ${cr.status}`
         }))
-      ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10)
+      ].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
 
       setRecentActivity(activity)
     } catch (err) {
@@ -241,7 +250,7 @@ const Dashboard = () => {
             <div className="flex items-center gap-2">
               <span>Purchase Requests</span>
               <span className="px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
-                {purchaseRequests.length}
+                {stats.totalPRs}
               </span>
             </div>
           </button>
@@ -256,7 +265,7 @@ const Dashboard = () => {
             <div className="flex items-center gap-2">
               <span>Purchase Orders</span>
               <span className="px-2 py-0.5 bg-purple-100 text-purple-800 rounded-full text-xs">
-                {purchaseOrders.length}
+                {stats.totalPOs}
               </span>
             </div>
           </button>
@@ -457,8 +466,8 @@ const Dashboard = () => {
       {activeTab === 'purchase-requests' && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">All Purchase Requests</h3>
-            <span className="text-sm text-gray-500">{purchaseRequests.length} total</span>
+            <h3 className="text-sm font-semibold text-gray-900">Recent Purchase Requests</h3>
+            <span className="text-sm text-gray-500">{purchaseRequests.length} shown of {stats.totalPRs}</span>
           </div>
 
           {/* Mobile list */}
@@ -533,8 +542,8 @@ const Dashboard = () => {
       {activeTab === 'purchase-orders' && (
         <Card className="p-4">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-semibold text-gray-900">All Purchase Orders</h3>
-            <span className="text-sm text-gray-500">{purchaseOrders.length} total</span>
+            <h3 className="text-sm font-semibold text-gray-900">Recent Purchase Orders</h3>
+            <span className="text-sm text-gray-500">{purchaseOrders.length} shown of {stats.totalPOs}</span>
           </div>
 
           {/* Mobile list */}

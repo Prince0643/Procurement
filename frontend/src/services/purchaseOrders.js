@@ -17,6 +17,22 @@ const dedupeRequest = async (key, requestFn) => {
 };
 
 export const purchaseOrderService = {
+  list: async (params = {}) => {
+    const page = params?.page ?? null;
+    const pageSize = params?.pageSize ?? null;
+
+    const key = `purchaseOrders-list-${JSON.stringify({ page, pageSize })}`;
+
+    return dedupeRequest(key, async () => {
+      const queryParams = {};
+      if (page) queryParams.page = page;
+      if (pageSize) queryParams.pageSize = pageSize;
+
+      const response = await api.get('/purchase-orders', { params: queryParams, cache: false });
+      return response.data;
+    });
+  },
+
   getAll: async () => {
     return dedupeRequest('purchaseOrders-getAll', async () => {
       const response = await api.get('/purchase-orders');
