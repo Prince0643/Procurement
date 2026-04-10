@@ -27,6 +27,9 @@ From the repo folder:
 docker compose --env-file /opt/procurement/.env.prod up -d --build
 ```
 
+The stack includes a one-shot `db_migrate` service that applies required production migrations
+(including `payment_terms_code` fields) before backend startup.
+
 Optional Adminer:
 
 ```bash
@@ -55,3 +58,7 @@ Then verify in browser:
 - DB data persists in Docker volume `db_data`.
 - Uploads persist in Docker volume `backend_uploads`.
 - The schema is imported automatically only on first DB initialization. If you delete the DB volume, it will re-import.
+- To rerun migrations manually:
+  ```bash
+  docker compose --env-file /opt/procurement/.env.prod run --rm db_migrate
+  ```
