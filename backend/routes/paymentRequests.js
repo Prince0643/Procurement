@@ -110,7 +110,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If PR source, validate PR
     if (purchase_request_id) {
       const [prs] = await db.query(
-        'SELECT pr_number, payment_basis, requested_by, purpose FROM purchase_requests WHERE id = ?',
+        `SELECT pr_number, payment_basis, requested_by, purpose, payment_terms_code, payment_terms_note
+         FROM purchase_requests
+         WHERE id = ?`,
         [purchase_request_id]
       );
       if (prs.length === 0) {
@@ -121,6 +123,19 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       // Only allow non_debt PRs to become payment requests
       if (prDetails.payment_basis !== 'non_debt') {
         return res.status(400).json({ message: 'Only PRs without account can create payment requests' });
+      }
+
+      const hasTermsCode = Boolean(String(prDetails.payment_terms_code || '').trim());
+      const hasTermsNote = Boolean(String(prDetails.payment_terms_note || '').trim());
+      if (!hasTermsCode && !hasTermsNote) {
+        return res.status(400).json({
+          message: 'Set Payment Terms in PR approval before creating Payment Request.'
+        });
+      }
+      if (hasTermsCode && String(prDetails.payment_terms_code).toUpperCase() === 'CUSTOM' && !hasTermsNote) {
+        return res.status(400).json({
+          message: 'Payment Terms on PR are incomplete. Set Payment Terms in PR approval before creating Payment Request.'
+        });
       }
       sourcePurpose = prDetails.purpose || sourcePurpose;
       sourceRequestedBy = prDetails.requested_by;

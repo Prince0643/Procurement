@@ -153,7 +153,23 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type } = req.body;
+    const {
+      purpose,
+      description,
+      amount,
+      quantity,
+      unit,
+      project,
+      project_address,
+      date_needed,
+      remarks,
+      order_number,
+      supplier_id,
+      supplier_name,
+      supplier_address,
+      cr_type,
+      payment_terms_note
+    } = req.body;
 
     // Validate required fields
     if (!purpose || !String(purpose).trim()) {
@@ -162,6 +178,11 @@ router.post('/', authenticate, async (req, res) => {
 
     if (!amount || amount <= 0) {
       return res.status(400).json({ message: 'Valid amount is required' });
+    }
+
+    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
+    if (!normalizedPaymentTermsNote) {
+      return res.status(400).json({ message: 'Payment terms are required' });
     }
 
     conn = await db.getConnection();
@@ -185,14 +206,15 @@ router.post('/', authenticate, async (req, res) => {
       supplier_id,
       supplier_name,
       supplier_address,
-      cr_type
+      cr_type,
+      payment_terms_note: normalizedPaymentTermsNote
     });
 
     // Create cash request
     const [result] = await conn.query(
       `INSERT INTO cash_requests 
-       (cr_number, requested_by, purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (cr_number, requested_by, purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type, payment_terms_note, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         crNumber,
         req.user.id,
@@ -210,6 +232,7 @@ router.post('/', authenticate, async (req, res) => {
         supplier_name || null,
         supplier_address || null,
         cr_type || 'payment_request',
+        normalizedPaymentTermsNote,
         'Draft'
       ]
     );

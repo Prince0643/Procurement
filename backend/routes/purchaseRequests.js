@@ -11,6 +11,10 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+const normalizePaymentTermsNote = (note) => {
+  const normalized = note == null ? '' : String(note).trim();
+  return normalized || null;
+};
 
 // Get all PRs (filtered by user role)
 router.get('/', authenticate, async (req, res) => {
@@ -169,7 +173,7 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id } = req.body;
     const isDraft = save_as_draft === true;
 
     // Only validate required fields if NOT saving as draft
@@ -213,6 +217,12 @@ router.post('/', authenticate, async (req, res) => {
     const prNumber = `${initials}-${year}-${month}-${String(counter).padStart(3, '0')}`;
     const status = isDraft ? 'Draft' : 'For Procurement Review';
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
+    const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
+    const paymentTermsCode = paymentBasis === 'debt' && paymentTermsNote ? 'CUSTOM' : null;
+
+    if (!isDraft && paymentBasis === 'debt' && !paymentTermsNote) {
+      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
+    }
 
     const normalizedItems = Array.isArray(items)
       ? items.map((item) => {
@@ -255,8 +265,8 @@ router.post('/', authenticate, async (req, res) => {
     // 200-218
     const [result] = await conn.query(
       `INSERT INTO purchase_requests
-      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, supplier_id, supplier_address, total_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, payment_terms_code, payment_terms_note, payment_terms_set_by, payment_terms_set_at, supplier_id, supplier_address, total_amount)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         prNumber,
         req.user.id,
@@ -268,6 +278,10 @@ router.post('/', authenticate, async (req, res) => {
         project_address || null,
         order_number || null,
         paymentBasis,
+        paymentTermsCode,
+        paymentTermsNote,
+        paymentTermsCode ? req.user.id : null,
+        paymentTermsCode ? new Date() : null,
         supplier_id || null,
         supplierAddress,
         totalAmount
@@ -307,7 +321,9 @@ router.post('/', authenticate, async (req, res) => {
       prId,
       pr_number: prNumber,
       status: status,
-      payment_basis: paymentBasis
+      payment_basis: paymentBasis,
+      payment_terms_code: paymentTermsCode,
+      payment_terms_note: paymentTermsNote
     });
   } catch (error) {
     if (conn) {
@@ -328,7 +344,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id } = req.body;
 
     // Check if PR exists and is draft
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -390,10 +406,18 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       supplierAddress = supRows[0].address ?? null;
     }
 
+    const nextPaymentBasis = payment_basis ?? pr.payment_basis;
+    const nextPaymentTermsNote = nextPaymentBasis === 'debt'
+      ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
+      : null;
+    const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
+
     // Update PR details
     await conn.query(
       `UPDATE purchase_requests 
-       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?, supplier_id = ?, supplier_address = ?, total_amount = ?, updated_at = NOW()
+       SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?,
+           payment_terms_code = ?, payment_terms_note = ?, payment_terms_set_by = ?, payment_terms_set_at = ?,
+           supplier_id = ?, supplier_address = ?, total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         purpose ?? pr.purpose,
@@ -402,7 +426,11 @@ router.put('/:id/draft', authenticate, async (req, res) => {
         project || pr.project,
         project_address || pr.project_address,
         order_number || pr.order_number,
-        payment_basis ?? pr.payment_basis,
+        nextPaymentBasis,
+        nextPaymentTermsCode,
+        nextPaymentTermsNote,
+        nextPaymentTermsCode ? req.user.id : null,
+        nextPaymentTermsCode ? new Date() : null,
         supplier_id ?? pr.supplier_id,
         supplierAddress,
         totalAmount,
@@ -465,6 +493,9 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     // Validate required fields for submission
     if (!pr.purpose || !String(pr.purpose).trim()) {
       return res.status(400).json({ message: 'Purpose is required to submit' });
+    }
+    if (pr.payment_basis === 'debt' && !normalizePaymentTermsNote(pr.payment_terms_note)) {
+      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
     }
 
     // Check if PR has items
@@ -657,12 +688,22 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
 router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
   let conn;
   try {
-    const { status, rejection_reason, items, supplier_id, supplier_address, item_remarks } = req.body;
+    const {
+      status,
+      rejection_reason,
+      items,
+      supplier_id,
+      supplier_address,
+      item_remarks
+    } = req.body;
     
     conn = await db.getConnection();
     await conn.beginTransaction();
     
-    const [prs] = await conn.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const [prs] = await conn.query(
+      'SELECT status, payment_basis, payment_terms_note FROM purchase_requests WHERE id = ?',
+      [req.params.id]
+    );
     if (prs.length === 0) {
       await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
@@ -680,6 +721,10 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     
     if (status === 'approved') {
       newStatus = 'For Super Admin Final Approval';
+      if (prs[0].payment_basis === 'debt' && !normalizePaymentTermsNote(prs[0].payment_terms_note)) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'Payment Terms and Conditions must be set on PR before approval.' });
+      }
       
       // Validate supplier_id is provided
       if (!supplier_id) {
@@ -740,7 +785,13 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       // Update PR status, total_amount, supplier_id and supplier_address
       await conn.query(
         'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_address = ? WHERE id = ?',
-        [newStatus, totalAmount, supplier_id, supplier_address || null, req.params.id]
+        [
+          newStatus,
+          totalAmount,
+          supplier_id,
+          supplier_address || null,
+          req.params.id
+        ]
       );
       
       // Store changes info for notification
@@ -947,7 +998,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id } = req.body;
 
     // Check if PR exists and is rejected
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -956,6 +1007,11 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     }
 
     const pr = prs[0];
+    const nextPaymentBasis = payment_basis ?? pr.payment_basis;
+    const nextPaymentTermsNote = nextPaymentBasis === 'debt'
+      ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
+      : null;
+    const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
 
     // Only the original requester can resubmit
     if (pr.requested_by !== req.user.id) {
@@ -965,6 +1021,9 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     // Only rejected PRs can be resubmitted
     if (pr.status !== 'Rejected') {
       return res.status(400).json({ message: 'Only rejected purchase requests can be resubmitted' });
+    }
+    if (nextPaymentBasis === 'debt' && !nextPaymentTermsNote) {
+      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
     }
 
     conn = await db.getConnection();
@@ -1013,7 +1072,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     await conn.query(
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
-           payment_basis = ?, supplier_id = ?,
+           payment_basis = ?, payment_terms_code = ?, payment_terms_note = ?, payment_terms_set_by = ?, payment_terms_set_at = ?, supplier_id = ?,
            status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
            supplier_address = ?, rejection_reason = NULL, 
            total_amount = ?, updated_at = NOW()
@@ -1025,7 +1084,11 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
         project || pr.project,
         project_address || pr.project_address,
         order_number || pr.order_number,
-        payment_basis ?? pr.payment_basis,
+        nextPaymentBasis,
+        nextPaymentTermsCode,
+        nextPaymentTermsNote,
+        nextPaymentTermsCode ? req.user.id : null,
+        nextPaymentTermsCode ? new Date() : null,
         supplier_id ?? pr.supplier_id,
         supplierAddress,
         totalAmount,

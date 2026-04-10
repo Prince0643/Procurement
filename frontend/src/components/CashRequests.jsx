@@ -201,6 +201,7 @@ const CashRequests = () => {
   const [supplierAddress, setSupplierAddress] = useState('')
   const [remarks, setRemarks] = useState('')
   const [orderNumber, setOrderNumber] = useState('')
+  const [paymentTermsNote, setPaymentTermsNote] = useState('')
   const [branches, setBranches] = useState([])
   const [crType, setCrType] = useState('payment_request')
 
@@ -386,6 +387,7 @@ const CashRequests = () => {
     setSupplierAddress(cr.supplier_address || '')
     setRemarks(cr.remarks || '')
     setOrderNumber(cr.order_number || '')
+    setPaymentTermsNote(cr.payment_terms_note || '')
     setCrType(cr.cr_type || 'payment_request')
     
     setShowEditModal(true)
@@ -434,6 +436,7 @@ const CashRequests = () => {
     setSupplierAddress('')
     setRemarks('')
     setOrderNumber('')
+    setPaymentTermsNote('')
     setCrType('payment_request')
   }
 
@@ -467,6 +470,7 @@ const CashRequests = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!purpose) { alert('Please enter purpose'); return }
+    if (!String(paymentTermsNote || '').trim()) { alert('Payment terms are required'); return }
     if (!amount || amount <= 0) { alert('Please enter a valid amount'); return }
 
     console.log('Submitting Cash Request - dateNeeded value:', dateNeeded, 'type:', typeof dateNeeded)
@@ -487,7 +491,8 @@ const CashRequests = () => {
         supplier_address: supplierAddress || null,
         remarks: remarks || null,
         order_number: orderNumber || null,
-        cr_type: crType
+        cr_type: crType,
+        payment_terms_note: paymentTermsNote.trim()
       }
       
       console.log('Full crData being sent:', crData)
@@ -994,6 +999,14 @@ const CashRequests = () => {
                 <Input label="Supplier Address" value={supplierAddress} onChange={(e) => setSupplierAddress(e.target.value)} />
                 
                 <TextArea label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional remarks" rows={2} />
+                <TextArea
+                  label="Payment Terms"
+                  value={paymentTermsNote}
+                  onChange={(e) => setPaymentTermsNote(e.target.value)}
+                  placeholder="Enter payment terms and conditions"
+                  rows={3}
+                  required
+                />
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>

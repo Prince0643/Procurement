@@ -41,19 +41,30 @@ const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled 
   )
 }
 
-const Input = ({ label, type = 'text', value, onChange, placeholder, required = false }) => (
+const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, multiline = false, rows = 4 }) => (
   <div className="mb-4">
     <label className="block text-sm font-medium text-gray-700 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
-    <input
-      type={type}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
-      required={required}
-    />
+    {multiline ? (
+      <textarea
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        rows={rows}
+        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-y"
+        required={required}
+      />
+    ) : (
+      <input
+        type={type}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        required={required}
+      />
+    )}
   </div>
 )
 
@@ -133,6 +144,18 @@ const STATUS_FILTER_OPTIONS = [
   'Paid'
 ]
 
+const formatPaymentTerms = (code, note) => {
+  const normalizedCode = String(code || '').trim().toUpperCase()
+  const normalizedNote = String(note || '').trim()
+  if (!normalizedCode && normalizedNote) return normalizedNote
+  if (!normalizedCode) return '-'
+  if (normalizedCode === 'CUSTOM') return normalizedNote || 'Custom (missing details)'
+  if (normalizedCode === 'NET_7') return 'NET 7'
+  if (normalizedCode === 'NET_15') return 'NET 15'
+  if (normalizedCode === 'NET_30') return 'NET 30'
+  return normalizedCode
+}
+
 const PurchaseRequests = () => {
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -191,6 +214,7 @@ const PurchaseRequests = () => {
   const [orderNumber, setOrderNumber] = useState('')
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [paymentBasis, setPaymentBasis] = useState('debt')
+  const [paymentTermsNote, setPaymentTermsNote] = useState('')
   const [remarks, setRemarks] = useState('')
   const [items, setItems] = useState([{ item_id: '', quantity: 1, unit_price: 0 }])
 
@@ -445,7 +469,6 @@ const PurchaseRequests = () => {
       alert('Supplier is required for approval')
       return
     }
-
     try {
       setProcurementSubmitting(true)
       await purchaseRequestService.procurementApprove(
@@ -569,6 +592,7 @@ const PurchaseRequests = () => {
       setOrderNumber(fullPr.order_number || '')
       setSelectedSupplier(String(fullPr.supplier_id || ''))
       setPaymentBasis(fullPr.payment_basis || 'debt')
+      setPaymentTermsNote(fullPr.payment_terms_note || '')
       setRemarks(fullPr.remarks || '')
       setItems((fullPr.items || []).map(item => ({
         item_id: String(item.item_id || item.id || ''),
@@ -593,6 +617,10 @@ const PurchaseRequests = () => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
     if (items.length === 0) { alert('At least one item is required'); return }
+    if (paymentBasis === 'debt' && !paymentTermsNote.trim()) {
+      alert('Payment Terms and Conditions is required for debt/with account PR')
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -604,6 +632,7 @@ const PurchaseRequests = () => {
         order_number: orderNumber || null,
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
+        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
         remarks: remarks || null,
         items: items.map(item => ({
           item_id: parseInt(item.item_id),
@@ -653,6 +682,7 @@ const PurchaseRequests = () => {
     setOrderNumber('')
     setSelectedSupplier('')
     setPaymentBasis('debt')
+    setPaymentTermsNote('')
     setRemarks('')
     setItems([{ item_id: '', quantity: 1, unit_price: 0 }])
   }
@@ -679,6 +709,10 @@ const PurchaseRequests = () => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
     if (items.length === 0) { alert('At least one item is required'); return }
+    if (paymentBasis === 'debt' && !paymentTermsNote.trim()) {
+      alert('Payment Terms and Conditions is required for debt/with account PR')
+      return
+    }
 
     try {
       setSubmitting(true)
@@ -690,6 +724,7 @@ const PurchaseRequests = () => {
         order_number: orderNumber || null,
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
+        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
         remarks: remarks || null,
         items: items.map(item => ({
           item_id: parseInt(item.item_id),
@@ -968,6 +1003,10 @@ const PurchaseRequests = () => {
                                  pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
                               </p>
                             </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Payment Terms</p>
+                              <p className="text-sm text-gray-900">{formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}</p>
+                            </div>
                           </div>
                           {pr.remarks && (
                             <div>
@@ -1103,6 +1142,9 @@ const PurchaseRequests = () => {
                       Payment Type: {pr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
                                     pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
                     </p>
+                    <p className="text-xs text-gray-500">
+                      Payment Terms: {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}
+                    </p>
                     {pr.remarks && <p className="text-xs text-gray-500">Remarks: {pr.remarks}</p>}
                   </div>
                 )}
@@ -1212,6 +1254,15 @@ const PurchaseRequests = () => {
                   ]} 
                   required 
                 />
+                <Input
+                  label={paymentBasis === 'debt' ? 'Payment Terms and Conditions *' : 'Payment Terms and Conditions'}
+                  value={paymentTermsNote}
+                  onChange={(e) => setPaymentTermsNote(e.target.value)}
+                  placeholder="Ex: Net 30 after invoice receipt"
+                  multiline
+                  rows={4}
+                  required={paymentBasis === 'debt'}
+                />
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
 
@@ -1297,6 +1348,15 @@ const PurchaseRequests = () => {
                     { value: 'non_debt', label: 'Cash/Non-debt (immediate payment)' }
                   ]} 
                   required 
+                />
+                <Input
+                  label={paymentBasis === 'debt' ? 'Payment Terms and Conditions *' : 'Payment Terms and Conditions'}
+                  value={paymentTermsNote}
+                  onChange={(e) => setPaymentTermsNote(e.target.value)}
+                  placeholder="Ex: Net 30 after invoice receipt"
+                  multiline
+                  rows={4}
+                  required={paymentBasis === 'debt'}
                 />
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />

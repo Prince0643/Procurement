@@ -40,6 +40,7 @@ CREATE TABLE `cash_requests` (
   `project_address` text DEFAULT NULL,
   `date_needed` date DEFAULT NULL,
   `order_number` varchar(100) DEFAULT NULL,
+  `payment_terms_note` text DEFAULT NULL,
   `supplier_id` int(11) DEFAULT NULL,
   `supplier_name` varchar(255) DEFAULT NULL,
   `supplier_address` text DEFAULT NULL,
@@ -371,6 +372,7 @@ CREATE TABLE `payment_requests` (
   `project` varchar(100) DEFAULT NULL,
   `project_address` varchar(255) DEFAULT NULL,
   `order_number` varchar(10) DEFAULT NULL,
+  `payment_terms_note` text DEFAULT NULL,
   `amount` decimal(12,2) NOT NULL DEFAULT 0.00,
   `payment_basis` enum('debt','non_debt') NOT NULL DEFAULT 'non_debt',
   `requested_by` int(11) NOT NULL,
@@ -881,6 +883,7 @@ CREATE TABLE `service_requests` (
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `order_number` varchar(10) DEFAULT NULL,
+  `payment_terms_note` text DEFAULT NULL,
   `sr_type` enum('payment_request','payment_order') DEFAULT 'payment_request' COMMENT 'Type: payment_request (amount+qty) vs payment_order (amount only)',
   `quantity` decimal(10,2) DEFAULT NULL COMMENT 'Quantity for payment_request type',
   `unit` varchar(20) DEFAULT NULL COMMENT 'Unit of measurement (e.g., pcs, hours, days)'

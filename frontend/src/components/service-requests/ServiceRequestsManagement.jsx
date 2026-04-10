@@ -180,7 +180,8 @@ const ServiceRequestsManagement = () => {
     amount: '',
     date_needed: '',
     remarks: '',
-    order_number: ''
+    order_number: '',
+    payment_terms_note: ''
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -397,6 +398,10 @@ const ServiceRequestsManagement = () => {
       alert('Purpose is required');
       return;
     }
+    if (!String(formData.payment_terms_note || '').trim()) {
+      alert('Payment terms are required');
+      return;
+    }
     if (!formData.amount || isNaN(formData.amount) || formData.amount <= 0) {
       alert('Valid amount is required');
       return;
@@ -407,7 +412,8 @@ const ServiceRequestsManagement = () => {
       await serviceRequestService.create({
         ...formData,
         amount: parseFloat(formData.amount),
-        quantity: formData.sr_type === 'payment_request' && formData.quantity ? parseFloat(formData.quantity) : null
+        quantity: formData.sr_type === 'payment_request' && formData.quantity ? parseFloat(formData.quantity) : null,
+        payment_terms_note: formData.payment_terms_note.trim()
       });
       setShowCreateModal(false);
       setFormData({
@@ -423,7 +429,8 @@ const ServiceRequestsManagement = () => {
         amount: '',
         date_needed: '',
         remarks: '',
-        order_number: ''
+        order_number: '',
+        payment_terms_note: ''
       });
       fetchServiceRequests();
     } catch (err) {
@@ -1059,6 +1066,17 @@ const ServiceRequestsManagement = () => {
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                   rows="2"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms *</label>
+                <textarea
+                  value={formData.payment_terms_note}
+                  onChange={(e) => setFormData({ ...formData, payment_terms_note: e.target.value })}
+                  rows="3"
+                  placeholder="Enter payment terms and conditions"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>

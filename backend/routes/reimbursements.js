@@ -216,7 +216,17 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { payee, purpose, project, project_address, order_number, amount, date_needed, remarks } = req.body;
+    const {
+      payee,
+      purpose,
+      project,
+      project_address,
+      order_number,
+      amount,
+      date_needed,
+      remarks,
+      payment_terms_note
+    } = req.body;
 
     if (!payee || !String(payee).trim()) {
       return res.status(400).json({ message: 'Payee is required' });
@@ -226,6 +236,11 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount is required' });
     }
 
+    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
+    if (!normalizedPaymentTermsNote) {
+      return res.status(400).json({ message: 'Payment terms are required' });
+    }
+
     conn = await db.getConnection();
     await conn.beginTransaction();
 
@@ -233,8 +248,8 @@ router.post('/', authenticate, async (req, res) => {
 
     const [result] = await conn.query(
       `INSERT INTO reimbursements
-       (rmb_number, requested_by, payee, purpose, project, project_address, order_number, amount, date_needed, remarks, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (rmb_number, requested_by, payee, purpose, project, project_address, order_number, amount, date_needed, remarks, payment_terms_note, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         rmbNumber,
         req.user.id,
@@ -246,6 +261,7 @@ router.post('/', authenticate, async (req, res) => {
         parseFloat(amount),
         date_needed || null,
         remarks || null,
+        normalizedPaymentTermsNote,
         'For Procurement Review'
       ]
     );

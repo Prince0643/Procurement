@@ -198,6 +198,17 @@ const Approvals = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const handleReimbursementsChanged = () => {
+      fetchData();
+    };
+
+    window.addEventListener('reimbursements:changed', handleReimbursementsChanged);
+    return () => {
+      window.removeEventListener('reimbursements:changed', handleReimbursementsChanged);
+    };
+  }, []);
+
   const fetchData = async () => {
     console.log('Approvals: fetchData called');
     try {

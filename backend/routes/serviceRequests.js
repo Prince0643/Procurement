@@ -174,7 +174,22 @@ router.get('/:id', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number } = req.body;
+    const {
+      purpose,
+      description,
+      service_type,
+      sr_type,
+      project,
+      project_address,
+      supplier_id,
+      amount,
+      quantity,
+      unit,
+      date_needed,
+      remarks,
+      order_number,
+      payment_terms_note
+    } = req.body;
 
     // Validate required fields
     if (!purpose || !String(purpose).trim()) {
@@ -187,6 +202,11 @@ router.post('/', authenticate, async (req, res) => {
 
     if (!amount || isNaN(amount) || amount <= 0) {
       return res.status(400).json({ message: 'Valid amount is required' });
+    }
+
+    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
+    if (!normalizedPaymentTermsNote) {
+      return res.status(400).json({ message: 'Payment terms are required' });
     }
 
     // Validate quantity required for payment_request type (payment_request = amount + qty)
@@ -202,9 +222,27 @@ router.post('/', authenticate, async (req, res) => {
 
     const [result] = await conn.query(
       `INSERT INTO service_requests 
-       (sr_number, requested_by, purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [srNumber, req.user.id, purpose, description || null, service_type, finalSrType, project || null, project_address || null, supplier_id || null, amount, finalSrType === 'payment_request' ? quantity : null, unit || null, date_needed || null, remarks || null, order_number || null, 'Draft']
+       (sr_number, requested_by, purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number, payment_terms_note, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        srNumber,
+        req.user.id,
+        purpose,
+        description || null,
+        service_type,
+        finalSrType,
+        project || null,
+        project_address || null,
+        supplier_id || null,
+        amount,
+        finalSrType === 'payment_request' ? quantity : null,
+        unit || null,
+        date_needed || null,
+        remarks || null,
+        order_number || null,
+        normalizedPaymentTermsNote,
+        'Draft'
+      ]
     );
 
     const srId = result.insertId;

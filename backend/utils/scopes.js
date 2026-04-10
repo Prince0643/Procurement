@@ -7,7 +7,7 @@ const scopes = {
 
   // Engineer scope
   engineer: {
-    purchaseRequest: ['id', 'pr_number', 'purpose', 'remarks', 'status', 'total_amount', 'date_needed', 'project', 'project_address', 'order_number', 'supplier_id', 'supplier_address', 'rejection_reason', 'created_at', 'updated_at', 'requester_first_name', 'requester_last_name'],
+    purchaseRequest: ['id', 'pr_number', 'purpose', 'remarks', 'status', 'total_amount', 'date_needed', 'project', 'project_address', 'order_number', 'supplier_id', 'supplier_address', 'payment_terms_code', 'payment_terms_note', 'payment_terms_set_by', 'payment_terms_set_at', 'rejection_reason', 'created_at', 'updated_at', 'requester_first_name', 'requester_last_name'],
     purchaseOrder: ['id', 'po_number', 'status', 'total_amount', 'expected_delivery_date', 'place_of_delivery', 'project', 'order_number', 'delivery_term', 'payment_term', 'created_at'],
     employee: ['id', 'employee_no', 'first_name', 'middle_initial', 'last_name', 'role', 'department', 'is_active'],
     disbursementVoucher: ['id', 'dv_number', 'status', 'amount', 'dv_date', 'project', 'order_number', 'pr_number', 'created_at'],
@@ -15,7 +15,7 @@ const scopes = {
 
   // Procurement scope
   procurement: {
-    purchaseRequest: ['id', 'pr_number', 'purpose', 'remarks', 'status', 'total_amount', 'date_needed', 'project', 'project_address', 'order_number', 'supplier_id', 'supplier_address', 'created_at', 'updated_at', 'requester_first_name', 'requester_last_name', 'rejection_reason'],
+    purchaseRequest: ['id', 'pr_number', 'purpose', 'remarks', 'status', 'total_amount', 'date_needed', 'project', 'project_address', 'order_number', 'supplier_id', 'supplier_address', 'payment_terms_code', 'payment_terms_note', 'payment_terms_set_by', 'payment_terms_set_at', 'created_at', 'updated_at', 'requester_first_name', 'requester_last_name', 'rejection_reason'],
     purchaseOrder: ['id', 'po_number', 'purchase_request_id', 'supplier_id', 'status', 'total_amount', 'expected_delivery_date', 'place_of_delivery', 'project', 'order_number', 'delivery_term', 'payment_term', 'notes', 'created_at', 'updated_at'],
     employee: ['id', 'employee_no', 'first_name', 'middle_initial', 'last_name', 'role', 'department', 'is_active', 'created_at'],
     disbursementVoucher: ['id', 'dv_number', 'purchase_order_id', 'purchase_request_id', 'supplier_id', 'status', 'amount', 'dv_date', 'particulars', 'project', 'order_number', 'pr_number', 'check_number', 'bank_name', 'payment_date', 'created_at', 'updated_at'],

@@ -81,6 +81,19 @@ const formatCurrency = (amount) => {
   }).format(amount || 0)
 }
 
+const resolvePaymentTermFromPR = (code, note) => {
+  const normalizedCode = String(code || '').trim().toUpperCase()
+  if (!normalizedCode) return null
+  if (normalizedCode === 'CUSTOM') {
+    const normalizedNote = String(note || '').trim()
+    return normalizedNote || null
+  }
+  if (normalizedCode === 'NET_7') return 'NET 7'
+  if (normalizedCode === 'NET_15') return 'NET 15'
+  if (normalizedCode === 'NET_30') return 'NET 30'
+  return normalizedCode
+}
+
 const formatDate = (dateString) => {
   if (!dateString) return '-'
   return new Date(dateString).toLocaleDateString('en-PH', {
@@ -194,6 +207,10 @@ const PurchaseOrders = () => {
   const loadPRItems = async (prId) => {
     try {
       const pr = await purchaseRequestService.getById(prId)
+      const inheritedPaymentTerm = resolvePaymentTermFromPR(pr.payment_terms_code, pr.payment_terms_note)
+      if (inheritedPaymentTerm) {
+        setPaymentTerm(inheritedPaymentTerm)
+      }
       if (pr.items && pr.items.length > 0) {
         setItems(pr.items.map(item => ({
           item_id: item.item_id,
@@ -711,6 +728,11 @@ const PurchaseOrders = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <Select label="Delivery Term" value={deliveryTerm} onChange={(e) => setDeliveryTerm(e.target.value)} options={[{value:'COD',label:'COD'},{value:'7 days',label:'7 days'},{value:'15 days',label:'15 days'},{value:'30 days',label:'30 days'}]} />
                   <Select label="Payment Term" value={paymentTerm} onChange={(e) => setPaymentTerm(e.target.value)} options={[{value:'CASH',label:'CASH'},{value:'CHECK',label:'CHECK'},{value:'BANK TRANSFER',label:'BANK TRANSFER'}]} />
+                  {sourceType === 'pr' && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Payment Term is inherited from PR payment terms during creation.
+                    </p>
+                  )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">

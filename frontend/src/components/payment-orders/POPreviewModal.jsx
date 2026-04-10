@@ -18,6 +18,14 @@ const formatDate = (dateString) => {
   });
 };
 
+const formatPaymentTerms = (record) => {
+  if (!record) return '-';
+  if (record.payment_terms_note) return record.payment_terms_note;
+  if (record.payment_term) return record.payment_term;
+  if (record.payment_terms_code) return record.payment_terms_code.replace(/_/g, ' ');
+  return '-';
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -152,6 +160,10 @@ const POPreviewModal = ({ po, loading, onClose }) => {
                       <td className="px-4 py-3 font-semibold text-gray-900">{formatCurrency(po.amount)}</td>
                       <td className="px-4 py-3 bg-gray-50 font-medium text-gray-600">SR NUMBER</td>
                       <td className="px-4 py-3">{po.sr_number || '-'}</td>
+                    </tr>
+                    <tr className="border-b border-gray-200">
+                      <td className="px-4 py-3 bg-gray-50 font-medium text-gray-600">PAYMENT TERMS</td>
+                      <td className="px-4 py-3" colSpan="3">{formatPaymentTerms(po)}</td>
                     </tr>
                     <tr>
                       <td className="px-4 py-3 bg-gray-50 font-medium text-gray-600">PREPARED BY</td>

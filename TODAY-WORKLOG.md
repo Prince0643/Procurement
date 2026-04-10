@@ -72,3 +72,38 @@ Date: 2026-04-09
 - Enabled sidebar access for `super_admin` to `/dashboard/service-requests` in:
   - `frontend/src/config/navigation.js`
 - Verified route already existed in app routes; no route-level addition required.
+
+## Implemented: Payment Terms in All Preview Modals
+- Added `Payment Terms` display (with fallback logic) in preview modals for:
+  - payment orders (`POPreviewModal`, `POApprovalPreviewModal`)
+  - payment requests, service requests, cash requests, disbursement vouchers, reimbursements
+  - purchase requests / purchase orders (existing coverage validated)
+- Standardized display fallback order:
+  - `payment_terms_note` -> `payment_term` -> `payment_terms_code` -> `-`
+- Updated SR/CR/Reimbursement preview display to support multiline terms (`whitespace-pre-wrap`).
+
+## Implemented: Required Multiline Payment Terms on Create (SR/CR/Reimbursement)
+- Added required `payment_terms_note` in create forms:
+  - `ServiceRequestsManagement`
+  - `CashRequests`
+  - `ReimbursementsManagement`
+- Enforced frontend validation: block submit if payment terms are empty.
+- Updated create payloads to send trimmed `payment_terms_note`.
+- Backend create routes now validate and persist `payment_terms_note`:
+  - `POST /service-requests`
+  - `POST /cash-requests`
+  - `POST /reimbursements`
+- Error message used consistently: `Payment terms are required`.
+
+## Implemented: Schema + Migration Fix for `Unknown column 'payment_terms_note'`
+- Added migration:
+  - `backend/migrations/add_payment_terms_to_sr_cr_reimbursements.sql`
+- Made migration rerunnable/idempotent using `ADD COLUMN IF NOT EXISTS`.
+- Applied migration to live local DB (`procurement_db`) and verified column exists in:
+  - `service_requests`
+  - `cash_requests`
+  - `reimbursements`
+- Synced schema snapshots:
+  - `backend/database/whole_sql_schema.sql`
+  - `dbschema/procurement_db.sql`
+- Confirmed service request insert no longer fails on `payment_terms_note` (rollback-safe DB insert test passed).

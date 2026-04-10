@@ -18,6 +18,16 @@ const formatDate = (dateString) => {
   });
 };
 
+const formatPaymentTerms = (record) => {
+  const note = String(record?.payment_terms_note || '').trim();
+  if (note) return note;
+  const term = String(record?.payment_term || '').trim();
+  if (term) return term;
+  const code = String(record?.payment_terms_code || '').trim().toUpperCase();
+  if (!code) return '-';
+  return code.replace(/_/g, ' ');
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -182,6 +192,15 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
               </div>
               <div className="col-span-4 px-3 py-2 text-sm text-gray-900">
                 {payment.purpose || '-'}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                Payment Terms
+              </div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {formatPaymentTerms(payment)}
               </div>
             </div>
 

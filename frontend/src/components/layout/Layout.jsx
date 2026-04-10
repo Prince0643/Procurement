@@ -32,6 +32,23 @@ const Layout = ({ user, notifications, setNotifications, onLogout, children }) =
     return () => clearInterval(interval);
   }, [user]);
 
+  useEffect(() => {
+    const handleReimbursementsChanged = async () => {
+      if (user?.role !== 'super_admin') return;
+      try {
+        const data = await reimbursementService.getPendingCount();
+        setPendingCount(data.count);
+      } catch (err) {
+        console.error('Failed to refresh pending count after reimbursement change:', err);
+      }
+    };
+
+    window.addEventListener('reimbursements:changed', handleReimbursementsChanged);
+    return () => {
+      window.removeEventListener('reimbursements:changed', handleReimbursementsChanged);
+    };
+  }, [user]);
+
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
   const handleLogout = () => {

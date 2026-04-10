@@ -18,6 +18,18 @@ const formatDate = (dateString) => {
   });
 };
 
+const formatPaymentTerms = (code, note) => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  const normalizedNote = String(note || '').trim();
+  if (!normalizedCode && normalizedNote) return normalizedNote;
+  if (!normalizedCode) return '-';
+  if (normalizedCode === 'CUSTOM') return normalizedNote || 'Custom (missing details)';
+  if (normalizedCode === 'NET_7') return 'NET 7';
+  if (normalizedCode === 'NET_15') return 'NET 15';
+  if (normalizedCode === 'NET_30') return 'NET 30';
+  return normalizedCode;
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -191,6 +203,16 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
             {/* Row 5: Purpose */}
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                Payment Terms
+              </div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}
+              </div>
+            </div>
+
+            {/* Row 6: Purpose */}
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
                 Purpose
               </div>
               <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
@@ -198,7 +220,7 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
               </div>
             </div>
 
-            {/* Row 6: Remarks (if present) */}
+            {/* Row 7: Remarks (if present) */}
             {pr.remarks && (
               <div className="grid grid-cols-12 border-b border-gray-300">
                 <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">

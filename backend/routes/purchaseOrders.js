@@ -12,6 +12,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+const PAYMENT_TERM_LABELS = {
+  CASH: 'CASH',
+  COD: 'COD',
+  NET_7: 'NET 7',
+  NET_15: 'NET 15',
+  NET_30: 'NET 30',
+  CUSTOM: 'CUSTOM'
+};
+
+const resolvePaymentTermFromPR = (code, note) => {
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return null;
+  if (normalizedCode === 'CUSTOM') {
+    const normalizedNote = note == null ? '' : String(note).trim();
+    return normalizedNote || null;
+  }
+  return PAYMENT_TERM_LABELS[normalizedCode] || normalizedCode;
+};
 
 // Get all POs
 router.get('/', authenticate, async (req, res) => {
@@ -163,11 +181,15 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     let poType = 'purchase_order'; // default
     let finalSupplierId = supplier_id;
     let sourceOrderNumber = null;
+    let effectivePaymentTerm = payment_term || 'CASH';
     
     if (hasPRSource) {
       // Get PR details including payment_basis
       const [prs] = await db.query(
-        'SELECT pr_number, payment_basis, supplier_id as pr_supplier_id, order_number FROM purchase_requests WHERE id = ?',
+        `SELECT pr_number, payment_basis, supplier_id as pr_supplier_id, order_number,
+                payment_terms_code, payment_terms_note
+         FROM purchase_requests
+         WHERE id = ?`,
         [purchase_request_id]
       );
       if (prs.length === 0) {
@@ -182,6 +204,25 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
           redirectTo: '/api/payment-requests'
         });
       }
+
+      const hasTermsCode = Boolean(String(prDetails.payment_terms_code || '').trim());
+      const hasTermsNote = Boolean(String(prDetails.payment_terms_note || '').trim());
+
+      if (!hasTermsCode && !hasTermsNote) {
+        return res.status(400).json({
+          message: 'Set Payment Terms in PR approval before creating Purchase Order.'
+        });
+      }
+
+      const fallbackTermsCode = hasTermsCode ? prDetails.payment_terms_code : 'CUSTOM';
+      const resolvedPRPaymentTerm = resolvePaymentTermFromPR(fallbackTermsCode, prDetails.payment_terms_note);
+
+      if (!resolvedPRPaymentTerm) {
+        return res.status(400).json({
+          message: 'Payment Terms on PR are incomplete. Set Payment Terms in PR approval before creating Purchase Order.'
+        });
+      }
+      effectivePaymentTerm = resolvedPRPaymentTerm;
       
       // Use supplier from PR if engineer selected one
       if (!finalSupplierId && prDetails.pr_supplier_id) {
@@ -243,7 +284,7 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     const [result] = await db.query(
       `INSERT INTO purchase_orders (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type) 
        VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, sourceOrderNumber, delivery_term || 'COD', payment_term || 'CASH', notes || null, status, poType]
+      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, sourceOrderNumber, delivery_term || 'COD', effectivePaymentTerm, notes || null, status, poType]
     );
 
     const poId = result.insertId;

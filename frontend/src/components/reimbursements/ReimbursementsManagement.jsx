@@ -80,6 +80,7 @@ const ReimbursementsManagement = () => {
     project: '',
     project_address: '',
     order_number: '',
+    payment_terms_note: '',
     amount: '',
     date_needed: '',
     remarks: ''
@@ -157,6 +158,17 @@ const ReimbursementsManagement = () => {
     fetchReimbursements();
   }, []);
 
+  useEffect(() => {
+    const handleReimbursementsChanged = () => {
+      fetchReimbursements();
+    };
+
+    window.addEventListener('reimbursements:changed', handleReimbursementsChanged);
+    return () => {
+      window.removeEventListener('reimbursements:changed', handleReimbursementsChanged);
+    };
+  }, []);
+
   const openPreview = async (r) => {
     setPreviewReimbursement(r);
     setLoadingPreview(true);
@@ -200,11 +212,16 @@ const ReimbursementsManagement = () => {
       alert('Valid amount is required');
       return;
     }
+    if (!String(formData.payment_terms_note || '').trim()) {
+      alert('Payment terms are required');
+      return;
+    }
 
     try {
       setSubmitting(true);
       await reimbursementService.create({
         ...formData,
+        payment_terms_note: formData.payment_terms_note.trim(),
         amount: amt
       });
       setShowCreateModal(false);
@@ -214,6 +231,7 @@ const ReimbursementsManagement = () => {
         project: '',
         project_address: '',
         order_number: '',
+        payment_terms_note: '',
         amount: '',
         date_needed: '',
         remarks: ''
@@ -383,7 +401,7 @@ const ReimbursementsManagement = () => {
                   >
                     <Eye className="w-4 h-4 text-blue-600" />
                   </Button>
-                  {user?.role === 'engineer' && r.status === 'Draft' && r.requested_by === user?.id && (
+                  {['engineer', 'procurement'].includes(user?.role) && r.status === 'Draft' && r.requested_by === user?.id && (
                     <>
                       <Button variant="ghost" size="sm" onClick={() => handleSubmit(r)}>
                         <Send className="w-4 h-4" />
@@ -630,6 +648,17 @@ const ReimbursementsManagement = () => {
                   value={formData.remarks}
                   onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms *</label>
+                <textarea
+                  rows={3}
+                  value={formData.payment_terms_note}
+                  onChange={(e) => setFormData({ ...formData, payment_terms_note: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  placeholder="Enter payment terms and conditions"
                 />
               </div>
             </div>

@@ -199,6 +199,24 @@ const PaymentOrders = () => {
     }
   }
 
+  useEffect(() => {
+    const handleReimbursementsChanged = async () => {
+      if (!showCreateModal) return
+
+      try {
+        const reimbursementsData = await reimbursementService.getAll()
+        setReimbursements(reimbursementsData.filter(r => r.status === 'For Purchase'))
+      } catch (err) {
+        console.error('Failed to refresh reimbursements for Payment Orders', err)
+      }
+    }
+
+    window.addEventListener('reimbursements:changed', handleReimbursementsChanged)
+    return () => {
+      window.removeEventListener('reimbursements:changed', handleReimbursementsChanged)
+    }
+  }, [showCreateModal])
+
   const closeCreateModal = () => {
     setShowCreateModal(false)
     resetForm()

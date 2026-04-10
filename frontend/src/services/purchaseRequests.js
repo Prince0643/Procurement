@@ -74,11 +74,6 @@ export const purchaseRequestService = {
     });
   },
 
-  getById: async (id) => {
-    const response = await api.get(`/purchase-requests/${id}`);
-    return response.data.purchaseRequest;
-  },
-
   create: async (prData) => {
     const response = await api.post('/purchase-requests', prData);
     return response.data;
@@ -89,8 +84,27 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  procurementApprove: async (id, status, rejection_reason, items, supplier_id, supplier_address, itemRemarks) => {
-    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, { status, rejection_reason, items, supplier_id, supplier_address, item_remarks: itemRemarks });
+  procurementApprove: async (
+    id,
+    status,
+    rejection_reason,
+    items,
+    supplier_id,
+    supplier_address,
+    itemRemarks,
+    payment_terms_code = null,
+    payment_terms_note = null
+  ) => {
+    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, {
+      status,
+      rejection_reason,
+      items,
+      supplier_id,
+      supplier_address,
+      item_remarks: itemRemarks,
+      payment_terms_code,
+      payment_terms_note
+    });
     return response.data;
   },
 
