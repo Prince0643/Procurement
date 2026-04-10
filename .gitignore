@@ -19,3 +19,6 @@ logs
 # Build outputs
 dist/
 build/
+
+# Local-only ops runbooks
+docs/PROD_UPDATE_COMMANDS.md

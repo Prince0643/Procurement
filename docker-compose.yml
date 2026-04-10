@@ -42,7 +42,7 @@ services:
       ATTENDANCE_API_KEY: ${ATTENDANCE_API_KEY:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://procurement.xandree.com}
     ports:
-      - "127.0.0.1:5000:5000"
+      - "127.0.0.1:5001:5000"
     volumes:
       - backend_uploads:/app/uploads
     depends_on:

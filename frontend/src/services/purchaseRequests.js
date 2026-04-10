@@ -74,6 +74,13 @@ export const purchaseRequestService = {
     });
   },
 
+  getById: async (id) => {
+    return dedupeRequest(`getById-${id}`, async () => {
+      const response = await api.get(`/purchase-requests/${id}`, { cache: false });
+      return response.data.purchaseRequest;
+    });
+  },
+
   create: async (prData) => {
     const response = await api.post('/purchase-requests', prData);
     return response.data;
