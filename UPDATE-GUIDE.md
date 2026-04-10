@@ -1,546 +1,173 @@
-# Procurement System - Update & Maintenance Guide
+# Procurement System - Production Update Guide (Docker Only)
 
-This guide covers how to update the frontend, backend, and database on your Hostinger KVM2 VPS after the initial deployment.
+This runbook is the single source of truth for production updates on `srv1313830`.
 
----
+Architecture:
+- Host Nginx (SSL + reverse proxy)
+- Docker Compose services:
+  - `db` (MariaDB)
+  - `db_migrate` (one-shot migrations)
+  - `backend` (Node API on container port `5000`)
+  - `frontend` (Nginx static site)
+  - `adminer` (optional, profile-based)
 
-## Table of Contents
-1. [Quick Update (Frontend + Backend Only)](#quick-update)
-2. [Full Update Guide](#full-update-guide)
-3. [Database Schema Updates](#database-schema-updates)
-4. [Rollback Procedures](#rollback-procedures)
-5. [Troubleshooting](#troubleshooting)
+Domains:
+- Frontend: `https://procurement.xandree.com`
+- API: `https://procurement-api.xandree.com`
 
----
+## 1) Standard Update
 
-## Quick Update (Frontend + Backend Only)
-
-Use this when you've only changed code (not database schema):
-
-```bash
-# SSH into your VPS
-ssh root@srv1313830
-
-# Go to project directory
-cd /var/www/procurement_system
-
-# Pull latest code
-git pull origin main
-
-# Update and restart backend
-cd /var/www/procurement_system/backend
-npm install
-pm2 restart procurement-api
-
-# Update and rebuild frontend
-cd /var/www/procurement_system/frontend
-npm install
-npm run build
-
-# Verify backend is running
-pm2 status
-
-# Test API
-curl -i http://127.0.0.1:5000/api/health
-```
-
----
-
-## Full Update Guide
-
-### Step 1: SSH into VPS
 ```bash
 ssh root@srv1313830
-```
-
-### Step 2: Navigate to Project
-```bash
 cd /var/www/procurement_system
-```
 
-### Step 3: Check Current Status (Before Update)
-```bash
-# Check PM2 status
-pm2 status
+# If local changes exist:
+git stash push -m "vps-local"
 
-# Check git status
-git status
-
-# Check last commit
-git log --oneline -3
-```
-
-### Step 4: Backup (Optional but Recommended)
-```bash
-# Create a backup branch
-git branch backup-$(date +%Y%m%d)
-
-# Backup database (if making DB changes)
-mysqldump -u procurement_app -p procurement_db > /root/procurement_db_backup_$(date +%F).sql
-```
-
-### Step 5: Pull Latest Code
-```bash
-# Stash any local changes (if any)
-git stash
-
-# Pull from GitHub
 git pull origin main
 
-# Check what changed
-git log --oneline -5
+# Rebuild and restart stack
+docker compose --env-file /opt/procurement/.env.prod up -d --build
 ```
 
----
-
-## Backend Update
-
-### Step 6: Update Backend Dependencies
+Health checks:
 ```bash
-cd /var/www/procurement_system/backend
-npm install
-```
-
-### Step 7: Update Backend Environment (if needed)
-```bash
-# Check if .env.example changed
-git diff HEAD~1 .env.example
-
-# If new env vars were added, update your .env
-nano .env
-```
-
-### Step 8: Restart Backend
-```bash
-# Restart with PM2
-pm2 restart procurement-api
-
-# Or stop and start fresh
-pm2 stop procurement-api
-pm2 start server.js --name procurement-api
-
-# Verify it's running
-pm2 status
-pm2 logs procurement-api --lines 20
-```
-
-### Step 9: Test Backend Locally
-```bash
-# Test health endpoint
+docker compose --env-file /opt/procurement/.env.prod ps
 curl -i http://127.0.0.1:5000/api/health
-
-# Test login (replace with real credentials)
-curl -X POST http://127.0.0.1:5000/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"employee_no":"ENG-2026-0001","password":"jajrconstruction"}'
+curl -i https://procurement-api.xandree.com/api/health
 ```
 
----
+## 2) Database Migrations
 
-## Frontend Update
-
-### Step 10: Update Frontend Dependencies
-```bash
-cd /var/www/procurement_system/frontend
-npm install
-```
-
-### Step 11: Update Frontend Environment (if needed)
-```bash
-# Check if .env.production needs updates
-git diff HEAD~1 .env.production
-
-# Update if needed
-nano .env.production
-```
-
-### Step 12: Rebuild Frontend
-```bash
-# Clean old build (optional)
-rm -rf dist
-
-# Build for production
-npm run build
-
-# Verify dist folder exists and has files
-ls -la dist/
-```
-
-### Step 13: Test Frontend in Browser
-- Open: `https://procurement.xandree.com`
-- Check login works
-- Check no console errors
-
----
-
-## Database Schema Updates
-
-⚠️ **WARNING:** Always backup database before schema changes!
-
-### Option A: Using SQL Migration Files
-
-```bash
-# Backup first
-mysqldump -u procurement_app -p procurement_db > /root/procurement_db_backup_$(date +%F).sql
-
-# Apply migration (example: adding a new table)
-mysql -u procurement_app -p procurement_db < /var/www/procurement_system/dbschema/migrations/001_add_new_table.sql
-```
-
-### Option B: Using Full Schema Dump (Nuclear Option)
-
-⚠️ **WARNING:** This deletes ALL data and recreates from scratch!
-
-```bash
-# Backup current data
-mysqldump -u procurement_app -p procurement_db > /root/procurement_db_backup_$(date +%F).sql
-
-# Disable foreign key checks and reimport
-cd /var/www/procurement_system
-mysql -u procurement_app -p -e "SET FOREIGN_KEY_CHECKS = 0;"
-mysql -u procurement_app -p procurement_db < dbschema/procurement_db.sql
-mysql -u procurement_app -p -e "SET FOREIGN_KEY_CHECKS = 1;"
-```
-
-### Option C: Manual Schema Changes
-
-```bash
-# Log into MySQL
-mysql -u procurement_app -p procurement_db
-
-# Inside MySQL, run your ALTER statements
-ALTER TABLE employees ADD COLUMN phone VARCHAR(20);
-ALTER TABLE purchase_requests ADD COLUMN priority ENUM('low', 'medium', 'high') DEFAULT 'medium';
-
-# Exit
-EXIT;
-```
--- Connect to MySQL as root/admin user
-mysql -u root -p
- 
--- Drop existing database
-DROP DATABASE IF EXISTS procurement_db;
- 
--- Create fresh database
-CREATE DATABASE procurement_db
-  CHARACTER SET utf8mb4
-  COLLATE utf8mb4_unicode_ci;
- 
--- Use the new database
-USE procurement_db;
-
-cd C:\Users\jajrc\Downloads\procurement_system
-scp dbschema/procurement_db.sql root@72.62.254.60:/var/www/procurement_system/
-
-### Verify Database After Changes
-```bash
-mysql -u procurement_app -p procurement_db -e "SHOW TABLES;"
-mysql -u procurement_app -p procurement_db -e "DESCRIBE employees;"
-```
-
----
-
-## Complete Update Script (Copy-Paste Ready)
-
-Save this as `/root/update-procurement.sh`:
-
-```bash
-#!/bin/bash
-set -e
-
-echo "=== Procurement System Update Script ==="
-echo "Started at: $(date)"
-
-# Backup database
-echo "[1/8] Backing up database..."
-mysqldump -u procurement_app -p'STRONG_PASSWORD_HERE' procurement_db > /root/procurement_db_backup_$(date +%F).sql
-
-# Update code
-echo "[2/8] Pulling latest code..."
-cd /var/www/procurement_system
-git pull origin main
-
-# Update backend
-echo "[3/8] Updating backend..."
-cd /var/www/procurement_system/backend
-npm install
-
-# Update frontend
-echo "[4/8] Updating frontend..."
-cd /var/www/procurement_system/frontend
-npm install
-npm run build
-
-# Restart backend
-echo "[5/8] Restarting backend..."
-pm2 restart procurement-api
-
-# Test backend
-echo "[6/8] Testing backend..."
-sleep 2
-curl -s http://127.0.0.1:5000/api/health | grep -q '"status":"OK"' && echo "Backend OK" || echo "Backend ERROR"
-
-# Reload Nginx
-echo "[7/8] Reloading Nginx..."
-nginx -t && systemctl reload nginx
-
-# Final status
-echo "[8/8] Final status check..."
-pm2 status
-echo "Update completed at: $(date)"
-echo "Frontend: https://procurement.xandree.com"
-echo "API: https://procurement-api.xandree.com"
-```
-
-Make it executable and run:
-```bash
-chmod +x /root/update-procurement.sh
-/root/update-procurement.sh
-```
-
----
-
-## Rollback Procedures
-
-### Rollback Code
+Run migrations explicitly (safe for repeated runs):
 ```bash
 cd /var/www/procurement_system
-
-# View recent commits
-git log --oneline -10
-
-# Revert to previous commit
-git reset --hard HEAD~1
-
-# Or checkout specific commit
-git checkout abc1234
-
-# Then restart services
-cd backend && pm2 restart procurement-api
-cd ../frontend && npm run build
+docker compose --env-file /opt/procurement/.env.prod run --rm db_migrate
 ```
 
-### Rollback Database
+Check migration logs:
 ```bash
-# Restore from backup
-mysql -u procurement_app -p procurement_db < /root/procurement_db_backup_YYYY-MM-DD.sql
-
-# Restart backend after restore
-pm2 restart procurement-api
+docker compose --env-file /opt/procurement/.env.prod logs --no-color db_migrate
 ```
 
----
-
-## Troubleshooting
-
-### Backend Won't Start
+Verify payment-terms columns:
 ```bash
-# Check logs
-pm2 logs procurement-api --lines 50
-
-# Check if port is already in use
-netstat -tlnp | grep 5000
-
-# Kill process on port 5000 if needed
-fuser -k 5000/tcp
-
-# Restart
-pm2 restart procurement-api
+docker exec -i procurement_db mysql -uroot -p'YOUR_ROOT_PASSWORD' procurement_db -e \
+"SHOW COLUMNS FROM purchase_requests LIKE 'payment_terms_code';"
 ```
 
-### Frontend Shows Old Version
+## 3) Full Restart (Keep Data)
+
+Use this when services are unhealthy:
 ```bash
-# Clear browser cache (Ctrl+Shift+R)
-# Or force rebuild
-cd /var/www/procurement_system/frontend
-rm -rf dist node_modules/.vite
-npm run build
+cd /var/www/procurement_system
+docker compose --env-file /opt/procurement/.env.prod down
+docker compose --env-file /opt/procurement/.env.prod up -d db
+docker compose --env-file /opt/procurement/.env.prod run --rm db_migrate
+docker compose --env-file /opt/procurement/.env.prod up -d backend frontend
 ```
 
-### Database Connection Errors
+Do not run this unless you intend to wipe DB data:
 ```bash
-# Test DB connection
-mysql -u procurement_app -p -e "SELECT 1;"
-
-# Check backend .env
-cat /var/www/procurement_system/backend/.env
-
-# Verify MySQL is running
-systemctl status mariadb
-systemctl restart mariadb
+docker compose down -v
 ```
 
-### Permission Issues
+## 4) Logs and Debug Commands
+
 ```bash
-# Fix permissions
-chown -R www-data:www-data /var/www/procurement_system
-chmod -R 755 /var/www/procurement_system
+docker compose --env-file /opt/procurement/.env.prod logs --tail=100 backend
+docker compose --env-file /opt/procurement/.env.prod logs --tail=100 db
+docker compose --env-file /opt/procurement/.env.prod logs --tail=100 db_migrate
+docker compose --env-file /opt/procurement/.env.prod logs --tail=100 frontend
 ```
 
----
-
-## Critical Deployment Configuration (DO NOT SKIP)
-
-Based on common deployment issues, follow these configurations exactly to avoid errors:
-
-### 1. CORS Configuration (CRITICAL - Only One Place!)
-
-**Rule:** Handle CORS in Express OR Nginx, **NEVER both**.
-
-**Recommended: Express only**
-
-In `backend/server.js`:
-```javascript
-app.use(cors({
-  origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
-```
-
-In `/etc/nginx/sites-available/procurement-api`:
-```nginx
-location / {
-    # NO add_header CORS lines here!
-    proxy_pass http://127.0.0.1:5001;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
-**Wrong configuration (causes duplicate CORS errors):**
-```nginx
-# DO NOT DO THIS if Express also has cors()
-add_header 'Access-Control-Allow-Origin' '*' always;
-```
-
-### 2. Port Configuration
-
-**Backend `.env`:**
+Confirm backend listening:
 ```bash
-PORT=5001  # Use 5001 consistently (avoid 5000 conflicts)
+ss -ltnp | grep 5000
 ```
 
-**Nginx proxy:**
-```nginx
-proxy_pass http://127.0.0.1:5001;  # Must match backend PORT
-```
-
-**If you get "EADDRINUSE: address already in use":**
+Confirm containers:
 ```bash
-# Find and kill process on port
-sudo lsof -i :5001
-sudo kill -9 <PID>
-
-# Or use a different port
-# Change PORT in .env, restart backend, update nginx proxy_pass
+docker ps | grep -E "procurement_(db|backend|frontend|db_migrate|adminer)"
 ```
 
-### 3. Database User Setup (NOT root!)
+## 5) Adminer (Optional, SSH Tunnel)
 
-**Create dedicated user:**
-```sql
-CREATE USER 'procurement_app'@'localhost' IDENTIFIED BY 'STRONG_PASSWORD';
-GRANT ALL PRIVILEGES ON procurement_db.* TO 'procurement_app'@'localhost';
-FLUSH PRIVILEGES;
-```
-
-**Backend `.env`:**
+Start Adminer:
 ```bash
-DB_HOST=127.0.0.1
-DB_PORT=3306
-DB_NAME=procurement_db
-DB_USER=procurement_app      # NOT root
-DB_PASSWORD=STRONG_PASSWORD  # Must match above
+cd /var/www/procurement_system
+docker compose --env-file /opt/procurement/.env.prod up -d db adminer
 ```
 
-**Wrong configuration:**
+On local machine:
 ```bash
-DB_USER=root       # Security risk + auth issues
-DB_PASSWORD=       # Empty password often rejected
+ssh -N -L 18082:127.0.0.1:8082 root@72.62.254.60
 ```
 
-### 4. Environment Variables Checklist
+Open:
+- `http://127.0.0.1:18082`
 
-Before starting backend, verify `.env` has:
-```bash
-NODE_ENV=production
-PORT=5001                           # Match nginx proxy_pass
-DB_USER=procurement_app             # Not root
-DB_PASSWORD=your_secure_password    # Not empty
-DB_NAME=procurement_db
-JWT_SECRET=long-random-secret-key     # Change in production!
-JWT_EXPIRES_IN=24h
-```
+Adminer login:
+- System: `MySQL`
+- Server: `db`
+- Username: `root` (or app user)
+- Password: from `/opt/procurement/.env.prod`
+- Database: `procurement_db`
 
-**Verify env vars are loaded:**
-```bash
-cd /var/www/procurement_system/backend
-pm2 delete all
-pm2 start server.js --name procurement-api --update-env
-pm2 env 0 | grep -E "DB_|PORT|NODE_ENV"
-```
+## 6) Required Production Config
 
-### 5. Frontend API Configuration
+Compose env file path:
+- `/opt/procurement/.env.prod`
 
-**Frontend `.env.production`:**
-```bash
+Must include:
+```env
+MYSQL_ROOT_PASSWORD=...
+MYSQL_USER=procurement_app
+MYSQL_PASSWORD=...
+JWT_SECRET=...
 VITE_API_URL=https://procurement-api.xandree.com/api
+CORS_ALLOWED_ORIGINS=https://procurement.xandree.com
 ```
 
-**Critical:** Frontend 401 interceptor should NOT redirect on login failures:
+Backend DB config in Docker Compose must remain:
+- `DB_HOST=db`
+- `DB_PORT=3306`
+- `DB_NAME=procurement_db`
 
-In `frontend/src/services/api.js`:
-```javascript
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      const requestUrl = error.config?.url || '';
-      const isAuthRequest = requestUrl.includes('/auth/login');
+## 7) Nginx Upstream Expectations
 
-      if (!isAuthRequest) {
-        // Only redirect for token expiration, not login failures
-        localStorage.removeItem('token');
-        localStorage.removeItem('user');
-        window.location.href = '/login';
-      }
-    }
-    return Promise.reject(error);
-  }
-);
+Host Nginx API site must proxy to:
+- `http://127.0.0.1:5000` for `/api/`
+- `http://127.0.0.1:5000` for `/socket.io/`
+- `http://127.0.0.1:5000/uploads/` for uploads
+
+After Nginx changes:
+```bash
+nginx -t && systemctl reload nginx
 ```
 
-This ensures wrong password messages display properly instead of page refreshing.
+## 8) Common Failure Patterns
+
+`502 Bad Gateway` on API:
+- Backend container not running or failed to start.
+- Check `docker compose ... ps` and backend logs.
+
+`db_migrate` exits with error:
+- Read migration logs and run migration manually.
+- Keep backend available by starting `backend` after schema fix.
+
+`Unknown column payment_terms_code`:
+- Migration not applied to current DB volume.
+- Run `db_migrate` and verify with `SHOW COLUMNS`.
+
+`git pull` blocked by local edits:
+```bash
+git stash push -m "vps-local"
+git pull origin main
+git stash pop
+```
 
 ---
 
-| Task | Command |
-|------|---------|
-| Check backend status | `pm2 status` |
-| View backend logs | `pm2 logs procurement-api --lines 50` |
-| Restart backend | `pm2 restart procurement-api` |
-| Test API locally | `curl http://127.0.0.1:5000/api/health` |
-| Test API via HTTPS | `curl https://procurement-api.xandree.com/api/health` |
-| Rebuild frontend | `cd /var/www/procurement_system/frontend && npm run build` |
-| Backup database | `mysqldump -u procurement_app -p procurement_db > backup.sql` |
-| Reload Nginx | `nginx -t && systemctl reload nginx` |
-
----
-
-## Important Notes
-
-1. **Always backup database** before major updates
-2. **Test on staging first** if possible
-3. **Update during low-traffic hours** if system is in use
-4. **Keep GitHub repo in sync** with your local development
-5. **Monitor PM2 logs** after restart for any errors
-
----
-
-**Last Updated:** 2026-02-10
-**Domains:** procurement.xandree.com, procurement-api.xandree.com
-**VPS:** srv1313830 (Hostinger KVM2)
+Last Updated: 2026-04-10  
+Mode: Docker production only (no PM2 runbook)
