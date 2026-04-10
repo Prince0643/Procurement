@@ -7,6 +7,7 @@ import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -447,7 +448,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     `, [req.params.id]);
 
     // Load template workbook
-    const templatePath = path.join(__dirname, '..', '..', 'PO 2026.xlsx');
+    const templatePath = resolveExcelTemplatePath('PO 2026.xlsx');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
 

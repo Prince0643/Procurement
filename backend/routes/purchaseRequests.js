@@ -3,12 +3,7 @@ import { authenticate, requireProcurement, requireSuperAdmin } from '../middlewa
 import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { devNull } from 'os';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 const normalizePaymentTermsNote = (note) => {
@@ -917,7 +912,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     `, [req.params.id]);
     
     // Load template workbook
-    const templatePath = path.join(__dirname, '..', '..', 'PURCHASE REQUEST- FINAL-2026.xlsx');
+    const templatePath = resolveExcelTemplatePath('PURCHASE REQUEST- FINAL-2026.xlsx');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
     

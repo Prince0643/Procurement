@@ -7,6 +7,7 @@ import { authenticate, requireAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import reimbursementUpload from '../middleware/reimbursementUpload.js';
 import { createNotification, getAdmins, getSuperAdmins } from '../utils/notifications.js';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -802,7 +803,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     console.log('Exporting reimbursement:', rmb.id, 'purpose:', rmb.purpose, 'amount:', rmb.amount);
     
     // Load template workbook
-    const templatePath = path.join(__dirname, '..', '..', 'Reimbursement.xlsx');
+    const templatePath = resolveExcelTemplatePath('Reimbursement.xlsx');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
     

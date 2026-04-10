@@ -2,14 +2,10 @@ import express from 'express';
 import db from '../config/database.js';
 import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 import ExcelJS from 'exceljs';
-import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Generate PO Number
 const generatePONumber = async () => {
@@ -325,7 +321,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     
     // Load template
-    const templatePath = fileURLToPath(new URL('../../Payment Order.xlsx', import.meta.url));
+    const templatePath = resolveExcelTemplatePath('Payment Order.xlsx');
     
     let worksheet;
     try {

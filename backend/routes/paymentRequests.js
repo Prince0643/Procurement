@@ -2,8 +2,8 @@ import express from 'express';
 import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import { createNotification, getSuperAdmins } from '../utils/notifications.js';
- import ExcelJS from 'exceljs';
- import { fileURLToPath } from 'url';
+import ExcelJS from 'exceljs';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 
@@ -478,7 +478,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     // Create Excel workbook from template (preserves formatting)
     const workbook = new ExcelJS.Workbook();
-    const templatePath = fileURLToPath(new URL('../../Payment-Request.xlsx', import.meta.url));
+    const templatePath = resolveExcelTemplatePath('Payment-Request.xlsx');
 
     let worksheet;
     try {

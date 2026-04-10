@@ -3,11 +3,7 @@ import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/aut
 import db from '../config/database.js';
 import { createNotification, getSuperAdmins, getProcurementOfficers } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 
@@ -574,7 +570,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     const dv = vouchers[0];
 
     // Load template workbook
-    const templatePath = path.join(__dirname, '..', '..', 'DISBURSEMENT VOUCHER.xlsx');
+    const templatePath = resolveExcelTemplatePath('DISBURSEMENT VOUCHER.xlsx');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
     

@@ -3,7 +3,7 @@ import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } fro
 import db from '../config/database.js';
 import { createNotification, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
-import { fileURLToPath } from 'url';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 
@@ -718,7 +718,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     const workbook = new ExcelJS.Workbook();
     
     // Load template
-    const templatePath = fileURLToPath(new URL('../../Cash Request.xlsx', import.meta.url));
+    const templatePath = resolveExcelTemplatePath('Cash Request.xlsx');
     
     let worksheet;
     try {

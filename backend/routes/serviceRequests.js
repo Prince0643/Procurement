@@ -3,8 +3,7 @@ import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } fro
 import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
-import { fileURLToPath } from 'url';
-import path from 'path';
+import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 
@@ -704,7 +703,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     // Create Excel workbook from template
     const workbook = new ExcelJS.Workbook();
-    const templatePath = fileURLToPath(new URL('../../Service Request.xlsx', import.meta.url));
+    const templatePath = resolveExcelTemplatePath('Service Request.xlsx');
 
     let worksheet;
     try {
