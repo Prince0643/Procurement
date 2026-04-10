@@ -86,18 +86,18 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-2 sm:p-4"
       onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-auto"
+        className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[92vh] sm:max-h-[90vh] overflow-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between z-10">
           <div className="flex items-center gap-3">
-            <FileText className="w-6 h-6 text-yellow-500" />
-            <h3 className="text-lg font-semibold text-gray-900">
+            <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-yellow-500" />
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">
               Payment Order Approval
             </h3>
           </div>
@@ -110,7 +110,7 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
@@ -118,7 +118,7 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
           ) : (
             <div className="space-y-6">
               {/* Status Banner */}
-              <div className="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-gray-50 rounded-lg p-3 sm:p-4">
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-500">Status:</span>
                   <StatusBadge status={po.status} />
@@ -129,7 +129,7 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
               </div>
 
               {/* Main Details Grid */}
-              <div className="border rounded-lg overflow-hidden">
+              <div className="border rounded-lg overflow-x-auto">
                 <table className="w-full text-sm">
                   <tbody>
                     <tr className="border-b border-gray-200">
@@ -188,15 +188,16 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
         </div>
 
         {/* Footer with Actions */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 flex justify-between">
-          <Button variant="secondary" onClick={handleClose}>
+        <div className="sticky bottom-0 bg-white border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:justify-between gap-2">
+          <Button className="w-full sm:w-auto" variant="secondary" onClick={handleClose}>
             Close
           </Button>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             {po.status !== 'Approved' && (
               <>
                 <Button 
                   variant="danger" 
+                  className="w-full sm:w-auto"
                   onClick={() => onHold(po.id)}
                   disabled={processingId === po.id}
                 >
@@ -205,6 +206,7 @@ const POApprovalPreviewModal = ({ po, loading, onClose, onApprove, onHold, proce
                 </Button>
                 <Button 
                   variant="success" 
+                  className="w-full sm:w-auto"
                   onClick={() => onApprove(po.id)}
                   disabled={processingId === po.id}
                 >

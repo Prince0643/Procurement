@@ -194,7 +194,7 @@ CREATE TABLE `notifications` (
   `recipient_id` int(11) NOT NULL,
   `title` varchar(255) NOT NULL,
   `message` text NOT NULL,
-  `type` enum('PR Created','PR Approved','PR Rejected','PO Created','Item Received','System') DEFAULT 'System',
+  `type` varchar(50) DEFAULT 'System',
   `related_id` int(11) DEFAULT NULL COMMENT 'ID of related record (PR, PO, etc.)',
   `related_type` varchar(50) DEFAULT NULL COMMENT 'Type of related record',
   `is_read` tinyint(1) DEFAULT 0,
@@ -707,6 +707,36 @@ INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `q
 (172,	42,	2,	1,	43.00,	43.00,	NULL,	NULL,	'Pending',	NULL,	NULL,	'2026-04-09 07:11:36'),
 (173,	42,	6,	1,	23.00,	23.00,	NULL,	NULL,	'Pending',	NULL,	NULL,	'2026-04-09 07:11:36'),
 (174,	43,	2,	1,	0.00,	0.00,	NULL,	NULL,	'Pending',	NULL,	NULL,	'2026-04-09 07:38:32');
+
+DROP TABLE IF EXISTS `payment_schedule_reminder_logs`;
+DROP TABLE IF EXISTS `purchase_request_payment_schedules`;
+CREATE TABLE `purchase_request_payment_schedules` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `purchase_request_id` int(11) NOT NULL,
+  `payment_date` date NOT NULL,
+  `amount` decimal(15,2) DEFAULT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `created_by` int(11) DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pr_payment_date` (`purchase_request_id`,`payment_date`),
+  KEY `idx_prps_payment_date` (`payment_date`),
+  KEY `fk_pr_schedule_created_by` (`created_by`),
+  CONSTRAINT `fk_pr_schedule_created_by` FOREIGN KEY (`created_by`) REFERENCES `employees` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_pr_schedule_pr` FOREIGN KEY (`purchase_request_id`) REFERENCES `purchase_requests` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE `payment_schedule_reminder_logs` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `schedule_id` int(11) NOT NULL,
+  `reminder_type` varchar(20) NOT NULL,
+  `sent_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_schedule_reminder` (`schedule_id`,`reminder_type`),
+  KEY `idx_psrl_type_sent_at` (`reminder_type`,`sent_at`),
+  CONSTRAINT `fk_reminder_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `purchase_request_payment_schedules` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 DROP TABLE IF EXISTS `reimbursements`;
 CREATE TABLE `reimbursements` (

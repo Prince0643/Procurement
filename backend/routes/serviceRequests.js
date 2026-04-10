@@ -6,6 +6,89 @@ import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
+const normalizePaymentTermsNote = (note) => {
+  const normalized = note == null ? '' : String(note).trim();
+  return normalized || null;
+};
+const createInputError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const normalizePaymentSchedules = (paymentSchedules) => {
+  if (paymentSchedules == null) return [];
+  if (!Array.isArray(paymentSchedules)) {
+    throw createInputError('payment_schedules must be an array');
+  }
+
+  const seenDates = new Set();
+  const normalized = paymentSchedules.map((entry, index) => {
+    const paymentDate = String(entry?.payment_date || '').trim();
+    if (!paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is required`);
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      throw createInputError(`payment_schedules[${index}].payment_date must be YYYY-MM-DD`);
+    }
+
+    const parsedDate = new Date(`${paymentDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is invalid`);
+    }
+
+    if (seenDates.has(paymentDate)) {
+      throw createInputError(`Duplicate payment date found: ${paymentDate}`);
+    }
+    seenDates.add(paymentDate);
+
+    const note = entry?.note == null ? null : String(entry.note).trim() || null;
+    let amount = null;
+    if (entry?.amount != null && entry.amount !== '') {
+      const numericAmount = Number(entry.amount);
+      if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+        throw createInputError(`payment_schedules[${index}].amount must be a non-negative number`);
+      }
+      amount = Number(numericAmount.toFixed(2));
+    }
+
+    return {
+      payment_date: paymentDate,
+      amount,
+      note
+    };
+  });
+
+  return normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+};
+
+const replacePaymentSchedules = async (conn, serviceRequestId, schedules, employeeId) => {
+  await conn.query(
+    'DELETE FROM service_request_payment_schedules WHERE service_request_id = ?',
+    [serviceRequestId]
+  );
+
+  if (!schedules.length) return;
+
+  for (const schedule of schedules) {
+    await conn.query(
+      `INSERT INTO service_request_payment_schedules
+      (service_request_id, payment_date, amount, note, created_by)
+      VALUES (?, ?, ?, ?, ?)`,
+      [serviceRequestId, schedule.payment_date, schedule.amount, schedule.note, employeeId]
+    );
+  }
+};
+
+const getPaymentScheduleCount = async (conn, serviceRequestId) => {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS count FROM service_request_payment_schedules WHERE service_request_id = ?',
+    [serviceRequestId]
+  );
+  return rows[0]?.count || 0;
+};
 
 // Generate SR number (SRV-Initials-YYYY-MM-XXX format)
 const generateSRNumber = async (user) => {
@@ -95,6 +178,8 @@ router.get('/', authenticate, async (req, res) => {
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
              s.supplier_name,
+             (SELECT COUNT(*) FROM service_request_payment_schedules srs WHERE srs.service_request_id = sr.id) as payment_schedule_count,
+             (SELECT MIN(srs.payment_date) FROM service_request_payment_schedules srs WHERE srs.service_request_id = sr.id) as next_payment_date,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name
       ${baseFrom}
@@ -162,7 +247,15 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Service request not found' });
     }
 
-    res.json({ serviceRequest: srs[0] });
+    const [paymentSchedules] = await db.query(
+      `SELECT id, service_request_id, payment_date, amount, note, created_by, created_at, updated_at
+       FROM service_request_payment_schedules
+       WHERE service_request_id = ?
+       ORDER BY payment_date ASC`,
+      [req.params.id]
+    );
+
+    res.json({ serviceRequest: { ...srs[0], payment_schedules: paymentSchedules } });
   } catch (error) {
     console.error('Fetch service request error:', error);
     res.status(500).json({ message: 'Failed to fetch service request: ' + error.message });
@@ -187,7 +280,8 @@ router.post('/', authenticate, async (req, res) => {
       date_needed,
       remarks,
       order_number,
-      payment_terms_note
+      payment_terms_note,
+      payment_schedules
     } = req.body;
 
     // Validate required fields
@@ -203,9 +297,10 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount is required' });
     }
 
-    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
-    if (!normalizedPaymentTermsNote) {
-      return res.status(400).json({ message: 'Payment terms are required' });
+    const normalizedPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
+    const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
+    if (normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
     }
 
     // Validate quantity required for payment_request type (payment_request = amount + qty)
@@ -245,6 +340,7 @@ router.post('/', authenticate, async (req, res) => {
     );
 
     const srId = result.insertId;
+    await replacePaymentSchedules(conn, srId, normalizedPaymentSchedules, req.user.id);
 
     await conn.commit();
 
@@ -262,6 +358,9 @@ router.post('/', authenticate, async (req, res) => {
         // ignore
       }
     }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
+    }
     console.error('Create service request error:', error);
     res.status(500).json({ message: 'Failed to create service request: ' + error.message });
   } finally {
@@ -273,7 +372,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number } = req.body;
+    const { purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number, payment_terms_note, payment_schedules } = req.body;
 
     // Check if SR exists
     const [srs] = await db.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
@@ -298,6 +397,14 @@ router.put('/:id', authenticate, async (req, res) => {
     if (finalSrType === 'payment_request' && amount && (!quantity || quantity <= 0)) {
       return res.status(400).json({ message: 'Valid quantity is required for Payment Request type' });
     }
+    const normalizedPaymentTermsNote = hasOwn(req.body, 'payment_terms_note')
+      ? normalizePaymentTermsNote(payment_terms_note)
+      : sr.payment_terms_note;
+    const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
+    const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
+    if (hasPaymentSchedulesField && normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
+    }
 
     conn = await db.getConnection();
     await conn.beginTransaction();
@@ -305,7 +412,7 @@ router.put('/:id', authenticate, async (req, res) => {
     await conn.query(
       `UPDATE service_requests 
        SET purpose = ?, description = ?, service_type = ?, sr_type = ?, project = ?, project_address = ?, 
-           supplier_id = ?, amount = ?, quantity = ?, unit = ?, date_needed = ?, remarks = ?, order_number = ?, updated_at = NOW()
+           supplier_id = ?, amount = ?, quantity = ?, unit = ?, date_needed = ?, remarks = ?, order_number = ?, payment_terms_note = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         purpose ?? sr.purpose,
@@ -321,9 +428,13 @@ router.put('/:id', authenticate, async (req, res) => {
         date_needed || sr.date_needed,
         remarks ?? sr.remarks,
         order_number || sr.order_number,
+        normalizedPaymentTermsNote,
         req.params.id
       ]
     );
+    if (hasPaymentSchedulesField) {
+      await replacePaymentSchedules(conn, req.params.id, normalizedPaymentSchedules, req.user.id);
+    }
 
     await conn.commit();
 
@@ -335,6 +446,9 @@ router.put('/:id', authenticate, async (req, res) => {
       } catch {
         // ignore
       }
+    }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
     }
     console.error('Update service request error:', error);
     res.status(500).json({ message: 'Failed to update service request: ' + error.message });
@@ -371,6 +485,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
 
     if (!sr.amount || sr.amount <= 0) {
       return res.status(400).json({ message: 'Valid amount is required to submit' });
+    }
+    const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
+    if (scheduleCount === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required before submission.' });
     }
 
     conn = await db.getConnection();
@@ -445,6 +563,11 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     let newStatus;
     
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       newStatus = 'For Super Admin Final Approval';
       
       // Validate supplier_id is provided for approval
@@ -539,6 +662,11 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
     
     let newStatus;
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       newStatus = 'Approved';
       await conn.query(
         'UPDATE service_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ?, updated_at = NOW() WHERE id = ?',

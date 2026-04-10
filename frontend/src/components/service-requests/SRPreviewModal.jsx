@@ -28,6 +28,11 @@ const formatPaymentTerms = (record) => {
   return code.replace(/_/g, ' ');
 };
 
+const formatScheduleAmount = (amount) => {
+  if (amount == null || amount === '') return '-';
+  return formatCurrency(amount);
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -110,18 +115,18 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Service Request Preview</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Service Request Preview</h3>
           </div>
           <button
             type="button"
@@ -132,9 +137,35 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
+          <div className="md:hidden space-y-3 mb-4">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <p className="text-xs text-gray-500">SR Number</p>
+              <p className="text-sm font-semibold text-gray-900 break-words">{sr.sr_number || '-'}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                <p className="text-gray-500">Date</p>
+                <p className="text-gray-900">{formatDate(sr.created_at)}</p>
+              </div>
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
+                <p className="text-gray-500">Status</p>
+                <div className="mt-1"><StatusBadge status={sr.status} /></div>
+              </div>
+            </div>
+            <div className="space-y-1 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg p-3">
+              <p><span className="text-gray-500">Payee:</span> {sr.supplier_name || '-'}</p>
+              <p><span className="text-gray-500">Project:</span> {sr.project || '-'}</p>
+              <p><span className="text-gray-500">Purpose:</span> {sr.purpose || '-'}</p>
+              <p><span className="text-gray-500">Amount:</span> {formatCurrency(sr.amount)}</p>
+              <p><span className="text-gray-500">Order Number:</span> {sr.order_number || '-'}</p>
+              <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(sr)}</p>
+              {sr.remarks && <p><span className="text-gray-500">Remarks:</span> {sr.remarks}</p>}
+            </div>
+          </div>
+
           {/* Excel-style Form Layout */}
-          <div className="border border-gray-300 rounded overflow-hidden">
+          <div className="hidden md:block border border-gray-300 rounded overflow-hidden">
             {/* Row 1: SR Number and Date */}
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
@@ -183,6 +214,25 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
               </div>
               <div className="col-span-10 px-3 py-2 text-sm text-gray-900 whitespace-pre-wrap">
                 {formatPaymentTerms(sr)}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                Payment Schedules
+              </div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {(sr.payment_schedules || []).length === 0 ? (
+                  <p>-</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(sr.payment_schedules || []).map((schedule) => (
+                      <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`}>
+                        {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                      </p>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -262,9 +312,10 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50">
           <Button 
             variant="secondary" 
+            className="w-full sm:w-auto"
             onClick={handleClose}
           >
             Close
@@ -274,6 +325,7 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
               {onHold && (
                 <Button 
                   variant="ghost" 
+                  className="w-full sm:w-auto"
                   onClick={handleHold}
                   disabled={processingId === sr.id}
                 >
@@ -284,6 +336,7 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
               {onApprove && (
                 <Button 
                   variant="success" 
+                  className="w-full sm:w-auto"
                   onClick={handleApprove}
                   disabled={processingId === sr.id}
                 >

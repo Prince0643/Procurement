@@ -13,6 +13,89 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const router = express.Router();
+const normalizePaymentTermsNote = (note) => {
+  const normalized = note == null ? '' : String(note).trim();
+  return normalized || null;
+};
+const createInputError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const normalizePaymentSchedules = (paymentSchedules) => {
+  if (paymentSchedules == null) return [];
+  if (!Array.isArray(paymentSchedules)) {
+    throw createInputError('payment_schedules must be an array');
+  }
+
+  const seenDates = new Set();
+  const normalized = paymentSchedules.map((entry, index) => {
+    const paymentDate = String(entry?.payment_date || '').trim();
+    if (!paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is required`);
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      throw createInputError(`payment_schedules[${index}].payment_date must be YYYY-MM-DD`);
+    }
+
+    const parsedDate = new Date(`${paymentDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is invalid`);
+    }
+
+    if (seenDates.has(paymentDate)) {
+      throw createInputError(`Duplicate payment date found: ${paymentDate}`);
+    }
+    seenDates.add(paymentDate);
+
+    const note = entry?.note == null ? null : String(entry.note).trim() || null;
+    let amount = null;
+    if (entry?.amount != null && entry.amount !== '') {
+      const numericAmount = Number(entry.amount);
+      if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+        throw createInputError(`payment_schedules[${index}].amount must be a non-negative number`);
+      }
+      amount = Number(numericAmount.toFixed(2));
+    }
+
+    return {
+      payment_date: paymentDate,
+      amount,
+      note
+    };
+  });
+
+  return normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+};
+
+const replacePaymentSchedules = async (conn, reimbursementId, schedules, employeeId) => {
+  await conn.query(
+    'DELETE FROM reimbursement_payment_schedules WHERE reimbursement_id = ?',
+    [reimbursementId]
+  );
+
+  if (!schedules.length) return;
+
+  for (const schedule of schedules) {
+    await conn.query(
+      `INSERT INTO reimbursement_payment_schedules
+      (reimbursement_id, payment_date, amount, note, created_by)
+      VALUES (?, ?, ?, ?, ?)`,
+      [reimbursementId, schedule.payment_date, schedule.amount, schedule.note, employeeId]
+    );
+  }
+};
+
+const getPaymentScheduleCount = async (conn, reimbursementId) => {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS count FROM reimbursement_payment_schedules WHERE reimbursement_id = ?',
+    [reimbursementId]
+  );
+  return rows[0]?.count || 0;
+};
 
 // Get pending approvals count for sidebar badge - MUST be before /:id routes
 router.get('/pending-count', authenticate, async (req, res) => {
@@ -119,6 +202,8 @@ router.get('/', authenticate, async (req, res) => {
       SELECT r.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
+             (SELECT COUNT(*) FROM reimbursement_payment_schedules rs WHERE rs.reimbursement_id = r.id) as payment_schedule_count,
+             (SELECT MIN(rs.payment_date) FROM reimbursement_payment_schedules rs WHERE rs.reimbursement_id = r.id) as next_payment_date,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name
       FROM reimbursements r
@@ -206,7 +291,15 @@ router.get('/:id', authenticate, async (req, res) => {
       [req.params.id]
     );
 
-    res.json({ reimbursement: { ...rows[0], attachments } });
+    const [paymentSchedules] = await db.query(
+      `SELECT id, reimbursement_id, payment_date, amount, note, created_by, created_at, updated_at
+       FROM reimbursement_payment_schedules
+       WHERE reimbursement_id = ?
+       ORDER BY payment_date ASC`,
+      [req.params.id]
+    );
+
+    res.json({ reimbursement: { ...rows[0], attachments, payment_schedules: paymentSchedules } });
   } catch (error) {
     console.error('Fetch reimbursement error:', error);
     res.status(500).json({ message: 'Failed to fetch reimbursement: ' + error.message });
@@ -226,7 +319,8 @@ router.post('/', authenticate, async (req, res) => {
       amount,
       date_needed,
       remarks,
-      payment_terms_note
+      payment_terms_note,
+      payment_schedules
     } = req.body;
 
     if (!payee || !String(payee).trim()) {
@@ -237,9 +331,10 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount is required' });
     }
 
-    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
-    if (!normalizedPaymentTermsNote) {
-      return res.status(400).json({ message: 'Payment terms are required' });
+    const normalizedPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
+    const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
+    if (normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
     }
 
     conn = await db.getConnection();
@@ -266,6 +361,7 @@ router.post('/', authenticate, async (req, res) => {
         'For Procurement Review'
       ]
     );
+    await replacePaymentSchedules(conn, result.insertId, normalizedPaymentSchedules, req.user.id);
 
     await conn.commit();
 
@@ -278,6 +374,9 @@ router.post('/', authenticate, async (req, res) => {
   } catch (error) {
     if (conn) {
       try { await conn.rollback(); } catch { /* ignore */ }
+    }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
     }
     console.error('Create reimbursement error:', error);
     res.status(500).json({ message: 'Failed to create reimbursement: ' + error.message });
@@ -363,7 +462,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
-    const { payee, purpose, project, project_address, order_number, amount, date_needed, remarks } = req.body;
+    const { payee, purpose, project, project_address, order_number, amount, date_needed, remarks, payment_terms_note, payment_schedules } = req.body;
 
     const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
@@ -382,6 +481,14 @@ router.put('/:id', authenticate, async (req, res) => {
 
     if (amount !== undefined && (isNaN(amount) || parseFloat(amount) <= 0)) {
       return res.status(400).json({ message: 'Valid amount is required' });
+    }
+    const normalizedPaymentTermsNote = hasOwn(req.body, 'payment_terms_note')
+      ? normalizePaymentTermsNote(payment_terms_note)
+      : r.payment_terms_note;
+    const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
+    const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
+    if (hasPaymentSchedulesField && normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
     }
 
     conn = await db.getConnection();
@@ -403,6 +510,13 @@ router.put('/:id', authenticate, async (req, res) => {
         req.params.id
       ]
     );
+    await conn.query(
+      'UPDATE reimbursements SET payment_terms_note = ?, updated_at = NOW() WHERE id = ?',
+      [normalizedPaymentTermsNote, req.params.id]
+    );
+    if (hasPaymentSchedulesField) {
+      await replacePaymentSchedules(conn, req.params.id, normalizedPaymentSchedules, req.user.id);
+    }
 
     await conn.commit();
 
@@ -410,6 +524,9 @@ router.put('/:id', authenticate, async (req, res) => {
   } catch (error) {
     if (conn) {
       try { await conn.rollback(); } catch { /* ignore */ }
+    }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
     }
     console.error('Update reimbursement error:', error);
     res.status(500).json({ message: 'Failed to update reimbursement: ' + error.message });
@@ -435,6 +552,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
 
     if (r.status !== 'Draft') {
       return res.status(400).json({ message: 'Only draft reimbursements can be submitted' });
+    }
+    const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
+    if (scheduleCount === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required before submission.' });
     }
 
     conn = await db.getConnection();
@@ -503,6 +624,11 @@ router.put('/:id/approve', authenticate, async (req, res) => {
 
     let newStatus;
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       // If procurement approves, move to 'For Super Admin Final Approval'
       // If super admin approves, move to 'For Purchase'
       if (req.user.role === 'procurement') {

@@ -202,6 +202,7 @@ const CashRequests = () => {
   const [remarks, setRemarks] = useState('')
   const [orderNumber, setOrderNumber] = useState('')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
+  const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
   const [branches, setBranches] = useState([])
   const [crType, setCrType] = useState('payment_request')
 
@@ -373,26 +374,34 @@ const CashRequests = () => {
   }
 
   const openEditModal = async (cr) => {
-    setEditingId(cr.id)
-    setPurpose(cr.purpose || '')
-    setDescription(cr.description || '')
-    setAmount(cr.amount || 0)
-    setQuantity(cr.quantity || 1)
-    setUnit(cr.unit || 'pcs')
-    setProject(cr.project || '')
-    setProjectAddress(cr.project_address || '')
-    setDateNeeded(cr.date_needed ? cr.date_needed.split('T')[0] : '')
-    setSelectedSupplier(cr.supplier_id ? cr.supplier_id.toString() : '')
-    setSupplierName(cr.supplier_name || '')
-    setSupplierAddress(cr.supplier_address || '')
-    setRemarks(cr.remarks || '')
-    setOrderNumber(cr.order_number || '')
-    setPaymentTermsNote(cr.payment_terms_note || '')
-    setCrType(cr.cr_type || 'payment_request')
-    
     setShowEditModal(true)
     setLoadingForm(true)
     try {
+      const fullCr = await cashRequestService.getById(cr.id)
+      setEditingId(cr.id)
+      setPurpose(fullCr.purpose || '')
+      setDescription(fullCr.description || '')
+      setAmount(fullCr.amount || 0)
+      setQuantity(fullCr.quantity || 1)
+      setUnit(fullCr.unit || 'pcs')
+      setProject(fullCr.project || '')
+      setProjectAddress(fullCr.project_address || '')
+      setDateNeeded(fullCr.date_needed ? String(fullCr.date_needed).split('T')[0] : '')
+      setSelectedSupplier(fullCr.supplier_id ? fullCr.supplier_id.toString() : '')
+      setSupplierName(fullCr.supplier_name || '')
+      setSupplierAddress(fullCr.supplier_address || '')
+      setRemarks(fullCr.remarks || '')
+      setOrderNumber(fullCr.order_number || '')
+      setPaymentTermsNote(fullCr.payment_terms_note || '')
+      setCrType(fullCr.cr_type || 'payment_request')
+      setPaymentSchedules((fullCr.payment_schedules || []).length > 0
+        ? fullCr.payment_schedules.map((schedule) => ({
+            payment_date: schedule.payment_date ? String(schedule.payment_date).slice(0, 10) : '',
+            amount: schedule.amount ?? '',
+            note: schedule.note || ''
+          }))
+        : [{ payment_date: '', amount: '', note: '' }])
+
       const [suppliersData, branchesData] = await Promise.all([
         supplierService.getAll(),
         fetch('https://jajr.xandree.com/get_branches_api.php').then(r => r.json())
@@ -437,7 +446,34 @@ const CashRequests = () => {
     setRemarks('')
     setOrderNumber('')
     setPaymentTermsNote('')
+    setPaymentSchedules([{ payment_date: '', amount: '', note: '' }])
     setCrType('payment_request')
+  }
+
+  const sanitizePaymentSchedules = (schedules = []) => {
+    const seenDates = new Set()
+    const normalized = []
+    for (const row of schedules) {
+      const paymentDate = String(row?.payment_date || '').trim()
+      const amountRaw = row?.amount
+      const note = String(row?.note || '').trim()
+      const hasAnyValue = paymentDate || note || amountRaw !== '' && amountRaw != null
+      if (!hasAnyValue) continue
+      if (!paymentDate) throw new Error('Each payment schedule row must have a payment date')
+      if (seenDates.has(paymentDate)) throw new Error(`Duplicate payment schedule date: ${paymentDate}`)
+      seenDates.add(paymentDate)
+      let amount = null
+      if (amountRaw !== '' && amountRaw != null) {
+        const numericAmount = Number(amountRaw)
+        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+          throw new Error('Payment schedule amount must be a non-negative number')
+        }
+        amount = Number(numericAmount.toFixed(2))
+      }
+      normalized.push({ payment_date: paymentDate, amount, note: note || null })
+    }
+    normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date))
+    return normalized
   }
 
   const handleSupplierChange = (e) => {
@@ -470,8 +506,18 @@ const CashRequests = () => {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!purpose) { alert('Please enter purpose'); return }
-    if (!String(paymentTermsNote || '').trim()) { alert('Payment terms are required'); return }
     if (!amount || amount <= 0) { alert('Please enter a valid amount'); return }
+    let normalizedSchedules = []
+    try {
+      normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
+    } catch (err) {
+      alert(err.message || 'Invalid payment schedules')
+      return
+    }
+    if (normalizedSchedules.length === 0) {
+      alert('At least one payment schedule is required')
+      return
+    }
 
     console.log('Submitting Cash Request - dateNeeded value:', dateNeeded, 'type:', typeof dateNeeded)
 
@@ -492,7 +538,8 @@ const CashRequests = () => {
         remarks: remarks || null,
         order_number: orderNumber || null,
         cr_type: crType,
-        payment_terms_note: paymentTermsNote.trim()
+        payment_terms_note: paymentTermsNote.trim() || null,
+        payment_schedules: normalizedSchedules
       }
       
       console.log('Full crData being sent:', crData)
@@ -1003,10 +1050,72 @@ const CashRequests = () => {
                   label="Payment Terms"
                   value={paymentTermsNote}
                   onChange={(e) => setPaymentTermsNote(e.target.value)}
-                  placeholder="Enter payment terms and conditions"
+                  placeholder="Optional payment terms narrative"
                   rows={3}
-                  required
                 />
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Payment Schedules <span className="text-red-500">*</span>
+                    </label>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setPaymentSchedules((prev) => [...prev, { payment_date: '', amount: '', note: '' }])}
+                    >
+                      <Plus className="w-4 h-4 mr-1" />
+                      Add Date
+                    </Button>
+                  </div>
+                  {paymentSchedules.map((schedule, index) => (
+                    <div key={`cr-schedule-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
+                      <div className="col-span-4">
+                        <label className="block text-xs text-gray-500 mb-1">Payment Date</label>
+                        <input
+                          type="date"
+                          value={schedule.payment_date}
+                          onChange={(e) => setPaymentSchedules((prev) => prev.map((row, i) => i === index ? { ...row, payment_date: e.target.value } : row))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <label className="block text-xs text-gray-500 mb-1">Amount</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={schedule.amount}
+                          onChange={(e) => setPaymentSchedules((prev) => prev.map((row, i) => i === index ? { ...row, amount: e.target.value } : row))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <label className="block text-xs text-gray-500 mb-1">Note</label>
+                        <input
+                          type="text"
+                          value={schedule.note}
+                          onChange={(e) => setPaymentSchedules((prev) => prev.map((row, i) => i === index ? { ...row, note: e.target.value } : row))}
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                          placeholder="Optional"
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setPaymentSchedules((prev) => prev.length === 1 ? [{ payment_date: '', amount: '', note: '' }] : prev.filter((_, i) => i !== index))}
+                          title="Remove schedule row"
+                        >
+                          <Trash2 className="w-4 h-4 text-red-600" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>

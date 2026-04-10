@@ -18,6 +18,11 @@ const formatDate = (dateString) => {
   });
 };
 
+const formatScheduleAmount = (amount) => {
+  if (amount == null || amount === '') return '-';
+  return formatCurrency(Number(amount) || 0);
+};
+
 const formatPaymentTerms = (code, note) => {
   const normalizedCode = String(code || '').trim().toUpperCase();
   const normalizedNote = String(note || '').trim();
@@ -114,16 +119,16 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
-          <h3 className="text-lg font-semibold text-gray-900">Purchase Request Preview</h3>
+        <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900">Purchase Request Preview</h3>
           <button
             type="button"
             onClick={handleClose}
@@ -133,9 +138,23 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
+          <div className="md:hidden space-y-3 mb-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+              <p><span className="text-gray-500">PR Number:</span> {pr.pr_number || '-'}</p>
+              <p><span className="text-gray-500">Date:</span> {formatDate(pr.created_at)}</p>
+              <p><span className="text-gray-500">Status:</span> <span className="inline-block ml-1"><StatusBadge status={pr.status} /></span></p>
+              <p><span className="text-gray-500">Payee:</span> {pr.supplier_name || pr.payee_name || '-'}</p>
+              <p><span className="text-gray-500">Project:</span> {pr.project || '-'}</p>
+              <p><span className="text-gray-500">Order Number:</span> {pr.order_number || '-'}</p>
+              <p><span className="text-gray-500">Amount:</span> {formatCurrency(calculateTotal())}</p>
+              <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}</p>
+              {pr.purpose && <p><span className="text-gray-500">Purpose:</span> {pr.purpose}</p>}
+            </div>
+          </div>
+
           {/* Excel-style Form Layout */}
-          <div className="border border-gray-300 rounded overflow-hidden">
+          <div className="hidden md:block border border-gray-300 rounded overflow-hidden">
             {/* Row 1: PR Number and Date */}
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
@@ -220,7 +239,27 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
               </div>
             </div>
 
-            {/* Row 7: Remarks (if present) */}
+            {/* Row 7: Payment Dates */}
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                Payment Dates
+              </div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {(pr.payment_schedules || []).length === 0 ? (
+                  '-'
+                ) : (
+                  <div className="space-y-1">
+                    {(pr.payment_schedules || []).map((schedule) => (
+                      <div key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="text-sm text-gray-900">
+                        {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Row 8: Remarks (if present) */}
             {pr.remarks && (
               <div className="grid grid-cols-12 border-b border-gray-300">
                 <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
@@ -241,7 +280,7 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
                 <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : pr.items && pr.items.length > 0 ? (
-              <div className="border border-gray-300 rounded overflow-hidden">
+              <div className="border border-gray-300 rounded overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-300">
@@ -288,9 +327,10 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50">
           <Button 
             variant="secondary" 
+            className="w-full sm:w-auto"
             onClick={handleClose}
           >
             Close
@@ -298,6 +338,7 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
           {onApprove && !readOnly && pr.status !== 'PO Created' && pr.status !== 'Completed' && (
             <Button 
               variant="success" 
+              className="w-full sm:w-auto"
               onClick={handleApprove}
               disabled={processingId === pr.id}
             >

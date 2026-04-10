@@ -30,12 +30,14 @@ import paymentRequestRoutes from './routes/paymentRequests.js';
 import paymentOrdersRoutes from './routes/paymentOrders.js';
 import pricingHistoryRoutes from './routes/pricingHistory.js';
 import orderNumberRoutes from './routes/orderNumbers.js';
+import { startPaymentScheduleReminderJob } from './jobs/paymentScheduleReminders.js';
 
 dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5000;
+const paymentReminderEnabled = String(process.env.PAYMENT_REMINDER_ENABLED || 'true').toLowerCase() !== 'false';
 
 // Trust proxy for accurate rate limiting behind Nginx
 app.set('trust proxy', 1);
@@ -195,6 +197,12 @@ app.use((req, res) => {
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV}`);
+  if (paymentReminderEnabled) {
+    startPaymentScheduleReminderJob();
+    console.log('Payment schedule reminder job started');
+  } else {
+    console.log('Payment schedule reminder job is disabled');
+  }
 });
 
 export { io };

@@ -27,6 +27,11 @@ const formatPaymentTerms = (record) => {
   return code.replace(/_/g, ' ');
 };
 
+const formatScheduleAmount = (amount) => {
+  if (amount == null || amount === '') return '-';
+  return formatCurrency(amount);
+};
+
 const StatusBadge = ({ status }) => {
   const styles = {
     Draft: 'bg-gray-100 text-gray-800',
@@ -110,13 +115,13 @@ const ReimbursementPreviewModal = ({ reimbursement, loading, onClose }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={handleClose}>
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4" onClick={handleClose}>
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Reimbursement Preview</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Reimbursement Preview</h3>
           </div>
           <button
             type="button"
@@ -128,7 +133,7 @@ const ReimbursementPreviewModal = ({ reimbursement, loading, onClose }) => {
           </button>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
           {/* Summary banner */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-50 rounded-lg p-4">
             <div className="flex items-center gap-3">
@@ -140,8 +145,23 @@ const ReimbursementPreviewModal = ({ reimbursement, loading, onClose }) => {
             </div>
           </div>
 
+          <div className="md:hidden space-y-3">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+              <p><span className="text-gray-500">RMB Number:</span> {reimbursement.rmb_number || '-'}</p>
+              <p><span className="text-gray-500">Payee:</span> {reimbursement.payee || '-'}</p>
+              <p><span className="text-gray-500">Amount:</span> {formatCurrency(reimbursement.amount)}</p>
+              <p><span className="text-gray-500">Project:</span> {reimbursement.project || '-'}</p>
+              <p><span className="text-gray-500">Date Needed:</span> {formatDate(reimbursement.date_needed)}</p>
+              <p><span className="text-gray-500">Order Number:</span> {reimbursement.order_number || '-'}</p>
+              <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(reimbursement)}</p>
+              <p><span className="text-gray-500">Requested By:</span> {summary.requesterName || reimbursement.requested_by || '-'}</p>
+              {reimbursement.project_address && <p><span className="text-gray-500">Project Address:</span> {reimbursement.project_address}</p>}
+              {reimbursement.purpose && <p><span className="text-gray-500">Purpose:</span> {reimbursement.purpose}</p>}
+            </div>
+          </div>
+
           {/* Details */}
-          <div className="border border-gray-300 rounded overflow-hidden">
+          <div className="hidden md:block border border-gray-300 rounded overflow-hidden">
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">RMB Number</div>
               <div className="col-span-4 px-3 py-2 border-r border-gray-300 text-sm font-mono text-gray-900">{reimbursement.rmb_number || '-'}</div>
@@ -175,6 +195,23 @@ const ReimbursementPreviewModal = ({ reimbursement, loading, onClose }) => {
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">Payment Terms</div>
               <div className="col-span-10 px-3 py-2 text-sm text-gray-900 whitespace-pre-wrap">{formatPaymentTerms(reimbursement)}</div>
+            </div>
+
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">Payment Schedules</div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {(reimbursement.payment_schedules || []).length === 0 ? (
+                  <p>-</p>
+                ) : (
+                  <div className="space-y-1">
+                    {(reimbursement.payment_schedules || []).map((schedule) => (
+                      <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`}>
+                        {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                      </p>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-12 border-b border-gray-300">
@@ -273,8 +310,8 @@ const ReimbursementPreviewModal = ({ reimbursement, loading, onClose }) => {
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
-          <Button variant="secondary" onClick={handleClose}>Close</Button>
+        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50">
+          <Button className="w-full sm:w-auto" variant="secondary" onClick={handleClose}>Close</Button>
         </div>
       </div>
 

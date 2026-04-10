@@ -100,6 +100,11 @@ const formatDate = (dateString) => {
   return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`
 }
 
+const formatScheduleAmount = (amount) => {
+  if (amount == null || amount === '') return '-'
+  return formatCurrency(Number(amount) || 0)
+}
+
 const Items = () => {
   const { user } = useAuth()
   const [items, setItems] = useState([])
@@ -136,6 +141,7 @@ const Items = () => {
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [paymentBasis, setPaymentBasis] = useState('debt')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
+  const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
   const [remarks, setRemarks] = useState('')
   const [showAddItemModal, setShowAddItemModal] = useState(false)
   const [newItemForm, setNewItemForm] = useState({
@@ -234,6 +240,7 @@ const Items = () => {
       supplier_address: projectAddress,
       payment_basis: paymentBasis,
       payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+      payment_schedules: sanitizePaymentSchedules(paymentSchedules),
       remarks,
       status: 'Draft',
       created_at: new Date().toISOString(),
@@ -262,6 +269,7 @@ const Items = () => {
     if (cart.length === 0) { alert('At least one item is required'); return }
 
     try {
+      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
       setSubmitting(true)
       const prData = {
         purpose,
@@ -272,15 +280,15 @@ const Items = () => {
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
         payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_schedules: normalizedSchedules,
         remarks: remarks || null,
-        status: 'Draft',
         items: cart.map(item => ({
           item_id: item.item_id,
           quantity: item.quantity,
           unit_price: item.unit_price
         }))
       }
-      await purchaseRequestService.create(prData)
+      await purchaseRequestService.saveDraft(prData)
       setCart([])
       closePRModal()
       alert('Draft saved successfully!')
@@ -350,7 +358,50 @@ const Items = () => {
     setSelectedSupplier('')
     setPaymentBasis('debt')
     setPaymentTermsNote('')
+    setPaymentSchedules([{ payment_date: '', amount: '', note: '' }])
     setRemarks('')
+  }
+
+  const addPaymentSchedule = () => {
+    setPaymentSchedules((prev) => [...prev, { payment_date: '', amount: '', note: '' }])
+  }
+
+  const removePaymentSchedule = (index) => {
+    setPaymentSchedules((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const updatePaymentSchedule = (index, field, value) => {
+    setPaymentSchedules((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  const sanitizePaymentSchedules = (rows) => {
+    const cleaned = (rows || [])
+      .map((row) => ({
+        payment_date: String(row?.payment_date || '').trim(),
+        amount: row?.amount === '' || row?.amount == null ? null : Number(row.amount),
+        note: String(row?.note || '').trim() || null
+      }))
+      .filter((row) => row.payment_date || row.amount != null || row.note)
+
+    const seen = new Set()
+    for (const row of cleaned) {
+      if (!row.payment_date) {
+        throw new Error('Each payment schedule row must have a payment date')
+      }
+      if (seen.has(row.payment_date)) {
+        throw new Error(`Duplicate payment schedule date: ${row.payment_date}`)
+      }
+      seen.add(row.payment_date)
+      if (row.amount != null && (Number.isNaN(row.amount) || row.amount < 0)) {
+        throw new Error('Payment schedule amount must be a non-negative number')
+      }
+    }
+
+    return cleaned
   }
 
   const addToCart = (item) => {
@@ -402,9 +453,13 @@ const Items = () => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
     if (cart.length === 0) { alert('At least one item is required'); return }
-    if (paymentBasis === 'debt' && !paymentTermsNote.trim()) { alert('Payment Terms and Conditions is required for debt/with account PR'); return }
 
     try {
+      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
+      if (paymentBasis === 'debt' && normalizedSchedules.length === 0) {
+        alert('At least one payment schedule is required for debt/with account PR')
+        return
+      }
       setSubmitting(true)
       const prData = {
         purpose,
@@ -415,6 +470,7 @@ const Items = () => {
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
         payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -843,8 +899,58 @@ const Items = () => {
                 placeholder="Ex: Net 30 after invoice receipt"
                 multiline
                 rows={4}
-                required={paymentBasis === 'debt'}
+                required={false}
               />
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Dates {paymentBasis === 'debt' && <span className="text-red-500">*</span>}
+                  </label>
+                  <Button type="button" variant="secondary" size="sm" onClick={addPaymentSchedule}>
+                    <Plus className="w-4 h-4 mr-1" /> Add Date
+                  </Button>
+                </div>
+                {paymentSchedules.map((schedule, index) => (
+                  <div key={`items-schedule-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
+                    <div className="col-span-4">
+                      <input
+                        type="date"
+                        value={schedule.payment_date}
+                        onChange={(e) => updatePaymentSchedule(index, 'payment_date', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                    <div className="col-span-3">
+                      <input
+                        type="number"
+                        placeholder="Amount (optional)"
+                        value={schedule.amount}
+                        onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        min="0"
+                        step="0.01"
+                      />
+                    </div>
+                    <div className="col-span-4">
+                      <input
+                        type="text"
+                        placeholder="Note (optional)"
+                        value={schedule.note}
+                        onChange={(e) => updatePaymentSchedule(index, 'note', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                      />
+                    </div>
+                    <div className="col-span-1 text-right">
+                      {paymentSchedules.length > 1 && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => removePaymentSchedule(index)}>
+                          <X className="w-4 h-4 text-red-500" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
 

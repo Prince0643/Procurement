@@ -94,18 +94,18 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Purchase Order Preview</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Purchase Order Preview</h3>
           </div>
           <button
             type="button"
@@ -116,9 +116,22 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
+          <div className="md:hidden space-y-3 mb-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+              <p><span className="text-gray-500">PO Number:</span> {po.po_number || '-'}</p>
+              <p><span className="text-gray-500">Date:</span> {formatDate(po.created_at)}</p>
+              <p><span className="text-gray-500">Status:</span> <span className="inline-block ml-1"><StatusBadge status={po.status} /></span></p>
+              <p><span className="text-gray-500">Supplier:</span> {po.supplier_name || '-'}</p>
+              <p><span className="text-gray-500">PR Number:</span> {po.pr_number || '-'}</p>
+              <p><span className="text-gray-500">Project:</span> {po.project || '-'}</p>
+              <p><span className="text-gray-500">Amount:</span> {formatCurrency(po.total_amount)}</p>
+              <p><span className="text-gray-500">Payment Term:</span> {po.payment_term || '-'}</p>
+            </div>
+          </div>
+
           {/* Excel-style Form Layout */}
-          <div className="border border-gray-300 rounded overflow-hidden">
+          <div className="hidden md:block border border-gray-300 rounded overflow-hidden">
             {/* Row 1: PO Number and Date */}
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
@@ -231,7 +244,7 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
                 <div className="w-6 h-6 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
               </div>
             ) : po.items && po.items.length > 0 ? (
-              <div className="border border-gray-300 rounded overflow-hidden">
+              <div className="border border-gray-300 rounded overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-300">
@@ -278,9 +291,10 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50">
           <Button 
             variant="secondary" 
+            className="w-full sm:w-auto"
             onClick={handleClose}
           >
             Close
@@ -290,6 +304,7 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
               {onHold && (
                 <Button 
                   variant="ghost" 
+                  className="w-full sm:w-auto"
                   onClick={handleHold}
                   disabled={processingId === po.id}
                 >
@@ -300,6 +315,7 @@ const POPreviewModal = ({ po, loading, onClose, onApprove, onHold, processingId 
               {onApprove && (
                 <Button 
                   variant="success" 
+                  className="w-full sm:w-auto"
                   onClick={handleApprove}
                   disabled={processingId === po.id}
                 >

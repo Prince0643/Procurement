@@ -3,16 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { 
   Plus, 
   Search, 
-  Filter, 
-  MoreVertical, 
   CheckCircle, 
   XCircle, 
-  Clock, 
-  FileText,
   ChevronDown,
   ChevronUp,
   Trash2,
-  Edit2,
   Send,
   Eye,
   Download
@@ -181,7 +176,8 @@ const ServiceRequestsManagement = () => {
     date_needed: '',
     remarks: '',
     order_number: '',
-    payment_terms_note: ''
+    payment_terms_note: '',
+    payment_schedules: [{ payment_date: '', amount: '', note: '' }]
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -393,13 +389,54 @@ const ServiceRequestsManagement = () => {
     }
   };
 
+  const sanitizePaymentSchedules = (schedules = []) => {
+    const seenDates = new Set();
+    const normalized = [];
+    for (const row of schedules) {
+      const paymentDate = String(row?.payment_date || '').trim();
+      const amountRaw = row?.amount;
+      const note = String(row?.note || '').trim();
+      const hasAnyValue = paymentDate || note || amountRaw !== '' && amountRaw != null;
+      if (!hasAnyValue) continue;
+      if (!paymentDate) {
+        throw new Error('Each payment schedule row must have a payment date');
+      }
+      if (seenDates.has(paymentDate)) {
+        throw new Error(`Duplicate payment schedule date: ${paymentDate}`);
+      }
+      seenDates.add(paymentDate);
+      let amount = null;
+      if (amountRaw !== '' && amountRaw != null) {
+        const numericAmount = Number(amountRaw);
+        if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+          throw new Error('Payment schedule amount must be a non-negative number');
+        }
+        amount = Number(numericAmount.toFixed(2));
+      }
+      normalized.push({
+        payment_date: paymentDate,
+        amount,
+        note: note || null
+      });
+    }
+    normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+    return normalized;
+  };
+
   const handleCreate = async () => {
     if (!formData.purpose.trim()) {
       alert('Purpose is required');
       return;
     }
-    if (!String(formData.payment_terms_note || '').trim()) {
-      alert('Payment terms are required');
+    let normalizedSchedules = [];
+    try {
+      normalizedSchedules = sanitizePaymentSchedules(formData.payment_schedules || []);
+    } catch (err) {
+      alert(err.message || 'Invalid payment schedules');
+      return;
+    }
+    if (normalizedSchedules.length === 0) {
+      alert('At least one payment schedule is required');
       return;
     }
     if (!formData.amount || isNaN(formData.amount) || formData.amount <= 0) {
@@ -413,7 +450,8 @@ const ServiceRequestsManagement = () => {
         ...formData,
         amount: parseFloat(formData.amount),
         quantity: formData.sr_type === 'payment_request' && formData.quantity ? parseFloat(formData.quantity) : null,
-        payment_terms_note: formData.payment_terms_note.trim()
+        payment_terms_note: formData.payment_terms_note.trim() || null,
+        payment_schedules: normalizedSchedules
       });
       setShowCreateModal(false);
       setFormData({
@@ -430,7 +468,8 @@ const ServiceRequestsManagement = () => {
         date_needed: '',
         remarks: '',
         order_number: '',
-        payment_terms_note: ''
+        payment_terms_note: '',
+        payment_schedules: [{ payment_date: '', amount: '', note: '' }]
       });
       fetchServiceRequests();
     } catch (err) {
@@ -571,13 +610,13 @@ const ServiceRequestsManagement = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Service Requests</h1>
-          <p className="text-gray-500 mt-1">Manage rent, job orders, and contractor services</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Service Requests</h1>
+          <p className="text-sm sm:text-base text-gray-500 mt-1">Manage rent, job orders, and contractor services</p>
         </div>
         {canCreate && (
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             New Service Request
           </Button>
@@ -586,8 +625,8 @@ const ServiceRequestsManagement = () => {
 
       {/* Filters */}
       <Card className="p-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div className="flex-1 min-w-0">
+        <div className="flex flex-col gap-3">
+          <div className="w-full">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
@@ -603,11 +642,11 @@ const ServiceRequestsManagement = () => {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_auto] gap-2 sm:gap-3 sm:items-center">
             <select
               value={statusFilter}
               onChange={(e) => handleStatusFilterChange(e.target.value)}
-              className="w-full sm:w-64 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              className="w-full sm:min-w-64 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
             >
               <option value="ALL">All statuses</option>
               {STATUS_FILTER_OPTIONS.map((s) => (
@@ -637,10 +676,9 @@ const ServiceRequestsManagement = () => {
                 View all
               </label>
             )}
-
-            <div className="text-sm text-gray-500 sm:ml-2">
-              {total === 0 ? '0 Requests' : `Showing ${startItem}-${endItem} of ${total}`}
-            </div>
+          </div>
+          <div className="text-sm text-gray-500">
+            {total === 0 ? '0 Requests' : `Showing ${startItem}-${endItem} of ${total}`}
           </div>
         </div>
       </Card>
@@ -654,7 +692,7 @@ const ServiceRequestsManagement = () => {
 
       {/* Service Requests List */}
       <Card>
-        <div className="divide-y divide-gray-200">
+        <div className="hidden md:block divide-y divide-gray-200">
           {serviceRequests.map((sr) => (
             <div
               key={sr.id}
@@ -664,29 +702,28 @@ const ServiceRequestsManagement = () => {
                 toggleExpand(sr.id);
               }}
             >
-              <div className="flex items-start justify-between">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
                     <p className="text-sm font-medium text-gray-900">{sr.sr_number}</p>
                     <StatusBadge status={sr.status} />
                     <SRTypeBadge type={sr.sr_type || 'payment_request'} />
                     <ServiceTypeBadge type={sr.service_type} />
                   </div>
                   <p className="text-sm text-gray-900 mt-1 truncate">{sr.purpose}</p>
-                  <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-sm text-gray-500">
                     <span>Amount: ₱{parseFloat(sr.amount).toLocaleString()}</span>
                     {sr.quantity && <span>Qty: {sr.quantity} {sr.unit}</span>}
-                    {sr.supplier_name && <span>Supplier: {sr.supplier_name}</span>}
+                    {sr.supplier_name && <span className="truncate max-w-[280px]">Supplier: {sr.supplier_name}</span>}
                     {sr.date_needed && (
                       <span>Needed: {new Date(sr.date_needed).toLocaleDateString()}</span>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2 ml-4" data-no-row-toggle="true">
-                  {/* Preview button - visible to all roles */}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                <div className="flex flex-wrap items-center justify-end gap-1 ml-2 shrink-0" data-no-row-toggle="true">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       openPreview(sr);
@@ -695,11 +732,9 @@ const ServiceRequestsManagement = () => {
                   >
                     <Eye className="w-4 h-4" />
                   </Button>
-
-                  {/* Export button - visible to all roles */}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleExport(sr.id, sr.sr_number);
@@ -708,8 +743,6 @@ const ServiceRequestsManagement = () => {
                   >
                     <Download className="w-4 h-4" />
                   </Button>
-                  
-                  {/* Engineer actions */}
                   {user?.role === 'engineer' && sr.status === 'Draft' && sr.requested_by === user?.id && (
                     <>
                       <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)}>
@@ -720,8 +753,6 @@ const ServiceRequestsManagement = () => {
                       </Button>
                     </>
                   )}
-
-                  {/* Requester receive action */}
                   {user?.role === 'engineer' &&
                     sr.requested_by === user?.id &&
                     ['PO Created', 'Payment Request Created', 'Payment Order Created', 'Paid'].includes(sr.status) && (
@@ -734,24 +765,26 @@ const ServiceRequestsManagement = () => {
                       <CheckCircle className="w-4 h-4 text-teal-600" />
                     </Button>
                   )}
-                  
-                  {/* Procurement approval actions */}
                   {canProcurementApprove && sr.status === 'For Procurement Review' && (
                     <>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleProcurementApproveClick(sr)}
                         title="Review and Approve"
                       >
                         <CheckCircle className="w-4 h-4 text-yellow-600" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => {
                           const reason = prompt('Enter rejection reason:');
-                          if (reason) handleProcurementApprove('rejected', reason);
+                          if (reason) {
+                            setSelectedSRForApproval(sr);
+                            setApprovalSupplierId(sr.supplier_id || '');
+                            handleProcurementApprove('rejected', reason);
+                          }
                         }}
                         title="Reject"
                       >
@@ -759,21 +792,19 @@ const ServiceRequestsManagement = () => {
                       </Button>
                     </>
                   )}
-                  
-                  {/* Super Admin final approval actions */}
                   {canSuperAdminApprove && sr.status === 'For Super Admin Final Approval' && (
                     <>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleSuperAdminApprove(sr, 'approved')}
                         title="Final Approve"
                       >
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleSuperAdminApprove(sr, 'rejected')}
                         title="Reject"
                       >
@@ -781,17 +812,15 @@ const ServiceRequestsManagement = () => {
                       </Button>
                     </>
                   )}
-                  
                   <Button variant="ghost" size="sm" onClick={() => toggleExpand(sr.id)}>
                     {expandedSRId === sr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </Button>
                 </div>
               </div>
 
-              {/* Expanded details */}
               {expandedSRId === sr.id && (
                 <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                     <div>
                       <span className="text-gray-500">Project:</span>
                       <span className="ml-2 text-gray-900">{sr.project || '-'}</span>
@@ -809,7 +838,7 @@ const ServiceRequestsManagement = () => {
                       <span className="ml-2 text-gray-900">{sr.remarks || '-'}</span>
                     </div>
                     {sr.rejection_reason && (
-                      <div className="col-span-2">
+                      <div className="sm:col-span-2">
                         <span className="text-red-500">Rejection Reason:</span>
                         <span className="ml-2 text-red-700">{sr.rejection_reason}</span>
                       </div>
@@ -819,12 +848,170 @@ const ServiceRequestsManagement = () => {
               )}
             </div>
           ))}
-          
           {serviceRequests.length === 0 && (
             <div className="p-8 text-center text-gray-500">
               No service requests found
             </div>
           )}
+        </div>
+
+        <div className="md:hidden p-3">
+          <div className="space-y-3">
+            {serviceRequests.map((sr) => (
+              <div
+                key={sr.id}
+                className={`border rounded-lg p-3 cursor-pointer transition-colors ${
+                  expandedSRId === sr.id ? 'border-yellow-400 bg-yellow-50/50' : 'border-gray-200 bg-white'
+                }`}
+                onClick={(e) => {
+                  if (e.target.closest('[data-no-row-toggle="true"]')) return;
+                  toggleExpand(sr.id);
+                }}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-500">{sr.sr_number}</p>
+                    <p className="text-sm font-semibold text-gray-900 break-words mt-0.5">{sr.purpose}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleExpand(sr.id);
+                    }}
+                    data-no-row-toggle="true"
+                  >
+                    {expandedSRId === sr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </Button>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <StatusBadge status={sr.status} />
+                  <SRTypeBadge type={sr.sr_type || 'payment_request'} />
+                  <ServiceTypeBadge type={sr.service_type} />
+                </div>
+
+                <div className="mt-2 space-y-1 text-xs text-gray-600">
+                  <p className="font-medium text-gray-700">Amount: ₱{parseFloat(sr.amount).toLocaleString()}</p>
+                  {sr.quantity && <p>Qty: {sr.quantity} {sr.unit}</p>}
+                  {sr.supplier_name && <p className="break-words">Supplier: {sr.supplier_name}</p>}
+                  {sr.date_needed && <p>Needed: {new Date(sr.date_needed).toLocaleDateString()}</p>}
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-1.5" data-no-row-toggle="true">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openPreview(sr);
+                    }}
+                    title="Preview"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleExport(sr.id, sr.sr_number);
+                    }}
+                    title="Export to Excel"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                  {user?.role === 'engineer' && sr.status === 'Draft' && sr.requested_by === user?.id && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)} title="Submit">
+                        <Send className="w-4 h-4" />
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(sr)} title="Delete">
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+                  {user?.role === 'engineer' &&
+                    sr.requested_by === user?.id &&
+                    ['PO Created', 'Payment Request Created', 'Payment Order Created', 'Paid'].includes(sr.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleMarkAsReceived(sr)}
+                      title="Mark as Received"
+                    >
+                      <CheckCircle className="w-4 h-4 text-teal-600" />
+                    </Button>
+                  )}
+                  {canProcurementApprove && sr.status === 'For Procurement Review' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleProcurementApproveClick(sr)}
+                        title="Review and Approve"
+                      >
+                        <CheckCircle className="w-4 h-4 text-yellow-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const reason = prompt('Enter rejection reason:');
+                          if (reason) {
+                            setSelectedSRForApproval(sr);
+                            setApprovalSupplierId(sr.supplier_id || '');
+                            handleProcurementApprove('rejected', reason);
+                          }
+                        }}
+                        title="Reject"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+                  {canSuperAdminApprove && sr.status === 'For Super Admin Final Approval' && (
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSuperAdminApprove(sr, 'approved')}
+                        title="Final Approve"
+                      >
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleSuperAdminApprove(sr, 'rejected')}
+                        title="Reject"
+                      >
+                        <XCircle className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </>
+                  )}
+                </div>
+
+                {expandedSRId === sr.id && (
+                  <div className="mt-3 pt-3 border-t border-gray-200 space-y-2 text-xs text-gray-600">
+                    <p><span className="text-gray-500">Project:</span> <span className="text-gray-900">{sr.project || '-'}</span></p>
+                    <p><span className="text-gray-500">Project Address:</span> <span className="text-gray-900">{sr.project_address || '-'}</span></p>
+                    <p><span className="text-gray-500">Description:</span> <span className="text-gray-900">{sr.description || '-'}</span></p>
+                    <p><span className="text-gray-500">Remarks:</span> <span className="text-gray-900">{sr.remarks || '-'}</span></p>
+                    {sr.rejection_reason && (
+                      <p><span className="text-red-500">Rejection Reason:</span> <span className="text-red-700">{sr.rejection_reason}</span></p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {serviceRequests.length === 0 && (
+              <div className="p-8 text-center text-gray-500">
+                No service requests found
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Pagination */}
@@ -835,44 +1022,84 @@ const ServiceRequestsManagement = () => {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page <= 1}
-                  onClick={() => goToPage(page - 1)}
-                >
-                  Prev
-                </Button>
-
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: 5 }, (_, i) => page - 2 + i)
-                    .filter((p) => p >= 1 && p <= totalPages)
-                    .map((p) => (
-                      <Button
-                        key={p}
-                        variant={p === page ? 'primary' : 'secondary'}
-                        size="sm"
-                        onClick={() => goToPage(p)}
-                      >
-                        {p}
-                      </Button>
-                    ))}
+              <>
+                <div className="sm:hidden">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={page <= 1}
+                      onClick={() => goToPage(page - 1)}
+                    >
+                      Prev
+                    </Button>
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: 3 }, (_, i) => page - 1 + i)
+                        .filter((p) => p >= 1 && p <= totalPages)
+                        .map((p) => (
+                          <Button
+                            key={`mobile-page-${p}`}
+                            variant={p === page ? 'primary' : 'secondary'}
+                            size="sm"
+                            onClick={() => goToPage(p)}
+                          >
+                            {p}
+                          </Button>
+                        ))}
+                    </div>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={page >= totalPages}
+                      onClick={() => goToPage(page + 1)}
+                    >
+                      Next
+                    </Button>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-2">
+                    Page {page} of {totalPages}
+                  </p>
                 </div>
 
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled={page >= totalPages}
-                  onClick={() => goToPage(page + 1)}
-                >
-                  Next
-                </Button>
+                <div className="hidden sm:flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => goToPage(page - 1)}
+                  >
+                    Prev
+                  </Button>
 
-                <span className="text-sm text-gray-500 ml-2">
-                  Page {page} of {totalPages}
-                </span>
-              </div>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: 5 }, (_, i) => page - 2 + i)
+                      .filter((p) => p >= 1 && p <= totalPages)
+                      .map((p) => (
+                        <Button
+                          key={p}
+                          variant={p === page ? 'primary' : 'secondary'}
+                          size="sm"
+                          onClick={() => goToPage(p)}
+                        >
+                          {p}
+                        </Button>
+                      ))}
+                  </div>
+
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => goToPage(page + 1)}
+                  >
+                    Next
+                  </Button>
+
+                  <span className="text-sm text-gray-500 ml-2">
+                    Page {page} of {totalPages}
+                  </span>
+                </div>
+              </>
             )}
           </div>
         </div>
@@ -888,11 +1115,11 @@ const ServiceRequestsManagement = () => {
       {/* Create Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
-          <Card className="w-full max-w-2xl max-h-[90vh] overflow-auto">
-            <div className="p-6 border-b border-gray-200">
+          <Card className="w-full max-w-2xl max-h-[92vh] overflow-auto">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Create Service Request</h2>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Purpose *</label>
                 <input
@@ -938,7 +1165,7 @@ const ServiceRequestsManagement = () => {
 
               {/* Quantity/Unit fields - only for Payment Request */}
               {formData.sr_type === 'payment_request' && (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Quantity *</label>
                     <input
@@ -977,7 +1204,7 @@ const ServiceRequestsManagement = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Amount *</label>
                   <input
@@ -1001,7 +1228,7 @@ const ServiceRequestsManagement = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Project *</label>
                   <select
@@ -1071,21 +1298,99 @@ const ServiceRequestsManagement = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms *</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Terms</label>
                 <textarea
                   value={formData.payment_terms_note}
                   onChange={(e) => setFormData({ ...formData, payment_terms_note: e.target.value })}
                   rows="3"
-                  placeholder="Enter payment terms and conditions"
+                  placeholder="Optional payment terms narrative"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
               </div>
+
+              <div>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                  <label className="block text-sm font-medium text-gray-700">Payment Schedules *</label>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => setFormData((prev) => ({
+                      ...prev,
+                      payment_schedules: [...(prev.payment_schedules || []), { payment_date: '', amount: '', note: '' }]
+                    }))}
+                  >
+                    <Plus className="w-4 h-4 mr-1" />
+                    Add Date
+                  </Button>
+                </div>
+                {(formData.payment_schedules || []).map((schedule, index) => (
+                  <div key={`sr-schedule-${index}`} className="grid grid-cols-1 sm:grid-cols-12 gap-2 mb-2 items-end border border-gray-200 rounded-md p-2 sm:p-0 sm:border-0">
+                    <div className="sm:col-span-4">
+                      <label className="block text-xs text-gray-500 mb-1">Payment Date</label>
+                      <input
+                        type="date"
+                        value={schedule.payment_date}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          payment_schedules: prev.payment_schedules.map((row, i) => i === index ? { ...row, payment_date: e.target.value } : row)
+                        }))}
+                        className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-xs text-gray-500 mb-1">Amount</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={schedule.amount}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          payment_schedules: prev.payment_schedules.map((row, i) => i === index ? { ...row, amount: e.target.value } : row)
+                        }))}
+                        placeholder="Optional"
+                        className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      />
+                    </div>
+                    <div className="sm:col-span-4">
+                      <label className="block text-xs text-gray-500 mb-1">Note</label>
+                      <input
+                        type="text"
+                        value={schedule.note}
+                        onChange={(e) => setFormData((prev) => ({
+                          ...prev,
+                          payment_schedules: prev.payment_schedules.map((row, i) => i === index ? { ...row, note: e.target.value } : row)
+                        }))}
+                        placeholder="Optional"
+                        className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full sm:w-auto"
+                        onClick={() => setFormData((prev) => ({
+                          ...prev,
+                          payment_schedules: prev.payment_schedules.length === 1
+                            ? [{ payment_date: '', amount: '', note: '' }]
+                            : prev.payment_schedules.filter((_, i) => i !== index)
+                        }))}
+                        title="Remove schedule row"
+                      >
+                        <Trash2 className="w-4 h-4 text-red-600" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={submitting}>
+            <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setShowCreateModal(false)} disabled={submitting}>
                 Cancel
               </Button>
-              <Button onClick={handleCreate} disabled={submitting}>
+              <Button className="w-full sm:w-auto" onClick={handleCreate} disabled={submitting}>
                 {submitting ? 'Creating...' : 'Create'}
               </Button>
             </div>
@@ -1097,11 +1402,11 @@ const ServiceRequestsManagement = () => {
       {showSupplierModal && selectedSRForApproval && (
         <div className="fixed inset-0 bg-gray-900/40 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-lg">
-            <div className="p-6 border-b border-gray-200">
+            <div className="p-4 sm:p-6 border-b border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900">Procurement Review - {selectedSRForApproval.sr_number}</h2>
               <p className="text-sm text-gray-500 mt-1">Select supplier and confirm approval</p>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
                 <select
@@ -1128,11 +1433,12 @@ const ServiceRequestsManagement = () => {
                 />
               </div>
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-              <Button variant="secondary" onClick={() => setShowSupplierModal(false)}>
+            <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setShowSupplierModal(false)}>
                 Cancel
               </Button>
               <Button 
+                className="w-full sm:w-auto"
                 onClick={() => handleProcurementApprove('approved')} 
                 disabled={!approvalSupplierId}
               >

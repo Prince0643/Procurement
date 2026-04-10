@@ -14,7 +14,7 @@ const Card = ({ children, className = '' }) => (
   </div>
 )
 
-const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled = false, className = '' }) => {
+const Button = ({ children, variant = 'primary', size = 'md', type = 'button', onClick, disabled = false, className = '' }) => {
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2'
   
   const variants = {
@@ -32,6 +32,7 @@ const Button = ({ children, variant = 'primary', size = 'md', onClick, disabled 
   
   return (
     <button
+      type={type}
       onClick={onClick}
       disabled={disabled}
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
@@ -216,6 +217,7 @@ const PurchaseRequests = () => {
   const [selectedSupplier, setSelectedSupplier] = useState('')
   const [paymentBasis, setPaymentBasis] = useState('debt')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
+  const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
   const [remarks, setRemarks] = useState('')
   const [items, setItems] = useState([{ item_id: '', quantity: 1, unit_price: 0 }])
 
@@ -611,6 +613,14 @@ const PurchaseRequests = () => {
       setSelectedSupplier(String(fullPr.supplier_id || ''))
       setPaymentBasis(fullPr.payment_basis || 'debt')
       setPaymentTermsNote(fullPr.payment_terms_note || '')
+      setPaymentSchedules((fullPr.payment_schedules || []).length > 0
+        ? fullPr.payment_schedules.map((schedule) => ({
+            payment_date: schedule.payment_date ? String(schedule.payment_date).slice(0, 10) : '',
+            amount: schedule.amount ?? '',
+            note: schedule.note || ''
+          }))
+        : [{ payment_date: '', amount: '', note: '' }]
+      )
       setRemarks(fullPr.remarks || '')
       setItems((fullPr.items || []).map(item => ({
         item_id: String(item.item_id || item.id || ''),
@@ -635,12 +645,13 @@ const PurchaseRequests = () => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
     if (items.length === 0) { alert('At least one item is required'); return }
-    if (paymentBasis === 'debt' && !paymentTermsNote.trim()) {
-      alert('Payment Terms and Conditions is required for debt/with account PR')
-      return
-    }
 
     try {
+      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
+      if (paymentBasis === 'debt' && normalizedSchedules.length === 0) {
+        alert('At least one payment schedule is required for debt/with account PR')
+        return
+      }
       setSubmitting(true)
       const prData = {
         purpose,
@@ -651,6 +662,7 @@ const PurchaseRequests = () => {
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
         payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: items.map(item => ({
           item_id: parseInt(item.item_id),
@@ -701,6 +713,7 @@ const PurchaseRequests = () => {
     setSelectedSupplier('')
     setPaymentBasis('debt')
     setPaymentTermsNote('')
+    setPaymentSchedules([{ payment_date: '', amount: '', note: '' }])
     setRemarks('')
     setItems([{ item_id: '', quantity: 1, unit_price: 0 }])
   }
@@ -719,6 +732,48 @@ const PurchaseRequests = () => {
     setItems(newItems)
   }
 
+  const addPaymentSchedule = () => {
+    setPaymentSchedules((prev) => [...prev, { payment_date: '', amount: '', note: '' }])
+  }
+
+  const removePaymentSchedule = (index) => {
+    setPaymentSchedules((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const updatePaymentSchedule = (index, field, value) => {
+    setPaymentSchedules((prev) => {
+      const next = [...prev]
+      next[index] = { ...next[index], [field]: value }
+      return next
+    })
+  }
+
+  const sanitizePaymentSchedules = (rows) => {
+    const cleaned = (rows || [])
+      .map((row) => ({
+        payment_date: String(row?.payment_date || '').trim(),
+        amount: row?.amount === '' || row?.amount == null ? null : Number(row.amount),
+        note: String(row?.note || '').trim() || null
+      }))
+      .filter((row) => row.payment_date || row.amount != null || row.note)
+
+    const seen = new Set()
+    for (const row of cleaned) {
+      if (!row.payment_date) {
+        throw new Error('Each payment schedule row must have a payment date')
+      }
+      if (seen.has(row.payment_date)) {
+        throw new Error(`Duplicate payment schedule date: ${row.payment_date}`)
+      }
+      seen.add(row.payment_date)
+      if (row.amount != null && (Number.isNaN(row.amount) || row.amount < 0)) {
+        throw new Error('Payment schedule amount must be a non-negative number')
+      }
+    }
+
+    return cleaned
+  }
+
   const calculateTotal = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
   }
@@ -727,12 +782,13 @@ const PurchaseRequests = () => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
     if (items.length === 0) { alert('At least one item is required'); return }
-    if (paymentBasis === 'debt' && !paymentTermsNote.trim()) {
-      alert('Payment Terms and Conditions is required for debt/with account PR')
-      return
-    }
 
     try {
+      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
+      if (paymentBasis === 'debt' && normalizedSchedules.length === 0) {
+        alert('At least one payment schedule is required for debt/with account PR')
+        return
+      }
       setSubmitting(true)
       const prData = {
         purpose,
@@ -743,6 +799,7 @@ const PurchaseRequests = () => {
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
         payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: items.map(item => ({
           item_id: parseInt(item.item_id),
@@ -905,8 +962,8 @@ const PurchaseRequests = () => {
                     const isExpanding = expandedId !== pr.id
                     setExpandedId(isExpanding ? pr.id : null)
                     
-                    // Load full details if expanding a rejected PR that doesn't have items loaded
-                    if (isExpanding && pr.status === 'Rejected' && !expandedPRDetails[pr.id]?.items) {
+                    // Load full details once when expanding so schedules/remarks are complete.
+                    if (isExpanding && !expandedPRDetails[pr.id]) {
                       setLoadingExpanded(pr.id)
                       try {
                         const fullPr = await purchaseRequestService.getById(pr.id)
@@ -1016,46 +1073,70 @@ const PurchaseRequests = () => {
                   {expandedId === pr.id && (
                     <tr>
                       <td colSpan="7" className="bg-gray-50 p-4">
+                        {(() => {
+                          const fullPr = expandedPRDetails[pr.id] || pr
+                          const paymentScheduleRows = fullPr.payment_schedules || []
+                          return (
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
                             <div>
                               <p className="text-xs text-gray-500 uppercase">Category</p>
-                              <p className="text-sm text-gray-900">{pr.category || '-'}</p>
+                              <p className="text-sm text-gray-900">{fullPr.category || '-'}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 uppercase">Purpose</p>
-                              <p className="text-sm text-gray-900">{pr.purpose || '-'}</p>
+                              <p className="text-sm text-gray-900">{fullPr.purpose || '-'}</p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 uppercase">Payment Type</p>
                               <p className="text-sm text-gray-900">
-                                {pr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
-                                 pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
+                                {fullPr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
+                                 fullPr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
                               </p>
                             </div>
                             <div>
                               <p className="text-xs text-gray-500 uppercase">Payment Terms</p>
-                              <p className="text-sm text-gray-900">{formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}</p>
+                              <p className="text-sm text-gray-900">{formatPaymentTerms(fullPr.payment_terms_code, fullPr.payment_terms_note)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Payment Schedule</p>
+                              <p className="text-sm text-gray-900">
+                                {Number(fullPr.payment_schedule_count || paymentScheduleRows.length || 0) > 0
+                                  ? `${fullPr.payment_schedule_count || paymentScheduleRows.length} date(s), next: ${formatDate(fullPr.next_payment_date || paymentScheduleRows[0]?.payment_date)}`
+                                  : '-'}
+                              </p>
                             </div>
                           </div>
-                          {pr.remarks && (
+                          {paymentScheduleRows.length > 0 && (
                             <div>
-                              <p className="text-xs text-gray-500 uppercase">Remarks</p>
-                              <p className="text-sm text-gray-900">{pr.remarks}</p>
+                              <p className="text-xs text-gray-500 uppercase">Payment Date Details</p>
+                              <div className="mt-1 space-y-1">
+                                {paymentScheduleRows.map((schedule) => (
+                                  <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="text-sm text-gray-900">
+                                    {formatDate(schedule.payment_date)} | {schedule.amount == null ? '-' : formatCurrency(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                                  </p>
+                                ))}
+                              </div>
                             </div>
                           )}
-                          {pr.rejection_reason && (
+                          {fullPr.remarks && (
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Remarks</p>
+                              <p className="text-sm text-gray-900">{fullPr.remarks}</p>
+                            </div>
+                          )}
+                          {fullPr.rejection_reason && (
                             <div>
                               <p className="text-xs text-red-500 uppercase">Rejection Reason</p>
-                              <p className="text-sm text-red-700">{pr.rejection_reason}</p>
+                              <p className="text-sm text-red-700">{fullPr.rejection_reason}</p>
                             </div>
                           )}
                           {/* Per-item rejection remarks */}
-                          {(expandedPRDetails[pr.id]?.items || pr.items)?.some(item => item.rejection_remarks?.length > 0) && (
+                          {(fullPr.items)?.some(item => item.rejection_remarks?.length > 0) && (
                             <div className="col-span-2">
                               <p className="text-xs text-red-500 uppercase mb-2">Item Rejection Remarks</p>
                               <div className="space-y-1">
-                                {((expandedPRDetails[pr.id]?.items || pr.items) || []).filter(item => item.rejection_remarks?.length > 0).map(item => (
+                                {(fullPr.items || []).filter(item => item.rejection_remarks?.length > 0).map(item => (
                                   <div key={item.id} className="bg-red-50 p-2 rounded border border-red-100">
                                     <p className="text-sm font-medium text-red-800">{item.item_name || item.item_code}</p>
                                     {item.rejection_remarks.map((remark, idx) => (
@@ -1073,6 +1154,8 @@ const PurchaseRequests = () => {
                             </div>
                           )}
                         </div>
+                          )
+                        })()}
                       </td>
                     </tr>
                   )}
@@ -1174,6 +1257,11 @@ const PurchaseRequests = () => {
                     </p>
                     <p className="text-xs text-gray-500">
                       Payment Terms: {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Payment Schedule: {Number(pr.payment_schedule_count || 0) > 0
+                        ? `${pr.payment_schedule_count} date(s), next: ${formatDate(pr.next_payment_date)}`
+                        : '-'}
                     </p>
                     {pr.remarks && <p className="text-xs text-gray-500">Remarks: {pr.remarks}</p>}
                   </div>
@@ -1291,8 +1379,58 @@ const PurchaseRequests = () => {
                   placeholder="Ex: Net 30 after invoice receipt"
                   multiline
                   rows={4}
-                  required={paymentBasis === 'debt'}
+                  required={false}
                 />
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Payment Dates {paymentBasis === 'debt' && <span className="text-red-500">*</span>}
+                    </label>
+                    <Button type="button" variant="secondary" size="sm" onClick={addPaymentSchedule}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Date
+                    </Button>
+                  </div>
+                  {paymentSchedules.map((schedule, index) => (
+                    <div key={`create-schedule-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
+                      <div className="col-span-4">
+                        <input
+                          type="date"
+                          value={schedule.payment_date}
+                          onChange={(e) => updatePaymentSchedule(index, 'payment_date', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          placeholder="Amount (optional)"
+                          value={schedule.amount}
+                          onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <input
+                          type="text"
+                          placeholder="Note (optional)"
+                          value={schedule.note}
+                          onChange={(e) => updatePaymentSchedule(index, 'note', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div className="col-span-1 text-right">
+                        {paymentSchedules.length > 1 && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removePaymentSchedule(index)}>
+                            <X className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
 
@@ -1386,8 +1524,58 @@ const PurchaseRequests = () => {
                   placeholder="Ex: Net 30 after invoice receipt"
                   multiline
                   rows={4}
-                  required={paymentBasis === 'debt'}
+                  required={false}
                 />
+
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Payment Dates {paymentBasis === 'debt' && <span className="text-red-500">*</span>}
+                    </label>
+                    <Button type="button" variant="secondary" size="sm" onClick={addPaymentSchedule}>
+                      <Plus className="w-4 h-4 mr-1" /> Add Date
+                    </Button>
+                  </div>
+                  {paymentSchedules.map((schedule, index) => (
+                    <div key={`edit-schedule-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
+                      <div className="col-span-4">
+                        <input
+                          type="date"
+                          value={schedule.payment_date}
+                          onChange={(e) => updatePaymentSchedule(index, 'payment_date', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="number"
+                          placeholder="Amount (optional)"
+                          value={schedule.amount}
+                          onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="col-span-4">
+                        <input
+                          type="text"
+                          placeholder="Note (optional)"
+                          value={schedule.note}
+                          onChange={(e) => updatePaymentSchedule(index, 'note', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
+                        />
+                      </div>
+                      <div className="col-span-1 text-right">
+                        {paymentSchedules.length > 1 && (
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removePaymentSchedule(index)}>
+                            <X className="w-4 h-4 text-red-500" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
 

@@ -106,18 +106,18 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
 
   return (
     <div 
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4"
       onClick={handleClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[92vh] sm:max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
+        <div className="p-3 sm:p-4 border-b border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-yellow-600" />
-            <h3 className="text-lg font-semibold text-gray-900">Payment Request Preview</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900">Payment Request Preview</h3>
           </div>
           <button
             type="button"
@@ -128,9 +128,23 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
           </button>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
+          <div className="md:hidden space-y-3 mb-4">
+            <div className="bg-white border border-gray-200 rounded-lg p-3 text-xs space-y-1">
+              <p><span className="text-gray-500">PR Number:</span> {payment.pr_number || '-'}</p>
+              <p><span className="text-gray-500">Date:</span> {formatDate(payment.created_at)}</p>
+              <p><span className="text-gray-500">Status:</span> <span className="inline-block ml-1"><StatusBadge status={payment.status} /></span></p>
+              <p><span className="text-gray-500">Payee:</span> {payment.payee_name || '-'}</p>
+              <p><span className="text-gray-500">Amount:</span> {formatCurrency(payment.amount)}</p>
+              <p><span className="text-gray-500">Project:</span> {payment.project || '-'}</p>
+              <p><span className="text-gray-500">Order Number:</span> {payment.order_number || '-'}</p>
+              <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(payment)}</p>
+              {payment.remarks && <p><span className="text-gray-500">Remarks:</span> {payment.remarks}</p>}
+            </div>
+          </div>
+
           {/* Excel-style Form Layout */}
-          <div className="border border-gray-300 rounded overflow-hidden">
+          <div className="hidden md:block border border-gray-300 rounded overflow-hidden">
             {/* Row 1: PR Number and Date */}
             <div className="grid grid-cols-12 border-b border-gray-300">
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
@@ -255,7 +269,7 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
           {payment.documents && payment.documents.length > 0 && (
             <div className="mt-6">
               <p className="text-xs font-semibold text-gray-600 uppercase mb-2">Supporting Documents</p>
-              <div className="border border-gray-300 rounded overflow-hidden">
+              <div className="border border-gray-300 rounded overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-gray-50">
                     <tr className="border-b border-gray-300">
@@ -288,9 +302,10 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200 flex justify-end gap-3 bg-gray-50">
+        <div className="p-3 sm:p-4 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3 bg-gray-50">
           <Button 
             variant="secondary" 
+            className="w-full sm:w-auto"
             onClick={handleClose}
           >
             Close
@@ -300,6 +315,7 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
               {onHold && (
                 <Button 
                   variant="ghost" 
+                  className="w-full sm:w-auto"
                   onClick={handleHold}
                   disabled={processingId === payment.id}
                 >
@@ -310,6 +326,7 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
               {onApprove && (
                 <Button 
                   variant="success" 
+                  className="w-full sm:w-auto"
                   onClick={handleApprove}
                   disabled={processingId === payment.id}
                 >

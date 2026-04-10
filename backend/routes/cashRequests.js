@@ -6,6 +6,89 @@ import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
+const normalizePaymentTermsNote = (note) => {
+  const normalized = note == null ? '' : String(note).trim();
+  return normalized || null;
+};
+const createInputError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const normalizePaymentSchedules = (paymentSchedules) => {
+  if (paymentSchedules == null) return [];
+  if (!Array.isArray(paymentSchedules)) {
+    throw createInputError('payment_schedules must be an array');
+  }
+
+  const seenDates = new Set();
+  const normalized = paymentSchedules.map((entry, index) => {
+    const paymentDate = String(entry?.payment_date || '').trim();
+    if (!paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is required`);
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      throw createInputError(`payment_schedules[${index}].payment_date must be YYYY-MM-DD`);
+    }
+
+    const parsedDate = new Date(`${paymentDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is invalid`);
+    }
+
+    if (seenDates.has(paymentDate)) {
+      throw createInputError(`Duplicate payment date found: ${paymentDate}`);
+    }
+    seenDates.add(paymentDate);
+
+    const note = entry?.note == null ? null : String(entry.note).trim() || null;
+    let amount = null;
+    if (entry?.amount != null && entry.amount !== '') {
+      const numericAmount = Number(entry.amount);
+      if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+        throw createInputError(`payment_schedules[${index}].amount must be a non-negative number`);
+      }
+      amount = Number(numericAmount.toFixed(2));
+    }
+
+    return {
+      payment_date: paymentDate,
+      amount,
+      note
+    };
+  });
+
+  return normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+};
+
+const replacePaymentSchedules = async (conn, cashRequestId, schedules, employeeId) => {
+  await conn.query(
+    'DELETE FROM cash_request_payment_schedules WHERE cash_request_id = ?',
+    [cashRequestId]
+  );
+
+  if (!schedules.length) return;
+
+  for (const schedule of schedules) {
+    await conn.query(
+      `INSERT INTO cash_request_payment_schedules
+      (cash_request_id, payment_date, amount, note, created_by)
+      VALUES (?, ?, ?, ?, ?)`,
+      [cashRequestId, schedule.payment_date, schedule.amount, schedule.note, employeeId]
+    );
+  }
+};
+
+const getPaymentScheduleCount = async (conn, cashRequestId) => {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS count FROM cash_request_payment_schedules WHERE cash_request_id = ?',
+    [cashRequestId]
+  );
+  return rows[0]?.count || 0;
+};
 
 // Generate CR number (CR-Initials-YYYY-MM-XXX format)
 const generateCRNumber = async (user) => {
@@ -92,6 +175,8 @@ router.get('/', authenticate, async (req, res) => {
       SELECT cr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
+             (SELECT COUNT(*) FROM cash_request_payment_schedules crs WHERE crs.cash_request_id = cr.id) as payment_schedule_count,
+             (SELECT MIN(crs.payment_date) FROM cash_request_payment_schedules crs WHERE crs.cash_request_id = cr.id) as next_payment_date,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name
       ${baseFrom}
@@ -140,9 +225,17 @@ router.get('/:id', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Cash request not found' });
     }
 
+    const [paymentSchedules] = await db.query(
+      `SELECT id, cash_request_id, payment_date, amount, note, created_by, created_at, updated_at
+       FROM cash_request_payment_schedules
+       WHERE cash_request_id = ?
+       ORDER BY payment_date ASC`,
+      [req.params.id]
+    );
+
     // Cash Requests store item data directly in the main table (no separate items table)
     // quantity, unit, amount, purpose are columns in cash_requests
-    res.json({ cashRequest: { ...crs[0], items: [] } });
+    res.json({ cashRequest: { ...crs[0], items: [], payment_schedules: paymentSchedules } });
   } catch (error) {
     console.error('Fetch cash request error:', error);
     res.status(500).json({ message: 'Failed to fetch cash request: ' + error.message });
@@ -168,7 +261,8 @@ router.post('/', authenticate, async (req, res) => {
       supplier_name,
       supplier_address,
       cr_type,
-      payment_terms_note
+      payment_terms_note,
+      payment_schedules
     } = req.body;
 
     // Validate required fields
@@ -180,9 +274,10 @@ router.post('/', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Valid amount is required' });
     }
 
-    const normalizedPaymentTermsNote = String(payment_terms_note || '').trim();
-    if (!normalizedPaymentTermsNote) {
-      return res.status(400).json({ message: 'Payment terms are required' });
+    const normalizedPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
+    const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
+    if (normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
     }
 
     conn = await db.getConnection();
@@ -236,6 +331,7 @@ router.post('/', authenticate, async (req, res) => {
         'Draft'
       ]
     );
+    await replacePaymentSchedules(conn, result.insertId, normalizedPaymentSchedules, req.user.id);
 
     await conn.commit();
 
@@ -253,6 +349,9 @@ router.post('/', authenticate, async (req, res) => {
         // ignore
       }
     }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
+    }
     console.error('Create cash request error:', error);
     res.status(500).json({ message: 'Failed to create cash request: ' + error.message });
   } finally {
@@ -264,7 +363,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type } = req.body;
+    const { purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type, payment_terms_note, payment_schedules } = req.body;
 
     // Check if CR exists
     const [crs] = await db.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
@@ -284,6 +383,15 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(400).json({ message: 'Only draft cash requests can be updated' });
     }
 
+    const normalizedPaymentTermsNote = hasOwn(req.body, 'payment_terms_note')
+      ? normalizePaymentTermsNote(payment_terms_note)
+      : cr.payment_terms_note;
+    const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
+    const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
+    if (hasPaymentSchedulesField && normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required.' });
+    }
+
     conn = await db.getConnection();
     await conn.beginTransaction();
 
@@ -291,7 +399,7 @@ router.put('/:id', authenticate, async (req, res) => {
       `UPDATE cash_requests 
        SET purpose = ?, description = ?, amount = ?, quantity = ?, unit = ?, 
            project = ?, project_address = ?, date_needed = ?, remarks = ?, 
-           order_number = ?, supplier_id = ?, supplier_name = ?, supplier_address = ?, cr_type = ?, updated_at = NOW()
+           order_number = ?, supplier_id = ?, supplier_name = ?, supplier_address = ?, cr_type = ?, payment_terms_note = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         purpose || cr.purpose,
@@ -308,9 +416,13 @@ router.put('/:id', authenticate, async (req, res) => {
         supplier_name ?? cr.supplier_name,
         supplier_address ?? cr.supplier_address,
         cr_type ?? cr.cr_type,
+        normalizedPaymentTermsNote,
         req.params.id
       ]
     );
+    if (hasPaymentSchedulesField) {
+      await replacePaymentSchedules(conn, req.params.id, normalizedPaymentSchedules, req.user.id);
+    }
 
     await conn.commit();
 
@@ -322,6 +434,9 @@ router.put('/:id', authenticate, async (req, res) => {
       } catch {
         // ignore
       }
+    }
+    if (error?.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
     }
     console.error('Update cash request error:', error);
     res.status(500).json({ message: 'Failed to update cash request: ' + error.message });
@@ -358,6 +473,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
 
     if (!cr.amount || cr.amount <= 0) {
       return res.status(400).json({ message: 'Valid amount is required to submit' });
+    }
+    const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
+    if (scheduleCount === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required before submission.' });
     }
 
     conn = await db.getConnection();
@@ -422,6 +541,11 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
     let newStatus;
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       newStatus = 'Approved';
       await conn.query(
         'UPDATE cash_requests SET status = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?',
@@ -497,6 +621,11 @@ router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, r
 
     let newStatus;
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       newStatus = 'For Super Admin Final Approval';
       await conn.query(
         "UPDATE cash_requests SET status = ?, remarks = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?",
@@ -587,6 +716,11 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
 
     let newStatus;
     if (status === 'approved') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+      }
       newStatus = 'Approved';
       await conn.query(
         "UPDATE cash_requests SET status = ?, remarks = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?",

@@ -10,6 +10,86 @@ const normalizePaymentTermsNote = (note) => {
   const normalized = note == null ? '' : String(note).trim();
   return normalized || null;
 };
+const createInputError = (message) => {
+  const error = new Error(message);
+  error.statusCode = 400;
+  return error;
+};
+
+const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+
+const normalizePaymentSchedules = (paymentSchedules) => {
+  if (paymentSchedules == null) return [];
+  if (!Array.isArray(paymentSchedules)) {
+    throw createInputError('payment_schedules must be an array');
+  }
+
+  const seenDates = new Set();
+  const normalized = paymentSchedules.map((entry, index) => {
+    const paymentDate = String(entry?.payment_date || '').trim();
+    if (!paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is required`);
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+      throw createInputError(`payment_schedules[${index}].payment_date must be YYYY-MM-DD`);
+    }
+
+    const parsedDate = new Date(`${paymentDate}T00:00:00Z`);
+    if (Number.isNaN(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== paymentDate) {
+      throw createInputError(`payment_schedules[${index}].payment_date is invalid`);
+    }
+
+    if (seenDates.has(paymentDate)) {
+      throw createInputError(`Duplicate payment date found: ${paymentDate}`);
+    }
+    seenDates.add(paymentDate);
+
+    const note = entry?.note == null ? null : String(entry.note).trim() || null;
+    let amount = null;
+    if (entry?.amount != null && entry.amount !== '') {
+      const numericAmount = Number(entry.amount);
+      if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+        throw createInputError(`payment_schedules[${index}].amount must be a non-negative number`);
+      }
+      amount = Number(numericAmount.toFixed(2));
+    }
+
+    return {
+      payment_date: paymentDate,
+      amount,
+      note
+    };
+  });
+
+  return normalized.sort((a, b) => a.payment_date.localeCompare(b.payment_date));
+};
+
+const replacePaymentSchedules = async (conn, purchaseRequestId, schedules, employeeId) => {
+  await conn.query(
+    'DELETE FROM purchase_request_payment_schedules WHERE purchase_request_id = ?',
+    [purchaseRequestId]
+  );
+
+  if (!schedules.length) return;
+
+  for (const schedule of schedules) {
+    await conn.query(
+      `INSERT INTO purchase_request_payment_schedules
+      (purchase_request_id, payment_date, amount, note, created_by)
+      VALUES (?, ?, ?, ?, ?)`,
+      [purchaseRequestId, schedule.payment_date, schedule.amount, schedule.note, employeeId]
+    );
+  }
+};
+
+const getPaymentScheduleCount = async (conn, purchaseRequestId) => {
+  const [rows] = await conn.query(
+    'SELECT COUNT(*) AS count FROM purchase_request_payment_schedules WHERE purchase_request_id = ?',
+    [purchaseRequestId]
+  );
+  return rows[0]?.count || 0;
+};
 
 // Get all PRs (filtered by user role)
 router.get('/', authenticate, async (req, res) => {
@@ -70,7 +150,9 @@ router.get('/', authenticate, async (req, res) => {
              e.last_name as requester_last_name,
              s.supplier_name,
              s.supplier_name as payee_name,
-             COALESCE(pr.supplier_address, s.address) as payee_address
+             COALESCE(pr.supplier_address, s.address) as payee_address,
+             (SELECT COUNT(*) FROM purchase_request_payment_schedules prs WHERE prs.purchase_request_id = pr.id) as payment_schedule_count,
+             (SELECT MIN(prs.payment_date) FROM purchase_request_payment_schedules prs WHERE prs.purchase_request_id = pr.id) as next_payment_date
       ${baseFrom}
       ${whereSql}
       ORDER BY pr.created_at DESC
@@ -137,6 +219,13 @@ router.get('/', authenticate, async (req, res) => {
       WHERE pri.purchase_request_id = ?
     `, [req.params.id]);
 
+    const [paymentSchedules] = await db.query(`
+      SELECT id, purchase_request_id, payment_date, amount, note, created_by, created_at, updated_at
+      FROM purchase_request_payment_schedules
+      WHERE purchase_request_id = ?
+      ORDER BY payment_date ASC
+    `, [req.params.id]);
+
     // Get per-item rejection remarks if PR is rejected or sent back to procurement
     let itemRemarks = [];
     if (pr.status === 'Rejected' || pr.status === 'For Procurement Review') {
@@ -157,7 +246,7 @@ router.get('/', authenticate, async (req, res) => {
       rejection_remarks: itemRemarks.filter(r => r.purchase_request_item_id === item.id)
     }));
 
-    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks } });
+    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks, payment_schedules: paymentSchedules } });
   } catch (error) {
     console.error('Fetch purchase request error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase request: ' + error.message });
@@ -168,7 +257,7 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
     const isDraft = save_as_draft === true;
 
     // Only validate required fields if NOT saving as draft
@@ -214,9 +303,10 @@ router.post('/', authenticate, async (req, res) => {
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
     const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
     const paymentTermsCode = paymentBasis === 'debt' && paymentTermsNote ? 'CUSTOM' : null;
+    const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
 
-    if (!isDraft && paymentBasis === 'debt' && !paymentTermsNote) {
-      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
+    if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
+      return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
     }
 
     const normalizedItems = Array.isArray(items)
@@ -294,6 +384,8 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
 
+    await replacePaymentSchedules(conn, prId, normalizedPaymentSchedules, req.user.id);
+
     await conn.commit();
 
     // Notify procurement officers only if NOT a draft
@@ -318,7 +410,8 @@ router.post('/', authenticate, async (req, res) => {
       status: status,
       payment_basis: paymentBasis,
       payment_terms_code: paymentTermsCode,
-      payment_terms_note: paymentTermsNote
+      payment_terms_note: paymentTermsNote,
+      payment_schedules: normalizedPaymentSchedules
     });
   } catch (error) {
     if (conn) {
@@ -329,7 +422,8 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
     console.error('Create purchase request error:', error);
-    res.status(500).json({ message: 'Failed to create purchase request: ' + error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: statusCode === 500 ? 'Failed to create purchase request: ' + error.message : error.message });
   } finally {
     if (conn) conn.release();
   }
@@ -339,7 +433,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
 
     // Check if PR exists and is draft
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -406,6 +500,8 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
       : null;
     const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
+    const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
+    const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
 
     // Update PR details
     await conn.query(
@@ -445,6 +541,10 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       }
     }
 
+    if (hasPaymentSchedulesField) {
+      await replacePaymentSchedules(conn, req.params.id, normalizedPaymentSchedules, req.user.id);
+    }
+
     await conn.commit();
 
     res.json({ message: 'Draft updated successfully', status: 'Draft' });
@@ -457,7 +557,8 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       }
     }
     console.error('Update draft error:', error);
-    res.status(500).json({ message: 'Failed to update draft: ' + error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: statusCode === 500 ? 'Failed to update draft: ' + error.message : error.message });
   } finally {
     if (conn) conn.release();
   }
@@ -489,8 +590,11 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     if (!pr.purpose || !String(pr.purpose).trim()) {
       return res.status(400).json({ message: 'Purpose is required to submit' });
     }
-    if (pr.payment_basis === 'debt' && !normalizePaymentTermsNote(pr.payment_terms_note)) {
-      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
+    if (pr.payment_basis === 'debt') {
+      const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
+      if (scheduleCount === 0) {
+        return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
+      }
     }
 
     // Check if PR has items
@@ -716,9 +820,12 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     
     if (status === 'approved') {
       newStatus = 'For Super Admin Final Approval';
-      if (prs[0].payment_basis === 'debt' && !normalizePaymentTermsNote(prs[0].payment_terms_note)) {
-        await conn.rollback();
-        return res.status(400).json({ message: 'Payment Terms and Conditions must be set on PR before approval.' });
+      if (prs[0].payment_basis === 'debt') {
+        const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+        if (scheduleCount === 0) {
+          await conn.rollback();
+          return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
+        }
       }
       
       // Validate supplier_id is provided
@@ -993,7 +1100,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
 
     // Check if PR exists and is rejected
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -1007,6 +1114,8 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
       : null;
     const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
+    const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
+    const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
 
     // Only the original requester can resubmit
     if (pr.requested_by !== req.user.id) {
@@ -1017,10 +1126,6 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     if (pr.status !== 'Rejected') {
       return res.status(400).json({ message: 'Only rejected purchase requests can be resubmitted' });
     }
-    if (nextPaymentBasis === 'debt' && !nextPaymentTermsNote) {
-      return res.status(400).json({ message: 'Payment Terms and Conditions is required for debt/with account PR.' });
-    }
-
     conn = await db.getConnection();
     await conn.beginTransaction();
 
@@ -1103,6 +1208,18 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       }
     }
 
+    if (hasPaymentSchedulesField) {
+      await replacePaymentSchedules(conn, req.params.id, normalizedPaymentSchedules, req.user.id);
+    }
+
+    if (nextPaymentBasis === 'debt') {
+      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
+      if (scheduleCount === 0) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
+      }
+    }
+
     await conn.commit();
 
     // Notify procurement officers about resubmitted PR
@@ -1128,7 +1245,8 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       }
     }
     console.error('Resubmit PR error:', error);
-    res.status(500).json({ message: 'Failed to resubmit purchase request: ' + error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: statusCode === 500 ? 'Failed to resubmit purchase request: ' + error.message : error.message });
   } finally {
     if (conn) conn.release();
   }
