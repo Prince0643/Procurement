@@ -1,64 +1,51 @@
-# Docker (VPS) Setup — Procurement System
+# Docker VPS Setup (Clean Start)
 
-This repo includes a production-focused Docker Compose stack:
-- MariaDB (container)
-- Backend API (Node/Express + Socket.IO)
-- Frontend (static build served by Nginx)
+This guide assumes a fresh production server state (no procurement containers, volumes, or DB).
 
-It is designed to be reverse-proxied by **host Nginx** with SSL:
-- Frontend: `https://procurement.xandree.com/`
-- API: `https://procurement-api.xandree.com/` (serves `/api`, `/socket.io`, `/uploads`)
-
-## 1) Configure env
-
-On your VPS, copy and edit:
+## 1) Prepare env file on VPS
 
 ```bash
 mkdir -p /opt/procurement
-cp deploy/.env.prod.example /opt/procurement/.env.prod
-vim /opt/procurement/.env.prod
+cp /var/www/procurement_system/deploy/.env.prod.example /opt/procurement/.env.prod
+nano /opt/procurement/.env.prod
 ```
 
-## 2) Start containers
-
-From the repo folder:
+## 2) Start Docker stack
 
 ```bash
+cd /var/www/procurement_system
 docker compose --env-file /opt/procurement/.env.prod up -d --build
 ```
 
-The stack includes a one-shot `db_migrate` service that applies required production migrations
-(including `payment_terms_code` fields) before backend startup.
+Notes:
+- DB initializes from `dbschema/procurement_db.sql` on first startup only.
+- Because this is a fresh setup, the sample data from that file will be imported.
 
-Optional Adminer:
-
-```bash
-docker compose --env-file /opt/procurement/.env.prod --profile adminer up -d
-```
-
-## 3) Host Nginx
-
-Copy the provided configs and adapt SSL paths as needed:
-- `deploy/nginx-procurement.conf`
-- `deploy/nginx-procurement-api.conf`
-
-Reload Nginx after changes.
-
-## 4) Verify
+## 3) Install host Nginx configs
 
 ```bash
-curl http://127.0.0.1:5000/api/health
+cp /var/www/procurement_system/deploy/nginx-procurement.conf /etc/nginx/sites-available/procurement
+cp /var/www/procurement_system/deploy/nginx-procurement-api.conf /etc/nginx/sites-available/procurement-api
+ln -sf /etc/nginx/sites-available/procurement /etc/nginx/sites-enabled/procurement
+ln -sf /etc/nginx/sites-available/procurement-api /etc/nginx/sites-enabled/procurement-api
+nginx -t && systemctl reload nginx
 ```
 
-Then verify in browser:
-- `https://procurement.xandree.com/`
+## 4) Re-issue SSL certs
+
+```bash
+certbot --nginx -d procurement.xandree.com
+certbot --nginx -d procurement-api.xandree.com
+```
+
+## 5) Verify
+
+```bash
+docker compose --env-file /opt/procurement/.env.prod ps
+curl -i http://127.0.0.1:5000/api/health
+curl -i https://procurement-api.xandree.com/api/health
+```
+
+Open in browser:
+- `https://procurement.xandree.com`
 - `https://procurement-api.xandree.com/api/health`
-
-## Notes
-- DB data persists in Docker volume `db_data`.
-- Uploads persist in Docker volume `backend_uploads`.
-- The schema is imported automatically only on first DB initialization. If you delete the DB volume, it will re-import.
-- To rerun migrations manually:
-  ```bash
-  docker compose --env-file /opt/procurement/.env.prod run --rm db_migrate
-  ```

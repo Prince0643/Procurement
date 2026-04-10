@@ -4,14 +4,14 @@ services:
     container_name: procurement_db
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in deploy/.env.prod}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in /opt/procurement/.env.prod}
       MYSQL_DATABASE: procurement_db
       MYSQL_USER: ${MYSQL_USER:-procurement_app}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in deploy/.env.prod}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in /opt/procurement/.env.prod}
     volumes:
       - db_data:/var/lib/mysql
       - ./backend/database/00_init_db.sql:/docker-entrypoint-initdb.d/00_init_db.sql:ro
-      - ./backend/database/whole_sql_schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./dbschema/procurement_db.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     # Do not expose DB publicly; keep internal-only.
     expose:
       - "3306"
@@ -21,24 +21,6 @@ services:
       timeout: 5s
       retries: 20
       start_period: 30s
-
-  db_migrate:
-    image: mariadb:10.4
-    container_name: procurement_db_migrate
-    restart: "no"
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set in deploy/.env.prod}
-      MYSQL_DATABASE: procurement_db
-    volumes:
-      - ./backend/migrations:/migrations:ro
-    command: >
-      sh -lc "
-      mysql -h db -uroot -p$$MYSQL_ROOT_PASSWORD $$MYSQL_DATABASE < /migrations/add_payment_terms_to_purchase_requests.sql &&
-      mysql -h db -uroot -p$$MYSQL_ROOT_PASSWORD $$MYSQL_DATABASE < /migrations/add_payment_terms_to_sr_cr_reimbursements.sql
-      "
 
   backend:
     build:
@@ -52,8 +34,8 @@ services:
       DB_PORT: 3306
       DB_NAME: procurement_db
       DB_USER: ${MYSQL_USER:-procurement_app}
-      DB_PASSWORD: ${MYSQL_PASSWORD:?set in deploy/.env.prod}
-      JWT_SECRET: ${JWT_SECRET:?set in deploy/.env.prod}
+      DB_PASSWORD: ${MYSQL_PASSWORD:?set in /opt/procurement/.env.prod}
+      JWT_SECRET: ${JWT_SECRET:?set in /opt/procurement/.env.prod}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-24h}
       ATTENDANCE_SYNC_API_KEY: ${ATTENDANCE_SYNC_API_KEY:-}
       ATTENDANCE_API_URL: ${ATTENDANCE_API_URL:-}
@@ -66,8 +48,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      db_migrate:
-        condition: service_completed_successfully
 
   frontend:
     build:
