@@ -8,7 +8,7 @@ import {
   FileText, Search, ChevronDown, ChevronUp, Building2, 
   ShoppingCart, Wrench, Banknote, Receipt, ArrowLeft,
   Calendar, MapPin, User, DollarSign, Filter, AlertCircle,
-  X, Eye, CheckCircle, FileSpreadsheet
+  X, CheckCircle, FileSpreadsheet
 } from 'lucide-react';
 import axios from 'axios';
 import PRPreviewModal from '../purchase-requests/PRPreviewModal';
@@ -651,26 +651,28 @@ const OrderNumbers = () => {
                       {col.header}
                     </th>
                   ))}
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {data.map((item, idx) => (
-                  <tr key={idx} className="hover:bg-gray-50">
+                  <tr
+                    key={idx}
+                    className="hover:bg-gray-50 cursor-pointer focus:outline-none focus:ring-2 focus:ring-yellow-400"
+                    onClick={() => onRowClick(item, type)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        onRowClick(item, type);
+                      }
+                    }}
+                    tabIndex={0}
+                    aria-label={`Preview ${typeLabel} item`}
+                  >
                     {columns.map((col, colIdx) => (
                       <td key={colIdx} className="px-4 py-3 text-sm">
                         {renderCell(col, item)}
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-sm">
-                      <button
-                        onClick={() => onRowClick(item, type)}
-                        className="text-yellow-600 hover:text-yellow-700 transition-colors"
-                        title="Preview"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
-                    </td>
                   </tr>
                 ))}
               </tbody>
