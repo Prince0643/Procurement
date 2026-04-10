@@ -163,6 +163,7 @@ const PurchaseRequests = () => {
   const pageSize = Math.min(Math.max(parseInt(searchParams.get('pageSize') || '20', 10) || 20, 1), 100)
   const urlStatus = searchParams.get('status') || 'ALL'
   const urlQ = searchParams.get('q') || ''
+  const urlView = searchParams.get('view') || ''
 
   const [purchaseRequests, setPurchaseRequests] = useState([])
   const [total, setTotal] = useState(0)
@@ -230,6 +231,15 @@ const PurchaseRequests = () => {
     setSearchQuery(urlQ)
   }, [urlStatus, urlQ])
 
+  // Only engineers can use view=all; clean up URL for other roles.
+  useEffect(() => {
+    if (user?.role && user.role !== 'engineer' && urlView) {
+      updateQueryParams((p) => {
+        p.delete('view')
+      }, { replace: true })
+    }
+  }, [user?.role, urlView, updateQueryParams])
+
   // Listen for real-time updates
   useEffect(() => {
     console.log('Setting up PR status change listener');
@@ -259,7 +269,7 @@ const PurchaseRequests = () => {
       console.log('Fetching purchase requests...');
       setLoading(true)
       setError('')
-      const view = user?.role === 'admin' || user?.role === 'super_admin' ? 'all' : null
+      const view = user?.role === 'engineer' && urlView === 'all' ? 'all' : null
       console.log('Fetching with view:', view, 'user role:', user?.role)
       const payload = await purchaseRequestService.list({
         view,
@@ -278,7 +288,7 @@ const PurchaseRequests = () => {
     } finally {
       setLoading(false)
     }
-  }, [user?.role, page, pageSize, urlStatus, urlQ])
+  }, [user?.role, urlView, page, pageSize, urlStatus, urlQ])
 
   const fetchRef = useRef(null)
   useEffect(() => {
@@ -398,6 +408,14 @@ const PurchaseRequests = () => {
     updateQueryParams((p) => {
       if (nextPageSize === 20) p.delete('pageSize')
       else p.set('pageSize', String(nextPageSize))
+      p.set('page', '1')
+    }, { replace: false })
+  }
+
+  const handleViewAllChange = (checked) => {
+    updateQueryParams((p) => {
+      if (checked) p.set('view', 'all')
+      else p.delete('view')
       p.set('page', '1')
     }, { replace: false })
   }
@@ -849,6 +867,18 @@ const PurchaseRequests = () => {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
+
+              {user?.role === 'engineer' && (
+                <label className="inline-flex items-center gap-2 text-sm text-gray-600 select-none">
+                  <input
+                    type="checkbox"
+                    checked={urlView === 'all'}
+                    onChange={(e) => handleViewAllChange(e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                  />
+                  View all
+                </label>
+              )}
             </div>
           </div>
         </Card>
