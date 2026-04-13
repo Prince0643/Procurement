@@ -91,7 +91,12 @@ const DisbursementVouchers = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [sourceType, setSourceType] = useState('po'); // 'po', 'payment_request', or 'payment_order'
   const [selectedSource, setSelectedSource] = useState(null);
+  const [scheduleOptions, setScheduleOptions] = useState([]);
+  const [selectedScheduleId, setSelectedScheduleId] = useState('');
+  const [selectedScheduleSourceType, setSelectedScheduleSourceType] = useState('');
+  const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [payingVoucherId, setPayingVoucherId] = useState(null);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -121,11 +126,9 @@ const DisbursementVouchers = () => {
       ]);
       setVouchers(vouchersData);
       
-      // Filter only Approved POs that don't have a DV yet
+      // A single approved PO can now drive multiple DVs via payment schedules.
       const approvedPOs = posData.filter(po => po.status === 'Approved');
-      const poIdsWithDV = new Set(vouchersData.filter(v => v.purchase_order_id).map(v => v.purchase_order_id));
-      const availablePOs = approvedPOs.filter(po => !poIdsWithDV.has(po.id));
-      setPurchaseOrders(availablePOs);
+      setPurchaseOrders(approvedPOs);
       
       // Filter only Approved Payment Requests that don't have a DV yet
       const approvedPRs = prData.filter(pr => pr.status === 'Approved' && pr.payment_basis === 'non_debt');
@@ -155,6 +158,10 @@ const DisbursementVouchers = () => {
       alert('Please select a source');
       return;
     }
+    if (!selectedScheduleId) {
+      alert('Please select a payment schedule.');
+      return;
+    }
 
     try {
       setSubmitting(true);
@@ -167,6 +174,8 @@ const DisbursementVouchers = () => {
         bank_name: formData.bank_name,
         payment_date: formData.payment_date,
         received_by: formData.received_by,
+        schedule_id: Number(selectedScheduleId) || null,
+        schedule_source_type: selectedScheduleSourceType || null,
         save_as_draft: saveAsDraft
       };
       
@@ -205,6 +214,34 @@ const DisbursementVouchers = () => {
     }
   };
 
+  const handleMarkPaid = async (voucher) => {
+    if (!voucher?.id) return;
+
+    const confirmed = window.confirm(`Mark DV "${voucher.dv_number}" as Paid?`);
+    if (!confirmed) return;
+
+    try {
+      setPayingVoucherId(voucher.id);
+      const today = new Date();
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+      await disbursementVoucherService.markAsPaid(voucher.id, {
+        check_number: voucher.check_number || '',
+        bank_name: voucher.bank_name || '',
+        payment_date: voucher.payment_date ? String(voucher.payment_date).slice(0, 10) : todayYmd,
+        received_by: voucher.received_by || voucher.supplier_name || voucher.payee_name || '',
+        received_date: todayYmd
+      });
+
+      await fetchData();
+      alert(`Disbursement voucher "${voucher.dv_number}" marked as Paid.`);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to mark disbursement voucher as paid');
+    } finally {
+      setPayingVoucherId(null);
+    }
+  };
+
   // Helper to get source reference number
   const getSourceRef = (voucher) => {
     if (voucher.po_number) return { num: voucher.po_number, type: 'PO' };
@@ -220,8 +257,13 @@ const DisbursementVouchers = () => {
   };
 
   const closeCreateModal = () => {
+    setShowCreateModal(false);
     setSourceType('po');
     setSelectedSource(null);
+    setScheduleOptions([]);
+    setSelectedScheduleId('');
+    setSelectedScheduleSourceType('');
+    setLoadingSchedules(false);
     setFormData({
       particulars: '',
       project: '',
@@ -238,6 +280,39 @@ const DisbursementVouchers = () => {
     if (source.sr_type) return ` (${source.sr_type === 'payment_request' ? 'Payment Request' : 'Payment Order'})`;
     if (source.cr_type) return ` (${source.cr_type === 'payment_request' ? 'Payment Request' : 'Payment Order'})`;
     return '';
+  };
+
+  const getSourceApiType = (type) => {
+    if (type === 'po') return 'purchase_order';
+    if (type === 'payment_request') return 'payment_request';
+    if (type === 'payment_order') return 'payment_order';
+    return '';
+  };
+
+  const handleSelectSource = async (source) => {
+    setSelectedSource(source);
+    setSelectedScheduleId('');
+    setScheduleOptions([]);
+    setSelectedScheduleSourceType('');
+
+    const sourceApiType = getSourceApiType(sourceType);
+    if (!sourceApiType || !source?.id) return;
+
+    try {
+      setLoadingSchedules(true);
+      const result = await disbursementVoucherService.getSchedules(sourceApiType, source.id);
+      const schedules = Array.isArray(result?.schedules)
+        ? result.schedules.filter((schedule) => !schedule?.is_consumed)
+        : [];
+      setScheduleOptions(schedules);
+      setSelectedScheduleSourceType(result?.schedule_source_type || '');
+    } catch (err) {
+      const message = err?.response?.data?.message || 'Failed to load payment schedules';
+      alert(message);
+      setScheduleOptions([]);
+    } finally {
+      setLoadingSchedules(false);
+    }
   };
 
   const filteredVouchers = vouchers.filter(voucher => 
@@ -315,6 +390,20 @@ const DisbursementVouchers = () => {
                     <td className="py-3 px-4 text-sm text-gray-600">{formatDate(voucher.dv_date)}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        {user?.role === 'admin' && voucher.status !== 'Paid' && (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            disabled={payingVoucherId === voucher.id}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMarkPaid(voucher);
+                            }}
+                            className="px-2"
+                          >
+                            {payingVoucherId === voucher.id ? 'Paying...' : 'Mark Paid'}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -400,7 +489,7 @@ const DisbursementVouchers = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Create Disbursement Voucher</h3>
-              <button onClick={closeCreateModal} className="text-gray-400 hover:text-gray-600">
+              <button type="button" onClick={closeCreateModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -410,7 +499,7 @@ const DisbursementVouchers = () => {
               <div className="flex gap-2 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => { setSourceType('po'); setSelectedSource(null); }}
+                  onClick={() => { setSourceType('po'); setSelectedSource(null); setScheduleOptions([]); setSelectedScheduleId(''); setSelectedScheduleSourceType(''); }}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     sourceType === 'po'
                       ? 'bg-yellow-500 text-white'
@@ -421,7 +510,7 @@ const DisbursementVouchers = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setSourceType('payment_request'); setSelectedSource(null); }}
+                  onClick={() => { setSourceType('payment_request'); setSelectedSource(null); setScheduleOptions([]); setSelectedScheduleId(''); setSelectedScheduleSourceType(''); }}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     sourceType === 'payment_request'
                       ? 'bg-yellow-500 text-white'
@@ -432,7 +521,7 @@ const DisbursementVouchers = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => { setSourceType('payment_order'); setSelectedSource(null); }}
+                  onClick={() => { setSourceType('payment_order'); setSelectedSource(null); setScheduleOptions([]); setSelectedScheduleId(''); setSelectedScheduleSourceType(''); }}
                   className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${
                     sourceType === 'payment_order'
                       ? 'bg-yellow-500 text-white'
@@ -458,7 +547,7 @@ const DisbursementVouchers = () => {
                       {purchaseOrders.map(po => (
                         <div
                           key={po.id}
-                          onClick={() => setSelectedSource(po)}
+                          onClick={() => handleSelectSource(po)}
                           className={`p-3 rounded-md cursor-pointer transition-colors ${
                             selectedSource?.id === po.id
                               ? 'bg-yellow-50 border border-yellow-300'
@@ -468,7 +557,12 @@ const DisbursementVouchers = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="font-medium text-sm text-gray-900">{po.po_number}</p>
-                              <p className="text-xs text-gray-500">{po.supplier_name} • {formatCurrency(po.total_amount)}</p>
+                              <p className="text-xs text-gray-500">
+                                {po.supplier_name}
+                                {po.scheduled_payment_date ? ` • Due: ${formatDate(po.scheduled_payment_date)}` : ''}
+                                {' • '}
+                                {formatCurrency(po.scheduled_amount || po.total_amount)}
+                              </p>
                             </div>
                             {selectedSource?.id === po.id && <CheckCircle className="w-5 h-5 text-yellow-500" />}
                           </div>
@@ -486,7 +580,7 @@ const DisbursementVouchers = () => {
                       {paymentRequests.map(pr => (
                         <div
                           key={pr.id}
-                          onClick={() => setSelectedSource(pr)}
+                          onClick={() => handleSelectSource(pr)}
                           className={`p-3 rounded-md cursor-pointer transition-colors ${
                             selectedSource?.id === pr.id
                               ? 'bg-yellow-50 border border-yellow-300'
@@ -522,7 +616,7 @@ const DisbursementVouchers = () => {
                         return (
                           <div
                             key={po.id}
-                            onClick={() => setSelectedSource(po)}
+                            onClick={() => handleSelectSource(po)}
                             className={`p-3 rounded-md cursor-pointer transition-colors ${
                               selectedSource?.id === po.id
                                 ? 'bg-yellow-50 border border-yellow-300'
@@ -546,6 +640,50 @@ const DisbursementVouchers = () => {
 
               {selectedSource && (
                 <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Payment Schedule <span className="text-red-500">*</span>
+                    </label>
+                    {loadingSchedules ? (
+                      <div className="p-3 border border-gray-200 rounded-md text-sm text-gray-500">Loading schedules...</div>
+                    ) : scheduleOptions.length === 0 ? (
+                      <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md text-sm text-yellow-800">
+                        No available payment schedules for this source.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-44 overflow-auto border border-gray-200 rounded-md p-2">
+                        {scheduleOptions.map((schedule) => (
+                          <label
+                            key={schedule.id}
+                            className={`flex items-center justify-between p-2 rounded-md border ${
+                              Number(selectedScheduleId) === Number(schedule.id)
+                                ? 'border-yellow-300 bg-yellow-50'
+                                : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-3">
+                              <p className="text-sm font-medium text-gray-900">
+                                {schedule.payment_date} • {formatCurrency(schedule.amount)}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {schedule.due_label}
+                                {schedule.note ? ` • ${schedule.note}` : ''}
+                              </p>
+                            </div>
+                            <input
+                              type="radio"
+                              name="dv_schedule"
+                              value={schedule.id}
+                              checked={Number(selectedScheduleId) === Number(schedule.id)}
+                              onChange={(e) => setSelectedScheduleId(e.target.value)}
+                              className="h-4 w-4"
+                            />
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Particulars</label>
@@ -634,7 +772,7 @@ const DisbursementVouchers = () => {
                 <Button 
                   type="button" 
                   variant="secondary"
-                  disabled={submitting || !selectedSource || 
+                  disabled={submitting || !selectedSource || !selectedScheduleId ||
                     (sourceType === 'po' ? purchaseOrders.length === 0 : 
                      sourceType === 'payment_request' ? paymentRequests.length === 0 :
                      paymentOrders.length === 0)}
@@ -644,7 +782,7 @@ const DisbursementVouchers = () => {
                 </Button>
                 <Button 
                   type="submit" 
-                  disabled={submitting || !selectedSource || 
+                  disabled={submitting || !selectedSource || !selectedScheduleId ||
                     (sourceType === 'po' ? purchaseOrders.length === 0 : 
                      sourceType === 'payment_request' ? paymentRequests.length === 0 :
                      paymentOrders.length === 0)}

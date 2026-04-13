@@ -149,6 +149,7 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
               <p><span className="text-gray-500">Order Number:</span> {pr.order_number || '-'}</p>
               <p><span className="text-gray-500">Amount:</span> {formatCurrency(calculateTotal())}</p>
               <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}</p>
+              <p><span className="text-gray-500">Payment Review Note:</span> {pr.payment_review_note || '-'}</p>
               {pr.purpose && <p><span className="text-gray-500">Purpose:</span> {pr.purpose}</p>}
             </div>
           </div>
@@ -259,7 +260,17 @@ const PRPreviewModal = ({ pr, loading, onClose, onApprove, processingId, readOnl
               </div>
             </div>
 
-            {/* Row 8: Remarks (if present) */}
+            {/* Row 8: Payment Review Note */}
+            <div className="grid grid-cols-12 border-b border-gray-300">
+              <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
+                Payment Review Note
+              </div>
+              <div className="col-span-10 px-3 py-2 text-sm text-gray-900">
+                {pr.payment_review_note || '-'}
+              </div>
+            </div>
+
+            {/* Row 9: Remarks (if present) */}
             {pr.remarks && (
               <div className="grid grid-cols-12 border-b border-gray-300">
                 <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">

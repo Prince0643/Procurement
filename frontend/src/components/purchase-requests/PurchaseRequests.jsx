@@ -174,6 +174,21 @@ const formatPaymentTerms = (code, note) => {
   return normalizedCode
 }
 
+const roundMoney = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric)) return 0
+  return Math.round((numeric + Number.EPSILON) * 100) / 100
+}
+
+const sumScheduleAmounts = (schedules = []) => {
+  return roundMoney(
+    schedules.reduce((sum, row) => {
+      const amount = Number(row?.amount)
+      return Number.isFinite(amount) ? sum + amount : sum
+    }, 0)
+  )
+}
+
 const PurchaseRequests = () => {
   const [searchParams, setSearchParams] = useSearchParams()
 
@@ -677,6 +692,7 @@ const PurchaseRequests = () => {
         alert('At least one payment schedule is required for debt/with account PR')
         return
       }
+      validateScheduleTotals(normalizedSchedules)
       setSubmitting(true)
       const prData = {
         purpose,
@@ -809,6 +825,27 @@ const PurchaseRequests = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
   }
 
+  const validateScheduleTotals = (normalizedSchedules) => {
+    if (paymentBasis !== 'debt') return true
+    const scheduleTotal = sumScheduleAmounts(normalizedSchedules)
+    const itemsTotal = roundMoney(calculateTotal())
+    if (scheduleTotal !== itemsTotal) {
+      throw new Error(`Payment schedule total (${formatCurrency(scheduleTotal)}) must match PR total (${formatCurrency(itemsTotal)}).`)
+    }
+    return true
+  }
+
+  const preventNumberScroll = (e) => {
+    e.currentTarget.blur()
+  }
+
+  const paymentScheduleTotal = sumScheduleAmounts(paymentSchedules)
+  const itemsTotal = roundMoney(calculateTotal())
+  const paymentScheduleDifference = roundMoney(paymentScheduleTotal - itemsTotal)
+  const paymentScheduleDifferenceLabel = paymentScheduleDifference > 0
+    ? `+${formatCurrency(paymentScheduleDifference)}`
+    : formatCurrency(paymentScheduleDifference)
+
   const handleProjectChange = (projectName) => {
     setProject(projectName)
     const selectedBranch = branches.find((branch) => (branch?.branch_name || '') === projectName)
@@ -832,6 +869,7 @@ const PurchaseRequests = () => {
         alert('At least one payment schedule is required for debt/with account PR')
         return
       }
+      validateScheduleTotals(normalizedSchedules)
       setSubmitting(true)
       const prData = {
         purpose,
@@ -1458,6 +1496,7 @@ const PurchaseRequests = () => {
                           placeholder="Amount (optional)"
                           value={schedule.amount}
                           onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
+                          onWheel={preventNumberScroll}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                           min="0"
                           step="0.01"
@@ -1481,6 +1520,13 @@ const PurchaseRequests = () => {
                       </div>
                     </div>
                   ))}
+                  {paymentBasis === 'debt' && (
+                    <div className={`mt-2 rounded-md border px-3 py-2 text-sm ${paymentScheduleDifference === 0 ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                      <p>Scheduled Total: {formatCurrency(paymentScheduleTotal)}</p>
+                      <p>PR Total: {formatCurrency(itemsTotal)}</p>
+                      <p>Difference: {paymentScheduleDifferenceLabel}</p>
+                    </div>
+                  )}
                 </div>
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
@@ -1611,6 +1657,7 @@ const PurchaseRequests = () => {
                           placeholder="Amount (optional)"
                           value={schedule.amount}
                           onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
+                          onWheel={preventNumberScroll}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
                           min="0"
                           step="0.01"
@@ -1634,6 +1681,13 @@ const PurchaseRequests = () => {
                       </div>
                     </div>
                   ))}
+                  {paymentBasis === 'debt' && (
+                    <div className={`mt-2 rounded-md border px-3 py-2 text-sm ${paymentScheduleDifference === 0 ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
+                      <p>Scheduled Total: {formatCurrency(paymentScheduleTotal)}</p>
+                      <p>PR Total: {formatCurrency(itemsTotal)}</p>
+                      <p>Difference: {paymentScheduleDifferenceLabel}</p>
+                    </div>
+                  )}
                 </div>
 
                 <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />

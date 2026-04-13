@@ -7,6 +7,232 @@ import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 
 const router = express.Router();
 
+const getTodayYmd = () => {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+};
+
+const getDueLabel = (paymentDateYmd, todayYmd) => {
+  if (!paymentDateYmd) return 'Unknown';
+  if (paymentDateYmd < todayYmd) return 'Overdue';
+  if (paymentDateYmd === todayYmd) return 'Due Today';
+  return 'Upcoming';
+};
+
+const getScheduleConfigForSource = (sourceType, sourceRow) => {
+  switch (sourceType) {
+    case 'purchase_order':
+      if (sourceRow?.purchase_request_id) {
+        return {
+          schedule_source_type: 'pr',
+          table: 'purchase_request_payment_schedules',
+          fkColumn: 'purchase_request_id',
+          fkValue: sourceRow.purchase_request_id
+        };
+      }
+      if (sourceRow?.service_request_id) {
+        return {
+          schedule_source_type: 'sr',
+          table: 'service_request_payment_schedules',
+          fkColumn: 'service_request_id',
+          fkValue: sourceRow.service_request_id
+        };
+      }
+      return null;
+    case 'payment_request':
+      if (sourceRow?.purchase_request_id) {
+        return {
+          schedule_source_type: 'pr',
+          table: 'purchase_request_payment_schedules',
+          fkColumn: 'purchase_request_id',
+          fkValue: sourceRow.purchase_request_id
+        };
+      }
+      if (sourceRow?.service_request_id) {
+        return {
+          schedule_source_type: 'sr',
+          table: 'service_request_payment_schedules',
+          fkColumn: 'service_request_id',
+          fkValue: sourceRow.service_request_id
+        };
+      }
+      return null;
+    case 'payment_order':
+      if (sourceRow?.service_request_id) {
+        return {
+          schedule_source_type: 'sr',
+          table: 'service_request_payment_schedules',
+          fkColumn: 'service_request_id',
+          fkValue: sourceRow.service_request_id
+        };
+      }
+      if (sourceRow?.cash_request_id) {
+        return {
+          schedule_source_type: 'cr',
+          table: 'cash_request_payment_schedules',
+          fkColumn: 'cash_request_id',
+          fkValue: sourceRow.cash_request_id
+        };
+      }
+      if (sourceRow?.reimbursement_id) {
+        return {
+          schedule_source_type: 'rmb',
+          table: 'reimbursement_payment_schedules',
+          fkColumn: 'reimbursement_id',
+          fkValue: sourceRow.reimbursement_id
+        };
+      }
+      return null;
+    case 'service_request':
+      return {
+        schedule_source_type: 'sr',
+        table: 'service_request_payment_schedules',
+        fkColumn: 'service_request_id',
+        fkValue: sourceRow?.id
+      };
+    case 'cash_request':
+      return {
+        schedule_source_type: 'cr',
+        table: 'cash_request_payment_schedules',
+        fkColumn: 'cash_request_id',
+        fkValue: sourceRow?.id
+      };
+    default:
+      return null;
+  }
+};
+
+const getSourceColumnForDv = (sourceType) => {
+  switch (sourceType) {
+    case 'purchase_order':
+      return 'purchase_order_id';
+    case 'payment_request':
+      return 'payment_request_id';
+    case 'payment_order':
+      return 'payment_order_id';
+    case 'service_request':
+      return 'service_request_id';
+    case 'cash_request':
+      return 'cash_request_id';
+    default:
+      return null;
+  }
+};
+
+const getSourceRow = async (conn, sourceType, sourceId) => {
+  if (!sourceId) return null;
+
+  if (sourceType === 'purchase_order') {
+    const [rows] = await conn.query(
+      `SELECT id, status, purchase_request_id, service_request_id, installment_schedule_id
+       FROM purchase_orders
+       WHERE id = ?`,
+      [sourceId]
+    );
+    return rows[0] || null;
+  }
+
+  if (sourceType === 'payment_request') {
+    const [rows] = await conn.query(
+      `SELECT id, status, purchase_request_id, service_request_id
+       FROM payment_requests
+       WHERE id = ?`,
+      [sourceId]
+    );
+    return rows[0] || null;
+  }
+
+  if (sourceType === 'payment_order') {
+    const [rows] = await conn.query(
+      `SELECT id, status, service_request_id, cash_request_id, reimbursement_id
+       FROM payment_orders
+       WHERE id = ?`,
+      [sourceId]
+    );
+    return rows[0] || null;
+  }
+
+  if (sourceType === 'service_request') {
+    const [rows] = await conn.query(
+      `SELECT id, status
+       FROM service_requests
+       WHERE id = ?`,
+      [sourceId]
+    );
+    return rows[0] || null;
+  }
+
+  if (sourceType === 'cash_request') {
+    const [rows] = await conn.query(
+      `SELECT id, status
+       FROM cash_requests
+       WHERE id = ?`,
+      [sourceId]
+    );
+    return rows[0] || null;
+  }
+
+  return null;
+};
+
+const getSchedulesForSource = async (conn, sourceType, sourceId) => {
+  const sourceRow = await getSourceRow(conn, sourceType, sourceId);
+  if (!sourceRow) {
+    return { sourceRow: null, scheduleConfig: null, schedules: [], sourceColumn: getSourceColumnForDv(sourceType) };
+  }
+
+  const scheduleConfig = getScheduleConfigForSource(sourceType, sourceRow);
+  const sourceColumn = getSourceColumnForDv(sourceType);
+
+  if (!scheduleConfig || !scheduleConfig.fkValue || !sourceColumn) {
+    return { sourceRow, scheduleConfig: null, schedules: [], sourceColumn };
+  }
+
+  const [schedules] = await conn.query(
+    `SELECT id, DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date, amount, note
+     FROM ${scheduleConfig.table}
+     WHERE ${scheduleConfig.fkColumn} = ?
+     ORDER BY payment_date ASC`,
+    [scheduleConfig.fkValue]
+  );
+
+  if (!schedules.length) {
+    return { sourceRow, scheduleConfig, schedules: [], sourceColumn };
+  }
+
+  const [consumedRows] = await conn.query(
+    `SELECT DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date
+     FROM disbursement_vouchers
+     WHERE ${sourceColumn} = ? AND status != 'Cancelled'`,
+    [sourceId]
+  );
+  const consumedDates = new Set(
+    consumedRows.map((row) => String(row?.payment_date || '').trim()).filter(Boolean)
+  );
+  const todayYmd = getTodayYmd();
+
+  const mapped = schedules.map((schedule) => {
+    const paymentDate = String(schedule?.payment_date || '').trim();
+    return {
+      id: schedule.id,
+      payment_date: paymentDate,
+      amount: schedule.amount,
+      note: schedule.note,
+      due_label: getDueLabel(paymentDate, todayYmd),
+      is_consumed: consumedDates.has(paymentDate)
+    };
+  });
+
+  // If PO is an installment PO bound to a specific schedule, expose only that schedule.
+  if (sourceType === 'purchase_order' && sourceRow?.installment_schedule_id) {
+    const boundScheduleId = Number(sourceRow.installment_schedule_id);
+    const filtered = mapped.filter((entry) => Number(entry.id) === boundScheduleId);
+    return { sourceRow, scheduleConfig, schedules: filtered, sourceColumn };
+  }
+
+  return { sourceRow, scheduleConfig, schedules: mapped, sourceColumn };
+};
+
 // Get all Disbursement Vouchers
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -64,6 +290,40 @@ router.get('/', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Failed to fetch disbursement vouchers', error);
     res.status(500).json({ message: 'Failed to fetch disbursement vouchers' });
+  }
+});
+
+// Get available schedules for DV creation based on selected source
+router.get('/schedules', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const sourceType = String(req.query.source_type || '').trim();
+    const sourceId = Number(req.query.source_id);
+
+    const validSourceTypes = new Set(['purchase_order', 'payment_request', 'payment_order', 'service_request', 'cash_request']);
+    if (!validSourceTypes.has(sourceType)) {
+      return res.status(400).json({ message: 'Invalid source_type' });
+    }
+    if (!Number.isInteger(sourceId) || sourceId <= 0) {
+      return res.status(400).json({ message: 'source_id must be a positive integer' });
+    }
+
+    const { sourceRow, scheduleConfig, schedules } = await getSchedulesForSource(db, sourceType, sourceId);
+    if (!sourceRow) {
+      return res.status(404).json({ message: 'Source document not found' });
+    }
+    if (!scheduleConfig) {
+      return res.status(400).json({ message: 'Selected source has no payment schedule configuration.' });
+    }
+
+    res.json({
+      source_type: sourceType,
+      source_id: sourceId,
+      schedule_source_type: scheduleConfig.schedule_source_type,
+      schedules
+    });
+  } catch (error) {
+    console.error('Failed to fetch DV schedules', error);
+    res.status(500).json({ message: 'Failed to fetch schedules for DV creation' });
   }
 });
 
@@ -131,6 +391,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       bank_name,
       payment_date,
       received_by,
+      schedule_id,
       save_as_draft 
     } = req.body;
     
@@ -276,16 +537,84 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       dvType = 'payment_order_based';
     }
     
-    // Check if a DV already exists for this PO, SR, CR, PR, or Payment Order
-    const [existingDVs] = await conn.query(
-      'SELECT id FROM disbursement_vouchers WHERE (purchase_order_id = ? OR service_request_id = ? OR cash_request_id = ? OR payment_request_id = ? OR payment_order_id = ?) AND status != ?',
-      [finalPurchaseOrderId, finalServiceRequestId, finalCashRequestId, finalPaymentRequestId, finalPaymentOrderId, 'Cancelled']
-    );
-    
-    if (existingDVs.length > 0) {
+    const creationSourceType = finalPurchaseOrderId
+      ? 'purchase_order'
+      : finalPaymentRequestId
+        ? 'payment_request'
+        : finalPaymentOrderId
+          ? 'payment_order'
+          : finalServiceRequestId
+            ? 'service_request'
+            : finalCashRequestId
+              ? 'cash_request'
+              : null;
+    const creationSourceId = finalPurchaseOrderId || finalPaymentRequestId || finalPaymentOrderId || finalServiceRequestId || finalCashRequestId || null;
+
+    if (!creationSourceType || !creationSourceId) {
       await conn.rollback();
-      return res.status(400).json({ message: 'A disbursement voucher already exists for this order' });
+      return res.status(400).json({ message: 'Unable to resolve source for schedule-based DV creation.' });
     }
+
+    const { scheduleConfig, schedules, sourceColumn } = await getSchedulesForSource(conn, creationSourceType, creationSourceId);
+    if (!scheduleConfig) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Selected source has no payment schedules configured.' });
+    }
+    if (!schedules.length) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'No payment schedules available for this source.' });
+    }
+
+    const numericScheduleId = Number(schedule_id);
+    if (!Number.isInteger(numericScheduleId) || numericScheduleId <= 0) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'schedule_id is required for DV creation.' });
+    }
+
+    // If the PO is an installment PO bound to a specific schedule, enforce the binding.
+    if (finalPurchaseOrderId && sourceData?.installment_schedule_id) {
+      const boundScheduleId = Number(sourceData.installment_schedule_id);
+      if (Number.isInteger(boundScheduleId) && boundScheduleId > 0 && numericScheduleId !== boundScheduleId) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'Selected schedule does not match the installment PO schedule.' });
+      }
+    }
+
+    const selectedSchedule = schedules.find((entry) => Number(entry.id) === numericScheduleId);
+    if (!selectedSchedule) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Selected payment schedule is invalid for this source.' });
+    }
+    if (selectedSchedule.is_consumed) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'A non-cancelled DV already exists for this payment schedule date.' });
+    }
+
+    const scheduleAmount = Number(selectedSchedule.amount);
+    if (!Number.isFinite(scheduleAmount) || scheduleAmount <= 0) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Selected payment schedule has invalid amount. Please set a valid schedule amount first.' });
+    }
+
+    const selectedScheduleDate = String(selectedSchedule.payment_date || '').trim();
+    if (!selectedScheduleDate) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Selected payment schedule has invalid payment date.' });
+    }
+
+    // Extra race-condition guard right before insert.
+    const [existingByDate] = await conn.query(
+      `SELECT id FROM disbursement_vouchers
+       WHERE ${sourceColumn} = ? AND DATE_FORMAT(payment_date, '%Y-%m-%d') = ? AND status != 'Cancelled'
+       LIMIT 1`,
+      [creationSourceId, selectedScheduleDate]
+    );
+    if (existingByDate.length > 0) {
+      await conn.rollback();
+      return res.status(400).json({ message: 'A non-cancelled DV already exists for this payment schedule date.' });
+    }
+
+    amount = scheduleAmount;
     
     // Generate DV number (YYYY-MM-### format)
     const now = new Date();
@@ -339,7 +668,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         poNumber,
         check_number || null,
         bank_name || null,
-        payment_date || null,
+        selectedScheduleDate,
         received_by || null,
         save_as_draft ? 'Draft' : 'Pending',
         order_number || sourceData.order_number || null,

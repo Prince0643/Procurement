@@ -34,6 +34,33 @@ const resolvePaymentTermFromPR = (code, note) => {
   return PAYMENT_TERM_LABELS[normalizedCode] || normalizedCode;
 };
 
+const getNextPoNumbers = async (conn, prefix, countNeeded) => {
+  if (!countNeeded || countNeeded <= 0) return [];
+
+  // Lock the latest row for this prefix inside the transaction to reduce collisions.
+  const [lastRows] = await conn.query(
+    `SELECT po_number
+     FROM purchase_orders
+     WHERE po_number LIKE ?
+     ORDER BY po_number DESC
+     LIMIT 1
+     FOR UPDATE`,
+    [`${prefix}%`]
+  );
+
+  let counter = 1;
+  if (lastRows.length > 0) {
+    const match = String(lastRows[0].po_number || '').match(/-(\d{3})$/);
+    if (match) counter = Number(match[1]) + 1;
+  }
+
+  const results = [];
+  for (let index = 0; index < countNeeded; index += 1) {
+    results.push(`${prefix}${String(counter + index).padStart(3, '0')}`);
+  }
+  return results;
+};
+
 // Get all POs
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -135,6 +162,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // Create PO (admin only)
 router.post('/', authenticate, requireAdminOnly, async (req, res) => {
+  let conn;
   try {
     const { purchase_request_id, supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items, service_request_id, save_as_draft } = req.body;
     const hasPRSource = Boolean(purchase_request_id);
@@ -264,59 +292,73 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     await assertProjectIsActive(sourceProject || project, {
       providedOrderNumber: sourceOrderNumber
     });
+    await assertOrderNumberUnlocked(sourceOrderNumber, 'purchase order creation');
     
-    // Generate PO number (MTN-YYYY-MM-### format - same as PR)
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Generate PO number prefix (MTN-YYYY-MM-)
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
-    
-    // Get initials from current user or default to MTN
-    const [userResult] = await db.query('SELECT first_name, last_name FROM employees WHERE id = ?', [req.user.id]);
+    const [userResult] = await conn.query('SELECT first_name, last_name FROM employees WHERE id = ? LIMIT 1', [req.user.id]);
     const user = userResult[0] || {};
     const initials = (user.first_name?.[0] || 'M') + (user.last_name?.[0] || 'T') + 'N';
-    
-    // Count existing POs for this month to generate sequence
-    const [countResult] = await db.query(
-      "SELECT COUNT(*) as count FROM purchase_orders WHERE po_number LIKE ?",
-      [`${initials}-${year}-${month}-%`]
-    );
-    const sequence = String(countResult[0].count + 1).padStart(3, '0');
-    const poNumber = `${initials}-${year}-${month}-${sequence}`;
+    const prefix = `${initials}-${year}-${month}-`;
 
-    // Calculate total amount
+    // Calculate total amount (based on items for PR; based on SR amount for SR source)
     const totalAmount = hasSRSource && normalizedItems.length === 0
       ? Number(srDetails?.amount || 0)
       : normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
 
-    // Create PO with po_type and service_request_id support
-    const [result] = await db.query(
-      `INSERT INTO purchase_orders (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type) 
-       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [poNumber, purchase_request_id || null, service_request_id || null, finalSupplierId, req.user.id, totalAmount, expected_delivery_date || null, place_of_delivery || null, project || null, sourceOrderNumber, delivery_term || 'COD', effectivePaymentTerm, notes || null, status, poType]
+    const [poNumber] = await getNextPoNumbers(conn, prefix, 1);
+
+    const [poResult] = await conn.query(
+      `INSERT INTO purchase_orders
+       (po_number, purchase_request_id, service_request_id, supplier_id, prepared_by, total_amount, po_date, expected_delivery_date, place_of_delivery, project, order_number, delivery_term, payment_term, notes, status, po_type,
+        parent_po_id, installment_schedule_id, scheduled_payment_date, scheduled_amount)
+       VALUES (?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, NULL)`,
+      [
+        poNumber,
+        purchase_request_id || null,
+        service_request_id || null,
+        finalSupplierId,
+        req.user.id,
+        totalAmount,
+        expected_delivery_date || null,
+        place_of_delivery || null,
+        project || null,
+        sourceOrderNumber,
+        delivery_term || 'COD',
+        effectivePaymentTerm,
+        notes || null,
+        status,
+        poType
+      ]
     );
 
-    const poId = result.insertId;
+    const poId = poResult.insertId;
 
-    // Insert items
     for (const item of normalizedItems) {
-      await db.query(
+      await conn.query(
         'INSERT INTO purchase_order_items (purchase_order_id, purchase_request_item_id, item_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)',
         [poId, item.purchase_request_item_id || null, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
       );
     }
 
-    // Update PR status to 'PO Created' or Service Request status
     if (hasPRSource) {
-      await db.query(
+      await conn.query(
         "UPDATE purchase_requests SET status = 'PO Created' WHERE id = ?",
         [purchase_request_id]
       );
     } else if (hasSRSource) {
-      await db.query(
+      await conn.query(
         "UPDATE service_requests SET status = 'PO Created' WHERE id = ?",
         [service_request_id]
       );
     }
+
+    await conn.commit();
 
     // Notify Super Admins that a new PO needs approval (only if not a draft)
     if (!save_as_draft) {
@@ -333,20 +375,31 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
       }
     }
 
-    const message = save_as_draft 
-      ? `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} saved as draft` 
+    const message = save_as_draft
+      ? `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} saved as draft`
       : `${poType === 'payment_order' ? 'Payment Request' : 'Purchase Order'} created successfully and is pending approval`;
 
-    res.status(201).json({ 
-      message, 
+    res.status(201).json({
+      message,
       poId,
       poNumber,
+      installment_po_ids: [],
       po_type: poType,
-      status
+      status,
+      create_mode: 'single'
     });
   } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
     console.error('Failed to create purchase order', error);
     res.status(500).json({ message: 'Failed to create purchase order' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -355,7 +408,10 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
   try {
     const { status } = req.body; // 'approved' | 'hold'
 
-    const [pos] = await db.query('SELECT status, order_number FROM purchase_orders WHERE id = ?', [req.params.id]);
+    const [pos] = await db.query(
+      'SELECT status, order_number, parent_po_id, purchase_request_id FROM purchase_orders WHERE id = ?',
+      [req.params.id]
+    );
     if (pos.length === 0) {
       return res.status(404).json({ message: 'Purchase order not found' });
     }
@@ -377,27 +433,38 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       [newStatus, req.params.id]
     );
 
-    // If PO is approved (Ordered), update the related PR to Completed
-    if (status === 'approved') {
-      const [po] = await db.query('SELECT purchase_request_id FROM purchase_orders WHERE id = ?', [req.params.id]);
-      if (po.length > 0) {
-        await db.query(
-          "UPDATE purchase_requests SET status = 'Completed' WHERE id = ?",
-          [po[0].purchase_request_id]
+    const isMasterPo = pos[0].parent_po_id == null;
+
+    // Propagate status to installment POs if this is a master PO.
+    if (isMasterPo) {
+      await db.query(
+        `UPDATE purchase_orders
+         SET status = ?, updated_at = NOW()
+         WHERE parent_po_id = ? AND status IN ('Draft','Pending Approval','On Hold')`,
+        [newStatus, req.params.id]
+      );
+    }
+
+    // If master PO is approved, update the related PR to Completed (installment approvals should not).
+    if (status === 'approved' && isMasterPo && pos[0].purchase_request_id) {
+      await db.query(
+        "UPDATE purchase_requests SET status = 'Completed' WHERE id = ?",
+        [pos[0].purchase_request_id]
+      );
+
+      const [pr] = await db.query(
+        'SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?',
+        [pos[0].purchase_request_id]
+      );
+      if (pr.length > 0) {
+        await createNotification(
+          pr[0].requested_by,
+          'PO Approved - Order Placed',
+          `Your Purchase Order has been approved and placed. Related PR: ${pr[0].pr_number}`,
+          'PO Created',
+          req.params.id,
+          'purchase_order'
         );
-        
-        // Get PR details to notify engineer
-        const [pr] = await db.query('SELECT pr_number, requested_by FROM purchase_requests WHERE id = ?', [po[0].purchase_request_id]);
-        if (pr.length > 0) {
-          await createNotification(
-            pr[0].requested_by,
-            'PO Approved - Order Placed',
-            `Your Purchase Order has been approved and placed. Related PR: ${pr[0].pr_number}`,
-            'PO Created',
-            req.params.id,
-            'purchase_order'
-          );
-        }
       }
     }
 

@@ -19,6 +19,20 @@ const createInputError = (message) => {
 };
 
 const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
+const roundMoney = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0;
+  return Math.round((numeric + Number.EPSILON) * 100) / 100;
+};
+
+const sumScheduleAmounts = (schedules = []) => {
+  return roundMoney(
+    schedules.reduce((sum, schedule) => {
+      const amount = Number(schedule?.amount);
+      return Number.isFinite(amount) ? sum + amount : sum;
+    }, 0)
+  );
+};
 
 const normalizePaymentSchedules = (paymentSchedules) => {
   if (paymentSchedules == null) return [];
@@ -91,6 +105,24 @@ const getPaymentScheduleCount = async (conn, purchaseRequestId) => {
     [purchaseRequestId]
   );
   return rows[0]?.count || 0;
+};
+
+const getExistingPaymentSchedules = async (conn, purchaseRequestId) => {
+  const [rows] = await conn.query(
+    'SELECT DATE_FORMAT(payment_date, "%Y-%m-%d") AS payment_date, amount, note FROM purchase_request_payment_schedules WHERE purchase_request_id = ?',
+    [purchaseRequestId]
+  );
+  return rows || [];
+};
+
+const assertPaymentScheduleTotalsMatch = ({ paymentBasis, schedules, totalAmount }) => {
+  if (paymentBasis !== 'debt') return;
+
+  const schedulesTotal = sumScheduleAmounts(schedules);
+  const prTotal = roundMoney(totalAmount);
+  if (schedulesTotal !== prTotal) {
+    throw createInputError(`Payment schedule total (${schedulesTotal.toFixed(2)}) must match PR total (${prTotal.toFixed(2)}).`);
+  }
 };
 
 // Get all PRs (filtered by user role)
@@ -222,11 +254,73 @@ router.get('/', authenticate, async (req, res) => {
     `, [req.params.id]);
 
     const [paymentSchedules] = await db.query(`
-      SELECT id, purchase_request_id, payment_date, amount, note, created_by, created_at, updated_at
+      SELECT id, purchase_request_id, DATE_FORMAT(payment_date, '%Y-%m-%d') as payment_date, amount, note, created_by, created_at, updated_at
       FROM purchase_request_payment_schedules
       WHERE purchase_request_id = ?
       ORDER BY payment_date ASC
     `, [req.params.id]);
+
+    const [paidDvRows] = await db.query(`
+      SELECT amount
+      FROM disbursement_vouchers
+      WHERE purchase_request_id = ? AND status = 'Paid'
+    `, [req.params.id]);
+
+    const formatDateLabel = (ymd) => {
+      if (!ymd) return '-';
+      const date = new Date(`${ymd}T00:00:00`);
+      return Number.isNaN(date.getTime()) ? ymd : date.toLocaleDateString('en-PH', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      });
+    };
+
+    const today = new Date();
+    const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
+    let paymentReviewNote = 'No payment schedules set';
+    if (paymentSchedules.length > 0) {
+      let remainingPaid = paidDvRows.reduce((sum, row) => {
+        const amount = Number(row?.amount);
+        return Number.isFinite(amount) ? sum + amount : sum;
+      }, 0);
+
+      const schedules = paymentSchedules.map((schedule) => ({
+        payment_date: String(schedule.payment_date || '').trim(),
+        amount: Number.isFinite(Number(schedule.amount)) && Number(schedule.amount) > 0 ? Number(schedule.amount) : 0
+      }));
+
+      const paidFlags = schedules.map(() => false);
+      for (let index = 0; index < schedules.length; index += 1) {
+        const scheduleAmount = schedules[index].amount;
+        if (remainingPaid >= scheduleAmount) {
+          paidFlags[index] = true;
+          remainingPaid -= scheduleAmount;
+        } else {
+          break;
+        }
+      }
+
+      if (!paidFlags[0]) {
+        const firstDate = schedules[0].payment_date;
+        paymentReviewNote = firstDate < todayYmd
+          ? `First payment is not paid — OVERDUE: ${formatDateLabel(firstDate)}`
+          : `First payment is not paid — UPCOMING: ${formatDateLabel(firstDate)}`;
+      } else {
+        const nextUpcomingUnpaidIndex = schedules.findIndex((schedule, index) => !paidFlags[index] && schedule.payment_date >= todayYmd);
+        if (nextUpcomingUnpaidIndex !== -1) {
+          paymentReviewNote = `Next upcoming payment: ${formatDateLabel(schedules[nextUpcomingUnpaidIndex].payment_date)}`;
+        } else if (paidFlags.every(Boolean)) {
+          paymentReviewNote = 'All scheduled payments are paid';
+        } else {
+          const firstUnpaidIndex = paidFlags.findIndex((paid) => !paid);
+          if (firstUnpaidIndex !== -1) {
+            paymentReviewNote = `First unpaid payment is overdue: ${formatDateLabel(schedules[firstUnpaidIndex].payment_date)}`;
+          }
+        }
+      }
+    }
 
     // Get per-item rejection remarks if PR is rejected or sent back to procurement
     let itemRemarks = [];
@@ -248,7 +342,7 @@ router.get('/', authenticate, async (req, res) => {
       rejection_remarks: itemRemarks.filter(r => r.purchase_request_item_id === item.id)
     }));
 
-    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks, payment_schedules: paymentSchedules } });
+    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks, payment_schedules: paymentSchedules, payment_review_note: paymentReviewNote } });
   } catch (error) {
     console.error('Fetch purchase request error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase request: ' + error.message });
@@ -334,6 +428,11 @@ router.post('/', authenticate, async (req, res) => {
     : [];
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    assertPaymentScheduleTotalsMatch({
+      paymentBasis,
+      schedules: normalizedPaymentSchedules,
+      totalAmount
+    });
 
     let supplierAddress = null;
 
@@ -506,6 +605,14 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
     const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
     const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
+    const schedulesForValidation = hasPaymentSchedulesField
+      ? normalizedPaymentSchedules
+      : await getExistingPaymentSchedules(conn, req.params.id);
+    assertPaymentScheduleTotalsMatch({
+      paymentBasis: nextPaymentBasis,
+      schedules: schedulesForValidation,
+      totalAmount
+    });
 
     // Update PR details
     await conn.query(
@@ -1029,6 +1136,21 @@ router.get('/:id/export', authenticate, async (req, res) => {
       JOIN items i ON pri.item_id = i.id
       WHERE pri.purchase_request_id = ?
     `, [req.params.id]);
+
+    // Get payment schedules (date string keeps timezone-safe comparisons)
+    const [paymentSchedules] = await db.query(`
+      SELECT DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date, amount, note
+      FROM purchase_request_payment_schedules
+      WHERE purchase_request_id = ?
+      ORDER BY payment_date ASC
+    `, [req.params.id]);
+
+    // Get paid DV totals tied to this PR (actual released payments).
+    const [paidDvRows] = await db.query(`
+      SELECT amount
+      FROM disbursement_vouchers
+      WHERE purchase_request_id = ? AND status = 'Paid'
+    `, [req.params.id]);
     
     // Load template workbook
     const templatePath = resolveExcelTemplatePath('PURCHASE REQUEST- FINAL-2026.xlsx');
@@ -1083,6 +1205,104 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Add "*** NOTHING FOLLOWS ***" after items
     const nothingFollowsRow = worksheet.getRow(rowNum);
     nothingFollowsRow.getCell(3).value = '*** NOTHING FOLLOWS ***';
+
+    // Add payment terms summary below "*** NOTHING FOLLOWS ***" without touching fixed template totals/signatures.
+    const exportNoteLines = [];
+    const paymentTermsNote = String(pr.payment_terms_note || '').trim();
+    if (paymentTermsNote) {
+      exportNoteLines.push(`Payment Terms: ${paymentTermsNote}`);
+    }
+
+    if (paymentSchedules.length > 0) {
+      const today = new Date();
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const formatMoney = (value) => Number(value || 0).toLocaleString('en-PH', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+      const getDueLabel = (dateYmd, suffix = '') => {
+        const base = dateYmd < todayYmd
+          ? 'OVERDUE'
+          : dateYmd === todayYmd
+            ? 'DUE TODAY'
+            : 'UPCOMING';
+        return suffix ? `${base} ${suffix}` : base;
+      };
+
+      const firstUpcomingOrToday = paymentSchedules.find((schedule) => schedule.payment_date >= todayYmd);
+      const targetSchedule = firstUpcomingOrToday || paymentSchedules[paymentSchedules.length - 1];
+
+      if (targetSchedule?.payment_date) {
+        const dueLabel = getDueLabel(targetSchedule.payment_date);
+
+        const amountNumber = Number(targetSchedule.amount);
+        const amountSuffix = Number.isFinite(amountNumber)
+          ? ` | Amount: ${formatMoney(amountNumber)}`
+          : '';
+
+        exportNoteLines.push(`Next Payment: ${targetSchedule.payment_date}${amountSuffix}`);
+        exportNoteLines.push(`Status: ${dueLabel}`);
+      }
+
+      // Compute first unpaid schedule using FIFO allocation of paid DV amount.
+      let remainingPaid = paidDvRows.reduce((sum, row) => {
+        const amount = Number(row?.amount);
+        return Number.isFinite(amount) ? sum + amount : sum;
+      }, 0);
+
+      let firstPaidSchedule = null;
+      let firstUnpaidSchedule = null;
+      for (const schedule of paymentSchedules) {
+        const amount = Number(schedule?.amount);
+        const scheduleAmount = Number.isFinite(amount) && amount > 0 ? amount : 0;
+        if (remainingPaid >= scheduleAmount) {
+          if (!firstPaidSchedule) {
+            firstPaidSchedule = {
+              payment_date: schedule.payment_date,
+              amount: scheduleAmount
+            };
+          }
+          remainingPaid -= scheduleAmount;
+          continue;
+        }
+        firstUnpaidSchedule = {
+          payment_date: schedule.payment_date,
+          amount: scheduleAmount
+        };
+        break;
+      }
+
+      if (firstPaidSchedule) {
+        exportNoteLines.push(
+          `First Paid Schedule: ${firstPaidSchedule.payment_date} | Amount: ${formatMoney(firstPaidSchedule.amount)} | PAID`
+        );
+      } else if (firstUnpaidSchedule) {
+        exportNoteLines.push(
+          `First Unpaid Schedule: ${firstUnpaidSchedule.payment_date} | Amount: ${formatMoney(firstUnpaidSchedule.amount)} | ${getDueLabel(firstUnpaidSchedule.payment_date, '(unpaid)')}`
+        );
+      } else {
+        exportNoteLines.push('First Unpaid Schedule: None (all scheduled payments fulfilled)');
+      }
+    }
+
+    const maxSummaryRow = 30; // Row 31 contains total; avoid overwriting template footer region.
+    let noteRowNumber = rowNum + 1;
+    for (const line of exportNoteLines) {
+      if (noteRowNumber > maxSummaryRow) break;
+      const mergeRange = `A${noteRowNumber}:F${noteRowNumber}`;
+      try {
+        worksheet.unMergeCells(mergeRange);
+      } catch {
+        // Ignore if row is not currently merged as A:F.
+      }
+      try {
+        worksheet.mergeCells(mergeRange);
+      } catch (mergeError) {
+        console.warn(`Failed to merge note row ${noteRowNumber} (${mergeRange}):`, mergeError?.message || mergeError);
+      }
+      worksheet.getRow(noteRowNumber).getCell(1).value = line;
+      noteRowNumber++;
+    }
     
     // Fill total (F31)
     worksheet.getCell('F31').value = pr.total_amount || 0;
@@ -1164,6 +1384,14 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     : [];
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const schedulesForValidation = hasPaymentSchedulesField
+      ? normalizedPaymentSchedules
+      : await getExistingPaymentSchedules(conn, req.params.id);
+    assertPaymentScheduleTotalsMatch({
+      paymentBasis: nextPaymentBasis,
+      schedules: schedulesForValidation,
+      totalAmount
+    });
 
     let supplierAddress = null;
     const effectiveSupplierId = supplier_id ?? pr.supplier_id;

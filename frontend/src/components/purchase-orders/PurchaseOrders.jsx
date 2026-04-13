@@ -155,6 +155,7 @@ const PurchaseOrders = () => {
   const [orderNumber, setOrderNumber] = useState('')
   const [deliveryTerm, setDeliveryTerm] = useState('COD')
   const [paymentTerm, setPaymentTerm] = useState('CASH')
+  const [inheritedPaymentTerm, setInheritedPaymentTerm] = useState('')
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState([{ item_id: '', quantity: 1, unit_price: 0 }])
   
@@ -207,9 +208,10 @@ const PurchaseOrders = () => {
   const loadPRItems = async (prId) => {
     try {
       const pr = await purchaseRequestService.getById(prId)
-      const inheritedPaymentTerm = resolvePaymentTermFromPR(pr.payment_terms_code, pr.payment_terms_note)
-      if (inheritedPaymentTerm) {
-        setPaymentTerm(inheritedPaymentTerm)
+      const resolvedTerm = resolvePaymentTermFromPR(pr.payment_terms_code, pr.payment_terms_note)
+      setInheritedPaymentTerm(resolvedTerm || '')
+      if (resolvedTerm) {
+        setPaymentTerm(resolvedTerm)
       }
       if (pr.items && pr.items.length > 0) {
         setItems(pr.items.map(item => ({
@@ -236,6 +238,7 @@ const PurchaseOrders = () => {
     setOrderNumber('')
     setDeliveryTerm('COD')
     setPaymentTerm('CASH')
+    setInheritedPaymentTerm('')
     setNotes('')
     setItems([{ item_id: '', quantity: 1, unit_price: 0 }])
     // Reset PR search
@@ -594,6 +597,7 @@ const PurchaseOrders = () => {
                           setShowPrResults(false)
                           setProject('')
                           setOrderNumber('')
+                          setInheritedPaymentTerm('')
                           setItems([{ item_id: '', quantity: 1, unit_price: 0 }])
                         }}
                         className="mr-2"
@@ -614,6 +618,7 @@ const PurchaseOrders = () => {
                           setShowPrResults(false)
                           setProject('')
                           setOrderNumber('')
+                          setInheritedPaymentTerm('')
                           setItems([])
                         }}
                         className="mr-2"
@@ -727,11 +732,26 @@ const PurchaseOrders = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <Select label="Delivery Term" value={deliveryTerm} onChange={(e) => setDeliveryTerm(e.target.value)} options={[{value:'COD',label:'COD'},{value:'7 days',label:'7 days'},{value:'15 days',label:'15 days'},{value:'30 days',label:'30 days'}]} />
-                  <Select label="Payment Term" value={paymentTerm} onChange={(e) => setPaymentTerm(e.target.value)} options={[{value:'CASH',label:'CASH'},{value:'CHECK',label:'CHECK'},{value:'BANK TRANSFER',label:'BANK TRANSFER'}]} />
-                  {sourceType === 'pr' && (
-                    <p className="mt-1 text-xs text-gray-500">
-                      Payment Term is inherited from PR payment terms during creation.
-                    </p>
+                  {sourceType === 'pr' ? (
+                    <div className="mb-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Inherited Payment Terms</label>
+                      <input
+                        type="text"
+                        value={inheritedPaymentTerm || '-'}
+                        readOnly
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-700 cursor-not-allowed"
+                      />
+                      <p className="mt-1 text-xs text-gray-500">
+                        Payment terms are inherited from selected PR and used as payment reference.
+                      </p>
+                    </div>
+                  ) : (
+                    <Select
+                      label="Payment Term"
+                      value={paymentTerm}
+                      onChange={(e) => setPaymentTerm(e.target.value)}
+                      options={[{value:'CASH',label:'CASH'},{value:'CHECK',label:'CHECK'},{value:'BANK TRANSFER',label:'BANK TRANSFER'}]}
+                    />
                   )}
                 </div>
 

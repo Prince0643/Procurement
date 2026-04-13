@@ -11,6 +11,16 @@ export const disbursementVoucherService = {
     return response.data.disbursementVoucher;
   },
 
+  getSchedules: async (sourceType, sourceId) => {
+    const response = await api.get('/disbursement-vouchers/schedules', {
+      params: {
+        source_type: sourceType,
+        source_id: sourceId
+      }
+    });
+    return response.data;
+  },
+
   create: async (dvData) => {
     const response = await api.post('/disbursement-vouchers', dvData);
     return response.data;
