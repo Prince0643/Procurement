@@ -4,6 +4,8 @@ import db from '../config/database.js';
 import { createNotification, getSuperAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 
@@ -110,7 +112,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If PR source, validate PR
     if (purchase_request_id) {
       const [prs] = await db.query(
-        `SELECT pr_number, payment_basis, requested_by, purpose, payment_terms_code, payment_terms_note
+        `SELECT pr_number, payment_basis, requested_by, purpose, payment_terms_code, payment_terms_note, project, order_number
          FROM purchase_requests
          WHERE id = ?`,
         [purchase_request_id]
@@ -137,6 +139,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
           message: 'Payment Terms on PR are incomplete. Set Payment Terms in PR approval before creating Payment Request.'
         });
       }
+      await assertProjectIsActive(prDetails.project || project, {
+        providedOrderNumber: prDetails.order_number || order_number
+      });
       sourcePurpose = prDetails.purpose || sourcePurpose;
       sourceRequestedBy = prDetails.requested_by;
     }
@@ -144,7 +149,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If SR source, validate SR
     if (service_request_id) {
       const [srs] = await db.query(
-        'SELECT sr_number, requested_by, purpose, status, service_type FROM service_requests WHERE id = ?',
+        'SELECT sr_number, requested_by, purpose, status, service_type, project, order_number FROM service_requests WHERE id = ?',
         [service_request_id]
       );
       if (srs.length === 0) {
@@ -159,6 +164,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       if (srDetails.service_type !== 'Service') {
         return res.status(400).json({ message: 'Only Service Requests with service_type = Service can create payment requests' });
       }
+      await assertProjectIsActive(srDetails.project || project, {
+        providedOrderNumber: srDetails.order_number || order_number
+      });
       sourcePurpose = srDetails.purpose || sourcePurpose;
       sourceRequestedBy = srDetails.requested_by;
     }
@@ -166,7 +174,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If CR source, validate CR
     if (cash_request_id) {
       const [crs] = await db.query(
-        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name FROM cash_requests WHERE id = ?',
+        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name, project, order_number FROM cash_requests WHERE id = ?',
         [cash_request_id]
       );
       if (crs.length === 0) {
@@ -181,6 +189,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       if (crDetails.cr_type !== 'payment_request') {
         return res.status(400).json({ message: 'Only Cash Requests with cr_type = payment_request can create payment requests' });
       }
+      await assertProjectIsActive(crDetails.project || project, {
+        providedOrderNumber: crDetails.order_number || order_number
+      });
       sourcePurpose = crDetails.purpose || sourcePurpose;
       sourceRequestedBy = crDetails.requested_by;
     }
@@ -298,7 +309,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     }
   } catch (error) {
     console.error('Failed to create payment request', error);
-    res.status(500).json({ message: 'Failed to create payment request: ' + error.message });
+    res.status(error.statusCode || 500).json({ message: 'Failed to create payment request: ' + error.message });
   }
 });
 
@@ -322,6 +333,7 @@ router.put('/:id/approve', authenticate, requireSuperAdmin, async (req, res) => 
       console.log('DEBUG: Payment request not found');
       return res.status(404).json({ message: 'Payment request not found' });
     }
+    await assertOrderNumberUnlocked(paymentRequests[0].order_number, 'approval');
 
     const currentStatus = paymentRequests[0].status;
     console.log('DEBUG: Current payment request status:', currentStatus);
@@ -389,6 +401,9 @@ router.put('/:id/approve', authenticate, requireSuperAdmin, async (req, res) => 
 
     res.json({ message: `Payment request ${normalizedStatus.toLowerCase()} successfully`, status: normalizedStatus });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Failed to approve payment request', error);
     res.status(500).json({ message: 'Failed to approve payment request' });
   }
@@ -401,13 +416,14 @@ router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
     
     // Get current payment request to check its status and get PR id
     const [paymentRequests] = await db.query(
-      'SELECT purchase_request_id, status FROM payment_requests WHERE id = ?',
+      'SELECT purchase_request_id, status, order_number FROM payment_requests WHERE id = ?',
       [req.params.id]
     );
     
     if (paymentRequests.length === 0) {
       return res.status(404).json({ message: 'Payment request not found' });
     }
+    await assertOrderNumberUnlocked(paymentRequests[0].order_number, 'status update');
     
     const currentStatus = paymentRequests[0].status;
     const purchaseRequestId = paymentRequests[0].purchase_request_id;
@@ -427,6 +443,9 @@ router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
 
     res.json({ message: 'Payment request status updated successfully' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to update payment request status' });
   }
 });

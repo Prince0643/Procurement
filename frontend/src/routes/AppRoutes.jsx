@@ -7,7 +7,6 @@ const PaymentOrders = lazy(() => import('../components/PaymentOrders'));
 const CashRequests = lazy(() => import('../components/CashRequests'));
 const ServiceRequestsManagement = lazy(() => import('../components/service-requests/ServiceRequestsManagement'));
 const ServiceRequestApproval = lazy(() => import('../components/service-requests/ServiceRequestApproval'));
-const CashRequestsManagement = lazy(() => import('../components/cash-requests/CashRequestsManagement'));
 const ReimbursementsManagement = lazy(() => import('../components/reimbursements/ReimbursementsManagement'));
 const Settings = lazy(() => import('../components/settings/Settings'));
 

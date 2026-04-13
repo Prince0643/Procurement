@@ -4,6 +4,8 @@ import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/aut
 import ExcelJS from 'exceljs';
 import fs from 'fs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 
@@ -79,6 +81,7 @@ router.get('/:id', authenticate, async (req, res) => {
     if (paymentOrders.length === 0) {
       return res.status(404).json({ message: 'Payment order not found' });
     }
+    await assertOrderNumberUnlocked(paymentOrders[0].order_number, 'status update');
     
     const paymentOrder = paymentOrders[0];
     console.log('DEBUG Payment Order:', { id: paymentOrder.id, service_request_id: paymentOrder.service_request_id, sr_number: paymentOrder.sr_number });
@@ -112,7 +115,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If SR source, validate SR
     if (service_request_id) {
       const [srs] = await db.query(
-        'SELECT sr_number, requested_by, purpose, status, sr_type FROM service_requests WHERE id = ?',
+        'SELECT sr_number, requested_by, purpose, status, sr_type, project, order_number FROM service_requests WHERE id = ?',
         [service_request_id]
       );
       if (srs.length === 0) {
@@ -127,6 +130,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       if (srDetails.sr_type !== 'payment_order') {
         return res.status(400).json({ message: 'Only Service Requests with sr_type = payment_order can create Payment Orders' });
       }
+      await assertProjectIsActive(srDetails.project || project, {
+        providedOrderNumber: srDetails.order_number || order_number
+      });
       sourcePurpose = srDetails.purpose || '';
       sourceRequestedBy = srDetails.requested_by;
     }
@@ -134,7 +140,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     // If CR source, validate CR
     if (cash_request_id) {
       const [crs] = await db.query(
-        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name FROM cash_requests WHERE id = ?',
+        'SELECT cr_number, requested_by, purpose, status, cr_type, amount, supplier_id, supplier_name, project, order_number FROM cash_requests WHERE id = ?',
         [cash_request_id]
       );
       if (crs.length === 0) {
@@ -149,6 +155,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       if (crDetails.cr_type !== 'payment_order') {
         return res.status(400).json({ message: 'Only Cash Requests with cr_type = payment_order can create Payment Orders' });
       }
+      await assertProjectIsActive(crDetails.project || project, {
+        providedOrderNumber: crDetails.order_number || order_number
+      });
       sourcePurpose = crDetails.purpose || '';
       sourceRequestedBy = crDetails.requested_by;
     }
@@ -168,6 +177,9 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       if (rmbDetails.status !== 'For Purchase') {
         return res.status(400).json({ message: 'Only reimbursements with status For Purchase can create Payment Orders' });
       }
+      await assertProjectIsActive(rmbDetails.project || project, {
+        providedOrderNumber: rmbDetails.order_number || order_number
+      });
       sourcePurpose = rmbDetails.purpose || '';
       sourceRequestedBy = rmbDetails.requested_by;
     }
@@ -227,7 +239,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Error creating payment order:', error);
-    res.status(500).json({ message: 'Failed to create payment order' });
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to create payment order' });
   }
 });
 
@@ -257,6 +269,9 @@ router.patch('/:id/status', authenticate, requireAdmin, async (req, res) => {
     
     res.json({ message: 'Payment order status updated successfully' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Error updating payment order status:', error);
     res.status(500).json({ message: 'Failed to update payment order status' });
   }
@@ -286,6 +301,7 @@ router.patch('/:id/super-admin-approve', authenticate, requireSuperAdmin, async 
     if (paymentOrders.length === 0) {
       return res.status(404).json({ message: 'Payment order not found' });
     }
+    await assertOrderNumberUnlocked(paymentOrders[0].order_number, 'approval');
     
     await db.query(
       'UPDATE payment_orders SET status = ?, updated_at = NOW() WHERE id = ?',
@@ -294,6 +310,9 @@ router.patch('/:id/super-admin-approve', authenticate, requireSuperAdmin, async 
     
     res.json({ message: `Payment order ${status} successfully` });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Error super admin approving payment order:', error);
     res.status(500).json({ message: 'Failed to approve payment order' });
   }

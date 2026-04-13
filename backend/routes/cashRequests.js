@@ -4,6 +4,8 @@ import db from '../config/database.js';
 import { createNotification, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 const normalizePaymentTermsNote = (note) => {
@@ -264,6 +266,7 @@ router.post('/', authenticate, async (req, res) => {
       payment_terms_note,
       payment_schedules
     } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Validate required fields
     if (!purpose || !String(purpose).trim()) {
@@ -349,8 +352,8 @@ router.post('/', authenticate, async (req, res) => {
         // ignore
       }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Create cash request error:', error);
     res.status(500).json({ message: 'Failed to create cash request: ' + error.message });
@@ -364,6 +367,7 @@ router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
     const { purpose, description, amount, quantity, unit, project, project_address, date_needed, remarks, order_number, supplier_id, supplier_name, supplier_address, cr_type, payment_terms_note, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if CR exists
     const [crs] = await db.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
@@ -372,6 +376,8 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const cr = crs[0];
+    await assertOrderNumberUnlocked(cr.order_number, 'approval');
+    await assertOrderNumberUnlocked(cr.order_number, 'approval');
 
     // Only the original requester can update
     if (cr.requested_by !== req.user.id) {
@@ -435,8 +441,8 @@ router.put('/:id', authenticate, async (req, res) => {
         // ignore
       }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Update cash request error:', error);
     res.status(500).json({ message: 'Failed to update cash request: ' + error.message });
@@ -455,6 +461,7 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     }
 
     const cr = crs[0];
+    await assertOrderNumberUnlocked(cr.order_number, 'approval');
 
     // Only the original requester can submit
     if (cr.requested_by !== req.user.id) {
@@ -591,6 +598,9 @@ router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         // ignore
       }
     }
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Approve cash request error:', error);
     res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });
   } finally {
@@ -686,6 +696,9 @@ router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, r
         // ignore
       }
     }
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Admin approve cash request error:', error);
     res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });
   } finally {
@@ -780,6 +793,9 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       } catch {
         // ignore
       }
+    }
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Super admin approve cash request error:', error);
     res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });

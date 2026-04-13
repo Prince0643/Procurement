@@ -8,6 +8,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -187,7 +189,7 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     if (hasPRSource) {
       // Get PR details including payment_basis
       const [prs] = await db.query(
-        `SELECT pr_number, payment_basis, supplier_id as pr_supplier_id, order_number,
+        `SELECT pr_number, payment_basis, supplier_id as pr_supplier_id, order_number, project,
                 payment_terms_code, payment_terms_note
          FROM purchase_requests
          WHERE id = ?`,
@@ -233,7 +235,7 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
     } else if (hasSRSource) {
       // Service Requests always create Payment Orders
       const [srs] = await db.query(
-        'SELECT sr_number, supplier_id as sr_supplier_id, order_number, amount FROM service_requests WHERE id = ?',
+        'SELECT sr_number, supplier_id as sr_supplier_id, order_number, amount, project FROM service_requests WHERE id = ?',
         [service_request_id]
       );
       if (srs.length === 0) {
@@ -257,6 +259,11 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
         message: 'Selected source has no order number. Update the source document first.'
       });
     }
+
+    const sourceProject = hasPRSource ? prDetails?.project : srDetails?.project;
+    await assertProjectIsActive(sourceProject || project, {
+      providedOrderNumber: sourceOrderNumber
+    });
     
     // Generate PO number (MTN-YYYY-MM-### format - same as PR)
     const now = new Date();
@@ -348,10 +355,11 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
   try {
     const { status } = req.body; // 'approved' | 'hold'
 
-    const [pos] = await db.query('SELECT status FROM purchase_orders WHERE id = ?', [req.params.id]);
+    const [pos] = await db.query('SELECT status, order_number FROM purchase_orders WHERE id = ?', [req.params.id]);
     if (pos.length === 0) {
       return res.status(404).json({ message: 'Purchase order not found' });
     }
+    await assertOrderNumberUnlocked(pos[0].order_number, 'approval');
 
     const currentStatus = pos[0].status;
     if (currentStatus !== 'Draft' && currentStatus !== 'On Hold' && currentStatus !== 'Pending Approval') {
@@ -395,6 +403,9 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
 
     res.json({ message: `Purchase order ${status} successfully`, status: newStatus });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Failed to approve purchase order', error);
     res.status(500).json({ message: 'Failed to approve purchase order' });
   }
@@ -404,6 +415,11 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
 router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
     const { status } = req.body; // 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'
+    const [pos] = await db.query('SELECT order_number FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+    await assertOrderNumberUnlocked(pos[0].order_number, 'status update');
     
     await db.query(
       'UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?',
@@ -412,6 +428,9 @@ router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
 
     res.json({ message: 'Purchase order status updated successfully' });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to update purchase order status' });
   }
 });

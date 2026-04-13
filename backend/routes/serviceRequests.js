@@ -4,6 +4,8 @@ import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 const normalizePaymentTermsNote = (note) => {
@@ -283,6 +285,7 @@ router.post('/', authenticate, async (req, res) => {
       payment_terms_note,
       payment_schedules
     } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Validate required fields
     if (!purpose || !String(purpose).trim()) {
@@ -358,8 +361,8 @@ router.post('/', authenticate, async (req, res) => {
         // ignore
       }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Create service request error:', error);
     res.status(500).json({ message: 'Failed to create service request: ' + error.message });
@@ -373,6 +376,7 @@ router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
     const { purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number, payment_terms_note, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if SR exists
     const [srs] = await db.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
@@ -381,6 +385,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const sr = srs[0];
+    await assertOrderNumberUnlocked(sr.order_number, 'approval');
 
     // Only the original requester can update
     if (sr.requested_by !== req.user.id) {
@@ -447,8 +452,8 @@ router.put('/:id', authenticate, async (req, res) => {
         // ignore
       }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Update service request error:', error);
     res.status(500).json({ message: 'Failed to update service request: ' + error.message });
@@ -467,6 +472,7 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     }
 
     const sr = srs[0];
+    await assertOrderNumberUnlocked(sr.order_number, 'approval');
 
     // Only the original requester can submit
     if (sr.requested_by !== req.user.id) {
@@ -631,6 +637,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     res.json({ message: `Service request ${status} by Procurement successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Procurement approval error:', error);
     res.status(500).json({ message: 'Failed to update service request: ' + error.message });
   } finally {
@@ -728,6 +737,9 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
     res.json({ message: `Service request ${status} successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Super Admin approval error:', error);
     res.status(500).json({ message: 'Failed to approve service request: ' + error.message });
   } finally {

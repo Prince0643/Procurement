@@ -7,6 +7,7 @@ import { disbursementVoucherService } from '../../services/disbursementVouchers'
 import { cashRequestService } from '../../services/cashRequests';
 import { paymentOrderService } from '../../services/paymentOrders';
 import { reimbursementService } from '../../services/reimbursements';
+import api from '../../services/api';
 import { socketService } from '../../services/socket';
 import PRPreviewModal from '../purchase-requests/PRPreviewModal';
 import POPreviewModal from '../purchase-orders/POPreviewModal';
@@ -128,6 +129,12 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+const LockedBadge = () => (
+  <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-700 border border-red-200">
+    Locked
+  </span>
+);
+
 const Approvals = () => {
   const [activeTab, setActiveTab] = useState('purchase-orders');
   const [poSubTab, setPoSubTab] = useState('pending');
@@ -170,6 +177,7 @@ const Approvals = () => {
   const [rejectRemarks, setRejectRemarks] = useState('');
   const [itemRemarks, setItemRemarks] = useState({});
   const [prAmounts, setPrAmounts] = useState({});
+  const [lockedOrderNumbers, setLockedOrderNumbers] = useState(new Set());
   const { user } = useAuth();
 
   useEffect(() => {
@@ -214,7 +222,7 @@ const Approvals = () => {
     try {
       setLoading(true);
       console.log('Approvals: Calling APIs...');
-      const [pos, prs, paymentReqs, srs, crs, dvs, paymentOrdersData, reimbursementsData] = await Promise.all([
+      const [pos, prs, paymentReqs, srs, crs, dvs, paymentOrdersData, reimbursementsData, orderNumbersResponse] = await Promise.all([
         purchaseOrderService.getAll(),
         purchaseRequestService.getAll('all'),
         paymentRequestService.getAll(),
@@ -222,7 +230,8 @@ const Approvals = () => {
         cashRequestService.getAll(),
         disbursementVoucherService.getAll(),
         paymentOrderService.getAll(),
-        reimbursementService.getAll()
+        reimbursementService.getAll(),
+        api.get('/order-numbers', { cache: false })
       ]);
       console.log('Approvals: APIs returned, setting state...');
       setPurchaseOrders(pos);
@@ -233,6 +242,13 @@ const Approvals = () => {
       setDisbursementVouchers(dvs);
       setPaymentOrders(paymentOrdersData);
       setReimbursements(reimbursementsData);
+      const locked = new Set(
+        (orderNumbersResponse?.data || [])
+          .filter((row) => row?.is_locked)
+          .map((row) => String(row?.order_number || '').trim())
+          .filter(Boolean)
+      );
+      setLockedOrderNumbers(locked);
       console.log('Approvals: State updated, PR count:', prs.length);
     } catch (err) {
       console.error('Approvals: Failed to fetch data', err);
@@ -240,6 +256,36 @@ const Approvals = () => {
       setLoading(false);
     }
   };
+
+  const isLockedOrderNumber = (orderNumber) => {
+    const normalized = String(orderNumber || '').trim();
+    return normalized ? lockedOrderNumbers.has(normalized) : false;
+  };
+
+  const blockIfLockedOrder = (orderNumber) => {
+    if (!isLockedOrderNumber(orderNumber)) return false;
+    alert(`Order number "${orderNumber}" is locked. Approval actions are disabled.`);
+    return true;
+  };
+
+  const getRecordOrderNumber = (record) => {
+    if (!record) return '';
+    return (
+      record.order_number ||
+      record.pr_order_number ||
+      record.purchase_request_order_number ||
+      record.request_order_number ||
+      record.project_order_number ||
+      ''
+    );
+  };
+
+  const renderStatusWithLock = (record) => (
+    <div className="flex items-center gap-2 flex-wrap">
+      <StatusBadge status={record?.status} />
+      {isLockedOrderNumber(getRecordOrderNumber(record)) && <LockedBadge />}
+    </div>
+  );
 
   // Filter POs by status
   const pendingPOs = purchaseOrders.filter(po => 
@@ -356,6 +402,8 @@ const Approvals = () => {
   );
 
   const handleApprovePO = async (id) => {
+    const po = purchaseOrders.find((row) => row.id === id);
+    if (blockIfLockedOrder(po?.order_number)) return;
     try {
       setProcessingId(id);
       await purchaseOrderService.superAdminApprove(id, 'approved');
@@ -368,6 +416,8 @@ const Approvals = () => {
   };
 
   const handleHoldPO = async (id) => {
+    const po = purchaseOrders.find((row) => row.id === id);
+    if (blockIfLockedOrder(po?.order_number)) return;
     try {
       setProcessingId(id);
       await purchaseOrderService.superAdminApprove(id, 'hold');
@@ -380,6 +430,8 @@ const Approvals = () => {
   };
 
   const handleApprovePR = async (id) => {
+    const prRow = purchaseRequests.find((row) => row.id === id);
+    if (blockIfLockedOrder(prRow?.order_number)) return;
     // Optimistic UI update - immediately move to approved
     setPurchaseRequests(prev => prev.map(pr => 
       pr.id === id ? { ...pr, status: 'For Purchase' } : pr
@@ -398,6 +450,7 @@ const Approvals = () => {
   };
 
   const handleRejectPR = async (pr) => {
+    if (blockIfLockedOrder(pr?.order_number)) return;
     setRejectPR(pr);
     setRejectRemarks('');
     setItemRemarks({});
@@ -419,6 +472,7 @@ const Approvals = () => {
 
   const submitRejection = async () => {
     if (!rejectPR) return;
+    if (blockIfLockedOrder(rejectPR?.order_number)) return;
     
     // Optimistic UI update - immediately remove from list
     setPurchaseRequests(prev => prev.filter(pr => pr.id !== rejectPR.id));
@@ -521,6 +575,8 @@ const Approvals = () => {
   };
 
   const handleHoldPR = async (id) => {
+    const prRow = purchaseRequests.find((row) => row.id === id);
+    if (blockIfLockedOrder(prRow?.order_number)) return;
     // Optimistic UI update - immediately move to on hold
     setPurchaseRequests(prev => prev.map(pr => 
       pr.id === id ? { ...pr, status: 'On Hold' } : pr
@@ -555,6 +611,8 @@ const Approvals = () => {
   };
 
   const handleApprovePaymentRequest = async (id) => {
+    const row = paymentRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await paymentRequestService.approve(id, 'approved');
@@ -567,6 +625,8 @@ const Approvals = () => {
   };
 
   const handleHoldPaymentRequest = async (id) => {
+    const row = paymentRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await paymentRequestService.updateStatus(id, 'On Hold');
@@ -579,6 +639,8 @@ const Approvals = () => {
   };
 
   const handleApproveSR = async (id) => {
+    const row = serviceRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await serviceRequestService.superAdminApprove(id, 'approved');
@@ -591,6 +653,8 @@ const Approvals = () => {
   };
 
   const handleRejectSR = async (id) => {
+    const row = serviceRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await serviceRequestService.superAdminApprove(id, 'rejected');
@@ -603,6 +667,8 @@ const Approvals = () => {
   };
 
   const handleApproveCR = async (id) => {
+    const row = cashRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await cashRequestService.superAdminApprove(id, 'approved');
@@ -615,6 +681,8 @@ const Approvals = () => {
   };
 
   const handleRejectCR = async (id) => {
+    const row = cashRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await cashRequestService.superAdminApprove(id, 'rejected');
@@ -627,6 +695,8 @@ const Approvals = () => {
   };
 
   const handleHoldCR = async (id) => {
+    const row = cashRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await cashRequestService.superAdminApprove(id, 'hold');
@@ -639,6 +709,8 @@ const Approvals = () => {
   };
 
   const handleApprovePaymentOrder = async (id) => {
+    const row = paymentOrders.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await paymentOrderService.superAdminApprove(id, 'approved');
@@ -651,6 +723,8 @@ const Approvals = () => {
   };
 
   const handleHoldPaymentOrder = async (id) => {
+    const row = paymentOrders.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       await paymentOrderService.superAdminApprove(id, 'hold');
@@ -676,6 +750,8 @@ const Approvals = () => {
   };
 
   const handleApproveReimbursement = async (id, status) => {
+    const row = reimbursements.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
       const rejectionReason = status === 'rejected' ? prompt('Enter rejection reason:') : null;
@@ -956,7 +1032,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1038,7 +1114,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1112,7 +1188,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.pr_number || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.supplier_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.total_amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1187,7 +1263,7 @@ const Approvals = () => {
                 <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
-                    <StatusBadge status={po.status} />
+                    {renderStatusWithLock(po)}
                   </div>
                   <InfoRow label="PR Number" value={po.pr_number || '-'} />
                   <InfoRow label="Supplier" value={po.supplier_name || '-'} />
@@ -1245,7 +1321,7 @@ const Approvals = () => {
                 <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
-                    <StatusBadge status={po.status} />
+                    {renderStatusWithLock(po)}
                   </div>
                   <InfoRow label="PR Number" value={po.pr_number || '-'} />
                   <InfoRow label="Supplier" value={po.supplier_name || '-'} />
@@ -1294,7 +1370,7 @@ const Approvals = () => {
                 <div key={po.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{po.po_number}</span>
-                    <StatusBadge status={po.status} />
+                    {renderStatusWithLock(po)}
                   </div>
                   <InfoRow label="PR Number" value={po.pr_number || '-'} />
                   <InfoRow label="Supplier" value={po.supplier_name || '-'} />
@@ -1442,7 +1518,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(calculatePRAmount(pr, prAmounts))}</td>
-                        <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1525,7 +1601,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(calculatePRAmount(pr))}</td>
-                        <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1592,7 +1668,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(calculatePRAmount(pr, prAmounts))}</td>
-                        <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -1660,7 +1736,7 @@ const Approvals = () => {
                 <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                    <StatusBadge status={pr.status} />
+                    {renderStatusWithLock(pr)}
                   </div>
                   <InfoRow label="Payee" value={pr.payee_name || '-'} />
                   <InfoRow label="Project" value={pr.project || '-'} />
@@ -1727,7 +1803,7 @@ const Approvals = () => {
                 <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                    <StatusBadge status={pr.status} />
+                    {renderStatusWithLock(pr)}
                   </div>
                   <InfoRow label="Payee" value={pr.payee_name || '-'} />
                   <InfoRow label="Project" value={pr.project || '-'} />
@@ -1776,7 +1852,7 @@ const Approvals = () => {
                 <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                    <StatusBadge status={pr.status} />
+                    {renderStatusWithLock(pr)}
                   </div>
                   <InfoRow label="Payee" value={pr.payee_name || '-'} />
                   <InfoRow label="Project" value={pr.project || '-'} />
@@ -1921,7 +1997,7 @@ const Approvals = () => {
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
-                      <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                      <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button
@@ -1994,7 +2070,7 @@ const Approvals = () => {
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
-                      <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                      <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button
@@ -2067,7 +2143,7 @@ const Approvals = () => {
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
-                      <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
+                      <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <Button
@@ -2142,7 +2218,7 @@ const Approvals = () => {
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                  <StatusBadge status={pr.status} />
+                  {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />
                 <InfoRow label="Project" value={pr.project || '-'} />
@@ -2177,7 +2253,7 @@ const Approvals = () => {
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                  <StatusBadge status={pr.status} />
+                  {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />
                 <InfoRow label="Project" value={pr.project || '-'} />
@@ -2207,7 +2283,7 @@ const Approvals = () => {
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
-                  <StatusBadge status={pr.status} />
+                  {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />
                 <InfoRow label="Project" value={pr.project || '-'} />
@@ -2327,7 +2403,7 @@ const Approvals = () => {
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-600">{getDVSupplierName(dv)}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(dv.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={dv.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(dv)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2406,7 +2482,7 @@ const Approvals = () => {
                         </td>
                         <td className="py-3 px-4 text-sm text-gray-600">{getDVSupplierName(dv)}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(dv.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={dv.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(dv)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2576,7 +2652,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{sr.sr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{sr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(sr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={sr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(sr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2657,7 +2733,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{sr.sr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{sr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(sr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={sr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(sr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2730,7 +2806,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{sr.sr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{sr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(sr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={sr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(sr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2901,7 +2977,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{cr.cr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{cr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(cr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={cr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(cr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -2996,7 +3072,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{cr.cr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{cr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(cr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={cr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(cr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3075,7 +3151,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm font-medium text-gray-900">{cr.cr_number}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{cr.purpose || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(cr.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={cr.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(cr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3254,7 +3330,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.payee_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3342,7 +3418,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.payee_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3422,7 +3498,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{po.payee_name || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{po.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(po.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={po.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(po)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3601,7 +3677,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(r)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3678,7 +3754,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(r)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button
@@ -3746,7 +3822,7 @@ const Approvals = () => {
                         <td className="py-3 px-4 text-sm text-gray-600">{r.payee}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{r.project || '-'}</td>
                         <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(r.amount)}</td>
-                        <td className="py-3 px-4"><StatusBadge status={r.status} /></td>
+                        <td className="py-3 px-4">{renderStatusWithLock(r)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
                             <Button

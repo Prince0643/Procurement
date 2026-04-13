@@ -1,7 +1,13 @@
 import express from 'express';
 import db from '../config/database.js';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireProcurement } from '../middleware/auth.js';
 import ExcelJS from 'exceljs';
+import {
+  getLockedOrderNumbers,
+  getOrderNumberLock,
+  lockOrderNumber,
+  normalizeOrderNumber
+} from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 
@@ -66,7 +72,12 @@ router.get('/', authenticate, async (req, res) => {
     `;
     
     const [orderNumbers] = await db.query(query);
-    res.json(orderNumbers);
+    const lockedSet = await getLockedOrderNumbers(orderNumbers.map((row) => row.order_number));
+    const withLockState = orderNumbers.map((row) => ({
+      ...row,
+      is_locked: lockedSet.has(normalizeOrderNumber(row.order_number))
+    }));
+    res.json(withLockState);
   } catch (error) {
     console.error('Error fetching order numbers:', error);
     res.status(500).json({ message: 'Failed to fetch order numbers' });
@@ -229,9 +240,22 @@ router.get('/dashboard/:orderNumber', authenticate, async (req, res) => {
       }
     }
 
+    const lock = await getOrderNumberLock(orderNumber);
+
     res.json({
       orderNumber,
       project: project || 'All Projects',
+      lock: {
+        isLocked: Boolean(lock),
+        lockedAt: lock?.locked_at || null,
+        lockedBy: lock
+          ? {
+              id: lock.locked_by,
+              first_name: lock.first_name || null,
+              last_name: lock.last_name || null
+            }
+          : null
+      },
       projects,
       plannedCost,
       budgetDetails: budgets,
@@ -289,6 +313,57 @@ router.get('/dashboard/:orderNumber', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error fetching order number dashboard:', error);
     res.status(500).json({ message: 'Failed to fetch dashboard data' });
+  }
+});
+
+// Permanently lock an order number (procurement/admin/super_admin)
+router.post('/:orderNumber/lock', authenticate, requireProcurement, async (req, res) => {
+  try {
+    const { orderNumber } = req.params;
+    const normalized = normalizeOrderNumber(orderNumber);
+    if (!normalized) {
+      return res.status(400).json({ message: 'Order number is required' });
+    }
+
+    // Ensure order number exists in at least one request/order table before locking.
+    const [rows] = await db.query(
+      `SELECT 1
+       FROM (
+         SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM purchase_requests
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM service_requests
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM cash_requests
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM reimbursements
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM purchase_orders
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM payment_requests
+         UNION ALL SELECT order_number COLLATE utf8mb4_unicode_ci AS order_number FROM payment_orders
+       ) all_orders
+       WHERE all_orders.order_number = ? COLLATE utf8mb4_unicode_ci
+       LIMIT 1`,
+      [normalized]
+    );
+
+    if (!rows.length) {
+      return res.status(404).json({ message: 'Order number not found' });
+    }
+
+    const lock = await lockOrderNumber(normalized, req.user.id);
+    res.json({
+      message: `Order number "${normalized}" is now locked.`,
+      lock: {
+        order_number: lock?.order_number || normalized,
+        locked_at: lock?.locked_at || null,
+        locked_by: lock
+          ? {
+              id: lock.locked_by,
+              first_name: lock.first_name || null,
+              last_name: lock.last_name || null
+            }
+          : null
+      }
+    });
+  } catch (error) {
+    console.error('Error locking order number:', error);
+    res.status(error.statusCode || 500).json({ message: error.message || 'Failed to lock order number' });
   }
 });
 

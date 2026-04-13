@@ -15,6 +15,7 @@ import {
 import SRPreviewModal from './SRPreviewModal';
 import { serviceRequestService } from '../../services/serviceRequests';
 import { supplierService } from '../../services/suppliers';
+import { projectService } from '../../services/projects';
 import { useAuth } from '../../contexts/AuthContext';
 import { socketService } from '../../services/socket';
 
@@ -233,31 +234,7 @@ const ServiceRequestsManagement = () => {
   const fetchBranches = async () => {
     try {
       setLoadingBranches(true)
-      const response = await fetch('https://jajr.xandree.com/get_branches_api.php', {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-      console.log('Branches API response:', data)
-      
-      // Handle the API response format
-      let branchList = []
-      if (Array.isArray(data)) {
-        // API returns array directly: [{id, branch_name}, ...]
-        branchList = data
-      } else if (data && Array.isArray(data.data)) {
-        // API returns { data: [...] }
-        branchList = data.data
-      } else if (data && Array.isArray(data.branches)) {
-        // API returns { branches: [...] }
-        branchList = data.branches
-      }
-      
-      console.log('Extracted branches:', branchList)
+      const branchList = await projectService.getActive()
       setBranches(branchList)
     } catch (err) {
       console.error('Failed to fetch branches:', err)

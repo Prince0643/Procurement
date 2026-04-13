@@ -30,6 +30,7 @@ import paymentRequestRoutes from './routes/paymentRequests.js';
 import paymentOrdersRoutes from './routes/paymentOrders.js';
 import pricingHistoryRoutes from './routes/pricingHistory.js';
 import orderNumberRoutes from './routes/orderNumbers.js';
+import projectRoutes from './routes/projects.js';
 import { startPaymentScheduleReminderJob } from './jobs/paymentScheduleReminders.js';
 
 dotenv.config();
@@ -181,6 +182,7 @@ app.use('/api/payment-requests', paymentRequestRoutes);
 app.use('/api/payment-orders', paymentOrdersRoutes);
 app.use('/api/pricing-history', pricingHistoryRoutes);
 app.use('/api/order-numbers', orderNumberRoutes);
+app.use('/api/projects', projectRoutes);
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 

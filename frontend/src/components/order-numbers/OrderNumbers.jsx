@@ -11,6 +11,7 @@ import {
   X, CheckCircle, FileSpreadsheet
 } from 'lucide-react';
 import axios from 'axios';
+import { useAuth } from '../../contexts/AuthContext';
 import PRPreviewModal from '../purchase-requests/PRPreviewModal';
 import SRPreviewModal from '../service-requests/SRPreviewModal';
 import CRPreviewModal from '../cash-requests/CRPreviewModal';
@@ -85,6 +86,7 @@ const StatusBadge = ({ status }) => {
 
 const OrderNumbers = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [orderNumbers, setOrderNumbers] = useState([]);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [selectedProject, setSelectedProject] = useState('all');
@@ -110,6 +112,7 @@ const OrderNumbers = () => {
   const [isEditingPlannedCost, setIsEditingPlannedCost] = useState(false);
   const [plannedCostInput, setPlannedCostInput] = useState('');
   const [savingPlannedCost, setSavingPlannedCost] = useState(false);
+  const [lockingOrder, setLockingOrder] = useState(false);
 
   useEffect(() => {
     fetchOrderNumbers();
@@ -142,7 +145,7 @@ const OrderNumbers = () => {
       setError(null);
       const token = localStorage.getItem('token');
       const params = project && project !== 'all' ? `?project=${encodeURIComponent(project)}` : '';
-      const response = await axios.get(`${API_BASE_URL}/order-numbers/dashboard/${orderNumber}${params}`, {
+      const response = await axios.get(`${API_BASE_URL}/order-numbers/dashboard/${encodeURIComponent(orderNumber)}${params}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDashboardData(response.data);
@@ -169,7 +172,7 @@ const OrderNumbers = () => {
       }
 
       await axios.put(
-        `${API_BASE_URL}/order-numbers/${selectedOrder.order_number}/budget`,
+        `${API_BASE_URL}/order-numbers/${encodeURIComponent(selectedOrder.order_number)}/budget`,
         {
           planned_cost: value,
           project: selectedProject === 'all' ? null : selectedProject
@@ -186,6 +189,37 @@ const OrderNumbers = () => {
       alert('Failed to save planned cost');
     } finally {
       setSavingPlannedCost(false);
+    }
+  };
+
+  const canLockOrderNumber = ['procurement', 'admin', 'super_admin'].includes(user?.role);
+  const isSelectedOrderLocked = Boolean(dashboardData?.lock?.isLocked);
+
+  const handleLockOrderNumber = async () => {
+    if (!selectedOrder?.order_number || !canLockOrderNumber || isSelectedOrderLocked) return;
+    const confirmed = window.confirm(
+      `Lock order number "${selectedOrder.order_number}" permanently?\n\nThis will block new requests and resubmits tied to this order number.`
+    );
+    if (!confirmed) return;
+
+    try {
+      setLockingOrder(true);
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API_BASE_URL}/order-numbers/${encodeURIComponent(selectedOrder.order_number)}/lock`,
+        {},
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      await Promise.all([
+        fetchOrderNumbers(),
+        fetchDashboardData(selectedOrder.order_number, selectedProject)
+      ]);
+      alert(`Order number "${selectedOrder.order_number}" locked successfully.`);
+    } catch (error) {
+      console.error('Failed to lock order number:', error);
+      alert(error.response?.data?.message || 'Failed to lock order number');
+    } finally {
+      setLockingOrder(false);
     }
   };
 
@@ -715,6 +749,23 @@ const OrderNumbers = () => {
             </div>
             
             <div className="flex items-center gap-4">
+              {isSelectedOrderLocked ? (
+                <span className="text-xs font-semibold uppercase tracking-wide px-3 py-1 rounded-full bg-red-100 text-red-700">
+                  Locked
+                </span>
+              ) : null}
+
+              {canLockOrderNumber && (
+                <Button
+                  variant="outline"
+                  onClick={handleLockOrderNumber}
+                  disabled={lockingOrder || isSelectedOrderLocked}
+                  className={isSelectedOrderLocked ? 'opacity-60 cursor-not-allowed' : ''}
+                >
+                  {lockingOrder ? 'Locking...' : (isSelectedOrderLocked ? 'Order Locked' : 'Lock Order Number')}
+                </Button>
+              )}
+
               {/* Planned Cost Input */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-600">Planned Cost:</span>
@@ -1103,9 +1154,16 @@ const OrderNumbers = () => {
                   <div className="p-2 bg-yellow-100 rounded-lg">
                     <FileText className="w-5 h-5 text-yellow-600" />
                   </div>
-                  <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                    View Dashboard
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {order.is_locked && (
+                      <span className="text-xs font-semibold text-red-700 bg-red-100 px-2 py-1 rounded">
+                        Locked
+                      </span>
+                    )}
+                    <span className="text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      View Dashboard
+                    </span>
+                  </div>
                 </div>
                 <h3 className="font-semibold text-gray-900 mb-1">{order.order_number}</h3>
                 <div className="space-y-1">

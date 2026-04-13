@@ -8,6 +8,8 @@ import db from '../config/database.js';
 import reimbursementUpload from '../middleware/reimbursementUpload.js';
 import { createNotification, getAdmins, getSuperAdmins } from '../utils/notifications.js';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -322,6 +324,7 @@ router.post('/', authenticate, async (req, res) => {
       payment_terms_note,
       payment_schedules
     } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     if (!payee || !String(payee).trim()) {
       return res.status(400).json({ message: 'Payee is required' });
@@ -375,8 +378,8 @@ router.post('/', authenticate, async (req, res) => {
     if (conn) {
       try { await conn.rollback(); } catch { /* ignore */ }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Create reimbursement error:', error);
     res.status(500).json({ message: 'Failed to create reimbursement: ' + error.message });
@@ -463,6 +466,7 @@ router.put('/:id', authenticate, async (req, res) => {
   let conn;
   try {
     const { payee, purpose, project, project_address, order_number, amount, date_needed, remarks, payment_terms_note, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
     if (rows.length === 0) {
@@ -470,6 +474,7 @@ router.put('/:id', authenticate, async (req, res) => {
     }
 
     const r = rows[0];
+    await assertOrderNumberUnlocked(r.order_number, 'approval');
 
     if (r.requested_by !== req.user.id) {
       return res.status(403).json({ message: 'Only the original requester can update this reimbursement' });
@@ -525,8 +530,8 @@ router.put('/:id', authenticate, async (req, res) => {
     if (conn) {
       try { await conn.rollback(); } catch { /* ignore */ }
     }
-    if (error?.statusCode === 400) {
-      return res.status(400).json({ message: error.message });
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Update reimbursement error:', error);
     res.status(500).json({ message: 'Failed to update reimbursement: ' + error.message });
@@ -689,6 +694,9 @@ router.put('/:id/approve', authenticate, async (req, res) => {
   } catch (error) {
     if (conn) {
       try { await conn.rollback(); } catch { /* ignore */ }
+    }
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
     }
     console.error('Approve reimbursement error:', error);
     res.status(500).json({ message: 'Failed to approve reimbursement: ' + error.message });

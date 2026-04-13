@@ -3,8 +3,9 @@ import { itemService } from '../../services/items'
 import { supplierService } from '../../services/suppliers'
 import { categoryService } from '../../services/categories'
 import { purchaseRequestService } from '../../services/purchaseRequests'
+import { projectService } from '../../services/projects'
 import { useAuth } from '../../contexts/AuthContext'
-import { Search, Package, ShoppingCart, Plus, X, Trash2 } from 'lucide-react'
+import { Search, Package, ShoppingCart, Plus, X, Trash2, Tag, Pencil } from 'lucide-react'
 
 const Card = ({ children, className = '' }) => (
   <div className={`bg-white rounded-lg shadow-sm border border-gray-200 ${className}`}>
@@ -105,13 +106,26 @@ const formatScheduleAmount = (amount) => {
   return formatCurrency(Number(amount) || 0)
 }
 
+const DEFAULT_ITEM_FORM = {
+  item_code: '',
+  item_name: '',
+  description: '',
+  category_id: '',
+  unit: 'pcs'
+}
+
 const Items = () => {
   const { user } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('all')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(20)
+  const [totalItems, setTotalItems] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   const [branches, setBranches] = useState([])
   const [loadingBranches, setLoadingBranches] = useState(false)
@@ -144,43 +158,49 @@ const Items = () => {
   const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
   const [remarks, setRemarks] = useState('')
   const [showAddItemModal, setShowAddItemModal] = useState(false)
-  const [newItemForm, setNewItemForm] = useState({
-    item_code: '',
-    item_name: '',
-    description: '',
-    category_id: '',
-    unit: 'pcs'
-  })
+  const [showEditItemModal, setShowEditItemModal] = useState(false)
+  const [showCategoryModal, setShowCategoryModal] = useState(false)
+  const [newItemForm, setNewItemForm] = useState(DEFAULT_ITEM_FORM)
+  const [editItemForm, setEditItemForm] = useState(DEFAULT_ITEM_FORM)
+  const [editingItem, setEditingItem] = useState(null)
   const [addingItem, setAddingItem] = useState(false)
+  const [updatingItem, setUpdatingItem] = useState(false)
+  const [categoryForm, setCategoryForm] = useState({
+    name: '',
+    description: ''
+  })
+  const [editingCategoryId, setEditingCategoryId] = useState(null)
+  const [editingCategoryForm, setEditingCategoryForm] = useState({
+    name: '',
+    description: ''
+  })
+  const [submittingCategory, setSubmittingCategory] = useState(false)
 
   useEffect(() => {
-    fetchItems()
     fetchBranches()
     fetchCategories()
   }, [])
 
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery.trim())
+    }, 300)
+
+    return () => clearTimeout(timeoutId)
+  }, [searchQuery])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchQuery, selectedCategory])
+
+  useEffect(() => {
+    fetchItems()
+  }, [currentPage, debouncedSearchQuery, selectedCategory])
+
   const fetchBranches = async () => {
     try {
       setLoadingBranches(true)
-      const response = await fetch('https://jajr.xandree.com/get_branches_api.php', {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      const data = await response.json()
-
-      let branchList = []
-      if (Array.isArray(data)) {
-        branchList = data
-      } else if (data && Array.isArray(data.data)) {
-        branchList = data.data
-      } else if (data && Array.isArray(data.branches)) {
-        branchList = data.branches
-      }
-
+      const branchList = await projectService.getActive()
       setBranches(branchList)
     } catch (err) {
       console.error('Failed to fetch branches:', err)
@@ -213,17 +233,55 @@ const Items = () => {
   const fetchItems = async () => {
     try {
       setLoading(true)
-      const data = await itemService.getAll()
-      setItems(data)
-      // Initialize quantities to 1
-      const qtys = {}
-      data.forEach(item => qtys[item.id] = 1)
-      setItemQuantities(qtys)
+      setError('')
+      const data = await itemService.getPage({
+        page: currentPage,
+        pageSize,
+        search: debouncedSearchQuery || undefined,
+        category: selectedCategory === 'all' ? undefined : selectedCategory
+      })
+      setItems(data.items || [])
+      setTotalItems(data.total || 0)
+      setTotalPages(data.totalPages || 1)
+      setCurrentPage(data.page || 1)
+
+      setItemQuantities((prev) => {
+        const next = { ...prev }
+        ;(data.items || []).forEach((item) => {
+          if (next[item.id] == null || next[item.id] === '') {
+            next[item.id] = 1
+          }
+        })
+        return next
+      })
     } catch (err) {
       setError('Failed to fetch items')
     } finally {
       setLoading(false)
     }
+  }
+
+  const closeAddItemModal = () => {
+    setShowAddItemModal(false)
+    setNewItemForm(DEFAULT_ITEM_FORM)
+  }
+
+  const openEditItemModal = (item) => {
+    setEditingItem(item)
+    setEditItemForm({
+      item_code: item?.item_code || '',
+      item_name: item?.item_name || '',
+      description: item?.description || '',
+      category_id: item?.category_id ? String(item.category_id) : '',
+      unit: item?.unit || 'pcs'
+    })
+    setShowEditItemModal(true)
+  }
+
+  const closeEditItemModal = () => {
+    setShowEditItemModal(false)
+    setEditingItem(null)
+    setEditItemForm(DEFAULT_ITEM_FORM)
   }
 
   const openPreview = () => {
@@ -324,24 +382,22 @@ const Items = () => {
       return
     }
 
+    if (!newItemForm.category_id) {
+      alert('Category is required')
+      return
+    }
+
     try {
       setAddingItem(true)
       const dataToSubmit = {
         ...newItemForm,
+        category_id: parseInt(newItemForm.category_id, 10),
         unit_price: newItemForm.unit_price ? parseFloat(newItemForm.unit_price) : null,
         reorder_level: newItemForm.reorder_level ? parseInt(newItemForm.reorder_level) : null
       }
       await itemService.create(dataToSubmit)
-      alert('Item created successfully!')
-      setShowAddItemModal(false)
-      setNewItemForm({
-        item_code: '',
-        item_name: '',
-        description: '',
-        category_id: '',
-        unit: 'pcs'
-      })
-      fetchItems() // Refresh the list
+      closeAddItemModal()
+      fetchItems()
     } catch (err) {
       console.error('Failed to create item:', err)
       alert('Failed to create item: ' + (err.response?.data?.message || err.message))
@@ -349,6 +405,130 @@ const Items = () => {
       setAddingItem(false)
     }
   }
+
+  const handleEditItemSubmit = async (e) => {
+    e.preventDefault()
+    if (!editingItem?.id) {
+      alert('No item selected for editing')
+      return
+    }
+
+    if (!editItemForm.item_code || !editItemForm.item_name) {
+      alert('Item Code and Item Name are required')
+      return
+    }
+
+    if (!editItemForm.category_id) {
+      alert('Category is required')
+      return
+    }
+
+    try {
+      setUpdatingItem(true)
+      await itemService.update(editingItem.id, {
+        ...editItemForm,
+        category_id: parseInt(editItemForm.category_id, 10)
+      })
+      closeEditItemModal()
+      fetchItems()
+    } catch (err) {
+      console.error('Failed to update item:', err)
+      alert('Failed to update item: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setUpdatingItem(false)
+    }
+  }
+
+  const closeCategoryModal = () => {
+    setShowCategoryModal(false)
+    setCategoryForm({ name: '', description: '' })
+    setEditingCategoryId(null)
+    setEditingCategoryForm({ name: '', description: '' })
+  }
+
+  const handleCreateCategory = async (e) => {
+    e.preventDefault()
+    if (!categoryForm.name.trim()) {
+      alert('Category name is required')
+      return
+    }
+
+    try {
+      setSubmittingCategory(true)
+      const response = await categoryService.create({
+        name: categoryForm.name.trim(),
+        description: categoryForm.description.trim()
+      })
+      await fetchCategories()
+      setCategoryForm({ name: '', description: '' })
+      alert(response?.message || 'Category created successfully')
+    } catch (err) {
+      alert('Failed to create category: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setSubmittingCategory(false)
+    }
+  }
+
+  const startEditingCategory = (category) => {
+    setEditingCategoryId(category.id)
+    setEditingCategoryForm({
+      name: category.category_name || '',
+      description: category.description || ''
+    })
+  }
+
+  const cancelEditingCategory = () => {
+    setEditingCategoryId(null)
+    setEditingCategoryForm({ name: '', description: '' })
+  }
+
+  const handleUpdateCategory = async (categoryId) => {
+    if (!editingCategoryForm.name.trim()) {
+      alert('Category name is required')
+      return
+    }
+
+    try {
+      setSubmittingCategory(true)
+      const response = await categoryService.update(categoryId, {
+        name: editingCategoryForm.name.trim(),
+        description: editingCategoryForm.description.trim()
+      })
+      await fetchCategories()
+      setEditingCategoryId(null)
+      setEditingCategoryForm({ name: '', description: '' })
+      alert(response?.message || 'Category updated successfully')
+    } catch (err) {
+      alert('Failed to update category: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setSubmittingCategory(false)
+    }
+  }
+
+  const handleDeleteCategory = async (category) => {
+    if (!confirm(`Delete category "${category.category_name}"?`)) return
+
+    try {
+      setSubmittingCategory(true)
+      const response = await categoryService.delete(category.id)
+      await fetchCategories()
+
+      if (selectedCategory === category.category_name) {
+        setSelectedCategory('all')
+      }
+
+      if (String(newItemForm.category_id || '') === String(category.id)) {
+        setNewItemForm((prev) => ({ ...prev, category_id: '' }))
+      }
+
+      alert(response?.message || 'Category deleted successfully')
+    } catch (err) {
+      alert('Failed to delete category: ' + (err.response?.data?.message || err.message))
+    } finally {
+      setSubmittingCategory(false)
+    }
+  }
+
   const resetPRForm = () => {
     setPurpose('')
     setProject('')
@@ -449,6 +629,8 @@ const Items = () => {
     return cart.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
   }
 
+  const getItemCategoryName = (item) => item?.category_name || item?.category || ''
+
   const handleSubmitPR = async (e) => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
@@ -489,8 +671,13 @@ const Items = () => {
     }
   }
 
-  // Get unique categories from items + add 'all' option
-  const filterCategories = ['all', ...new Set(items.map(item => item.category).filter(Boolean))]
+  const canManageCatalog = ['procurement', 'admin', 'super_admin'].includes(user?.role)
+
+  // Get categories from database + add 'all' option
+  const filterCategories = [
+    'all',
+    ...new Set(dbCategories.map((category) => category.category_name).filter(Boolean))
+  ]
   
   // Category options from database for the add item modal
   const categoryOptions = dbCategories.map(cat => ({ value: cat.id, label: cat.category_name }))
@@ -498,15 +685,6 @@ const Items = () => {
   const unitOptions = [
     'pcs', 'box', 'set', 'unit', 'meter', 'roll', 'kg', 'liter', 'gallon', 'sheet', 'pack', 'bundle'
   ]
-
-  // Filter items
-  const filteredItems = items.filter(item => {
-    const matchesSearch = !searchQuery || 
-      item.item_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.item_code?.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory
-    return matchesSearch && matchesCategory
-  })
 
   if (loading) {
     return (
@@ -531,7 +709,14 @@ const Items = () => {
           <p className="text-sm text-gray-500">Select items and quantities for your purchase request</p>
         </div>
         <div className="flex items-center gap-2 sm:gap-3">
-          {user?.role !== 'engineer' && (
+          {canManageCatalog && (
+            <Button variant="secondary" onClick={() => setShowCategoryModal(true)} className="px-3 py-2">
+              <Tag className="w-4 h-4 mr-2" />
+              <span className="hidden sm:inline">Manage Categories</span>
+              <span className="sm:hidden">Categories</span>
+            </Button>
+          )}
+          {canManageCatalog && (
             <Button onClick={() => setShowAddItemModal(true)} className="px-3 py-2">
               <Plus className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Add New Item</span>
@@ -641,17 +826,17 @@ const Items = () => {
 
       {/* Items List View */}
       <Card>
-        {filteredItems.length === 0 ? (
+        {items.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>No items found</p>
-            {searchQuery && <p className="text-sm">Try adjusting your search</p>}
+            {(debouncedSearchQuery || selectedCategory !== 'all') && <p className="text-sm">Try adjusting your search or category</p>}
           </div>
         ) : (
           <>
             {/* Mobile grid */}
             <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
-              {filteredItems.map(item => {
+              {items.map(item => {
                 const inCart = cart.find(c => c.item_id === item.id)
                 return (
                   <div key={item.id} className="border border-gray-200 rounded-lg p-3 flex flex-col">
@@ -679,13 +864,24 @@ const Items = () => {
                       {inCart ? (
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-medium text-green-700">In cart: {inCart.quantity}</span>
-                          <button
-                            onClick={() => removeFromCart(item.id)}
-                            className="text-red-500 hover:text-red-700"
-                            aria-label="Remove from cart"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2">
+                            {canManageCatalog && (
+                              <button
+                                onClick={() => openEditItemModal(item)}
+                                className="text-gray-500 hover:text-gray-700"
+                                aria-label="Edit item"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => removeFromCart(item.id)}
+                              className="text-red-500 hover:text-red-700"
+                              aria-label="Remove from cart"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
@@ -705,6 +901,15 @@ const Items = () => {
                             <Plus className="w-4 h-4 mr-1" />
                             Add
                           </Button>
+                          {canManageCatalog && (
+                            <button
+                              onClick={() => openEditItemModal(item)}
+                              className="px-2 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
+                              aria-label="Edit item"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
@@ -715,7 +920,7 @@ const Items = () => {
 
             {/* Desktop/tablet list */}
             <div className="hidden sm:block divide-y divide-gray-200">
-              {filteredItems.map(item => {
+              {items.map(item => {
                 const inCart = cart.find(c => c.item_id === item.id)
                 return (
                   <div key={item.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
@@ -728,9 +933,9 @@ const Items = () => {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-gray-900">{item.item_name}</p>
-                        {item.category && (
+                        {getItemCategoryName(item) && (
                           <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
-                            {item.category}
+                            {getItemCategoryName(item)}
                           </span>
                         )}
                       </div>
@@ -744,6 +949,16 @@ const Items = () => {
 
                     {/* Add to Cart */}
                     <div className="flex items-center gap-3">
+                      {canManageCatalog && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => openEditItemModal(item)}
+                        >
+                          <Pencil className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                      )}
                       {inCart ? (
                         <div className="flex items-center gap-2 text-green-600">
                           <span className="text-sm font-medium">In cart: {inCart.quantity}</span>
@@ -777,6 +992,40 @@ const Items = () => {
                   </div>
                 )
               })}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-gray-500">
+                {totalItems > 0 ? (
+                  <>
+                    Showing {(currentPage - 1) * pageSize + 1}-
+                    {Math.min(currentPage * pageSize, totalItems)} of {totalItems} items
+                  </>
+                ) : (
+                  'No items found'
+                )}
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage <= 1 || loading}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Page {totalItems === 0 ? 0 : currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage >= totalPages || loading || totalItems === 0}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           </>
         )}
@@ -967,6 +1216,122 @@ const Items = () => {
         </div>
       )}
 
+      {/* Manage Categories Modal */}
+      {showCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Manage Categories</h3>
+                <p className="text-sm text-gray-500 mt-1">Visible to everyone, editable by non-engineers only.</p>
+              </div>
+              <button onClick={closeCategoryModal} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <form onSubmit={handleCreateCategory} className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-4">Add Category</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <Input
+                    label="Category Name *"
+                    value={categoryForm.name}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })}
+                    placeholder="e.g., Electrical"
+                    required
+                  />
+                  <Input
+                    label="Description"
+                    value={categoryForm.description}
+                    onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })}
+                    placeholder="Optional description"
+                  />
+                </div>
+                <div className="flex justify-end">
+                  <Button type="submit" disabled={submittingCategory}>
+                    {submittingCategory ? 'Saving...' : 'Create Category'}
+                  </Button>
+                </div>
+              </form>
+
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-medium text-gray-900">Existing Categories</h4>
+                  {loadingCategories && <span className="text-sm text-gray-500">Refreshing...</span>}
+                </div>
+
+                {dbCategories.length === 0 ? (
+                  <div className="text-center py-10 text-gray-500 border border-dashed border-gray-300 rounded-lg">
+                    No categories found
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {dbCategories.map((category) => {
+                      const isEditing = editingCategoryId === category.id
+
+                      return (
+                        <div key={category.id} className="border border-gray-200 rounded-lg p-4">
+                          {isEditing ? (
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <Input
+                                  label="Category Name *"
+                                  value={editingCategoryForm.name}
+                                  onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, name: e.target.value })}
+                                  placeholder="Category name"
+                                  required
+                                />
+                                <Input
+                                  label="Description"
+                                  value={editingCategoryForm.description}
+                                  onChange={(e) => setEditingCategoryForm({ ...editingCategoryForm, description: e.target.value })}
+                                  placeholder="Optional description"
+                                />
+                              </div>
+                              <div className="flex justify-end gap-3">
+                                <Button type="button" variant="secondary" onClick={cancelEditingCategory} disabled={submittingCategory}>
+                                  Cancel
+                                </Button>
+                                <Button type="button" onClick={() => handleUpdateCategory(category.id)} disabled={submittingCategory}>
+                                  {submittingCategory ? 'Saving...' : 'Save Changes'}
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-medium text-gray-900">{category.category_name}</p>
+                                  <span className="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded">
+                                    {category.items_count || 0} items
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-500 mt-1">{category.description || 'No description'}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button type="button" variant="secondary" size="sm" onClick={() => startEditingCategory(category)}>
+                                  <Pencil className="w-4 h-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <Button type="button" variant="danger" size="sm" onClick={() => handleDeleteCategory(category)} disabled={submittingCategory}>
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Delete
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Item Modal */}
       {showAddItemModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
@@ -1009,11 +1374,12 @@ const Items = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <Select
-                  label="Category"
+                  label="Category *"
                   value={newItemForm.category_id || ''}
                   onChange={(e) => setNewItemForm({ ...newItemForm, category_id: e.target.value })}
                   options={categoryOptions}
                   placeholder="Select category..."
+                  required
                 />
                 <Select
                   label="Unit"
@@ -1024,11 +1390,81 @@ const Items = () => {
               </div>
 
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <Button type="button" variant="secondary" onClick={() => setShowAddItemModal(false)} disabled={addingItem}>
+                <Button type="button" variant="secondary" onClick={closeAddItemModal} disabled={addingItem}>
                   Cancel
                 </Button>
                 <Button type="submit" disabled={addingItem}>
                   {addingItem ? 'Creating...' : 'Create Item'}
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditItemModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Item</h3>
+              <button onClick={closeEditItemModal} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditItemSubmit} className="p-6">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Item Code *"
+                  value={editItemForm.item_code}
+                  onChange={(e) => setEditItemForm({ ...editItemForm, item_code: e.target.value })}
+                  placeholder="e.g., ITM001"
+                  required
+                />
+                <Input
+                  label="Item Name *"
+                  value={editItemForm.item_name}
+                  onChange={(e) => setEditItemForm({ ...editItemForm, item_name: e.target.value })}
+                  placeholder="e.g., Cement"
+                  required
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <textarea
+                  value={editItemForm.description}
+                  onChange={(e) => setEditItemForm({ ...editItemForm, description: e.target.value })}
+                  placeholder="Optional description..."
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <Select
+                  label="Category *"
+                  value={editItemForm.category_id || ''}
+                  onChange={(e) => setEditItemForm({ ...editItemForm, category_id: e.target.value })}
+                  options={categoryOptions}
+                  placeholder="Select category..."
+                  required
+                />
+                <Select
+                  label="Unit"
+                  value={editItemForm.unit}
+                  onChange={(e) => setEditItemForm({ ...editItemForm, unit: e.target.value })}
+                  options={unitOptions.map(u => ({ value: u, label: u }))}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button type="button" variant="secondary" onClick={closeEditItemModal} disabled={updatingItem}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={updatingItem}>
+                  {updatingItem ? 'Saving...' : 'Save Changes'}
                 </Button>
               </div>
             </form>

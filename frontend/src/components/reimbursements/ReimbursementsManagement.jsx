@@ -14,6 +14,7 @@ import {
   Download
 } from 'lucide-react';
 import { reimbursementService } from '../../services/reimbursements';
+import { projectService } from '../../services/projects';
 import { useAuth } from '../../contexts/AuthContext';
 import ReimbursementPreviewModal from './ReimbursementPreviewModal';
 
@@ -94,16 +95,7 @@ const ReimbursementsManagement = () => {
     setShowCreateModal(true);
     setLoadingBranches(true);
     try {
-      const branchesData = await fetch('https://jajr.xandree.com/get_branches_api.php').then(r => r.json());
-      // Handle branches API response format
-      let branchList = [];
-      if (Array.isArray(branchesData)) {
-        branchList = branchesData;
-      } else if (branchesData && Array.isArray(branchesData.data)) {
-        branchList = branchesData.data;
-      } else if (branchesData && Array.isArray(branchesData.branches)) {
-        branchList = branchesData.branches;
-      }
+      const branchList = await projectService.getActive();
       setBranches(branchList);
     } catch (err) {
       console.error('Failed to load branches', err);

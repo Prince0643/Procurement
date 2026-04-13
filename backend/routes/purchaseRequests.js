@@ -4,6 +4,8 @@ import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
+import { assertProjectIsActive } from '../utils/branchProjects.js';
+import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
 const normalizePaymentTermsNote = (note) => {
@@ -258,6 +260,7 @@ router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
     const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
     const isDraft = save_as_draft === true;
 
     // Only validate required fields if NOT saving as draft
@@ -434,6 +437,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
     const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if PR exists and is draft
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -664,11 +668,12 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     conn = await db.getConnection();
     await conn.beginTransaction();
     
-    const [prs] = await conn.query('SELECT status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const [prs] = await conn.query('SELECT status, order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
       await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
+    await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
     
     const currentStatus = prs[0].status;
     
@@ -776,6 +781,9 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Super Admin first approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
   } finally {
@@ -800,7 +808,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     await conn.beginTransaction();
     
     const [prs] = await conn.query(
-      'SELECT status, payment_basis, payment_terms_note FROM purchase_requests WHERE id = ?',
+      'SELECT status, payment_basis, payment_terms_note, order_number FROM purchase_requests WHERE id = ?',
       [req.params.id]
     );
     if (prs.length === 0) {
@@ -809,6 +817,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     }
     
     const currentStatus = prs[0].status;
+    await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
     
     if (currentStatus !== 'For Procurement Review') {
       await conn.rollback();
@@ -981,6 +990,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus, total_amount: totalAmount });
   } catch (error) {
     if (conn) await conn.rollback();
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     console.error('Procurement approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
   } finally {
@@ -1101,6 +1113,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
     const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if PR exists and is rejected
     const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
@@ -1256,6 +1269,11 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 router.put('/:id/approve', authenticate, async (req, res) => {
   try {
     const { status, remarks } = req.body;
+    const [prs] = await db.query('SELECT order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
     
     await db.query(
       'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
@@ -1264,6 +1282,9 @@ router.put('/:id/approve', authenticate, async (req, res) => {
 
     res.json({ message: `Purchase request ${status} successfully` });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to update purchase request' });
   }
 });
@@ -1305,6 +1326,11 @@ router.put('/:id/received', authenticate, async (req, res) => {
 router.put('/:id/status', authenticate, async (req, res) => {
   try {
     const { status } = req.body;
+    const [prs] = await db.query('SELECT order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    await assertOrderNumberUnlocked(prs[0].order_number, 'status update');
     
     await db.query(
       'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
@@ -1313,6 +1339,9 @@ router.put('/:id/status', authenticate, async (req, res) => {
 
     res.json({ message: `Purchase request status updated to ${status} successfully`, status });
   } catch (error) {
+    if (error?.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message });
+    }
     res.status(500).json({ message: 'Failed to update purchase request status' });
   }
 });

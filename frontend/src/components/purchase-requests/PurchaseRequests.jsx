@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { supplierService } from '../../services/suppliers'
 import { socketService } from '../../services/socket'
+import { projectService } from '../../services/projects'
 import PRPreviewModal from './PRPreviewModal'
 import { ChevronUp, ChevronDown, Plus, FileSpreadsheet, Edit, Trash2, X, Eye, CheckCircle, XCircle, Pause, Search } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
@@ -42,7 +43,18 @@ const Button = ({ children, variant = 'primary', size = 'md', type = 'button', o
   )
 }
 
-const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, multiline = false, rows = 4 }) => (
+const Input = ({
+  label,
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  multiline = false,
+  rows = 4,
+  readOnly = false,
+  disabled = false
+}) => (
   <div className="mb-4">
     <label className="block text-sm font-medium text-gray-700 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
@@ -55,6 +67,8 @@ const Input = ({ label, type = 'text', value, onChange, placeholder, required = 
         rows={rows}
         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 resize-y"
         required={required}
+        readOnly={readOnly}
+        disabled={disabled}
       />
     ) : (
       <input
@@ -64,12 +78,14 @@ const Input = ({ label, type = 'text', value, onChange, placeholder, required = 
         placeholder={placeholder}
         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
         required={required}
+        readOnly={readOnly}
+        disabled={disabled}
       />
     )}
   </div>
 )
 
-const Select = ({ label, value, onChange, options, required = false, placeholder = 'Select...' }) => (
+const Select = ({ label, value, onChange, options, required = false, placeholder = 'Select...', disabled = false }) => (
   <div className="mb-4">
     <label className="block text-sm font-medium text-gray-700 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
@@ -79,6 +95,7 @@ const Select = ({ label, value, onChange, options, required = false, placeholder
       onChange={onChange}
       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
       required={required}
+      disabled={disabled}
     >
       <option value="">{placeholder}</option>
       {options.map(opt => (
@@ -205,6 +222,8 @@ const PurchaseRequests = () => {
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingPR, setEditingPR] = useState(null)
   const [suppliers, setSuppliers] = useState([])
+  const [branches, setBranches] = useState([])
+  const [loadingBranches, setLoadingBranches] = useState(false)
   const [loadingForm, setLoadingForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   
@@ -597,9 +616,14 @@ const PurchaseRequests = () => {
     setEditingPR(pr)
     setShowEditModal(true)
     setLoadingForm(true)
+    setLoadingBranches(true)
     try {
-      const suppliersData = await supplierService.getAll()
+      const [suppliersData, branchList] = await Promise.all([
+        supplierService.getAll(),
+        projectService.getActive()
+      ])
       setSuppliers(suppliersData)
+      setBranches(branchList)
       
       // Load PR details
       const fullPr = await purchaseRequestService.getById(pr.id)
@@ -632,6 +656,7 @@ const PurchaseRequests = () => {
       closeEditModal()
     } finally {
       setLoadingForm(false)
+      setLoadingBranches(false)
     }
   }
 
@@ -689,13 +714,19 @@ const PurchaseRequests = () => {
   const openCreateModal = async () => {
     setShowCreateModal(true)
     setLoadingForm(true)
+    setLoadingBranches(true)
     try {
-      const suppliersData = await supplierService.getAll()
+      const [suppliersData, branchList] = await Promise.all([
+        supplierService.getAll(),
+        projectService.getActive()
+      ])
       setSuppliers(suppliersData)
+      setBranches(branchList)
     } catch (err) {
-      console.error('Failed to load suppliers', err)
+      console.error('Failed to load create form data', err)
     } finally {
       setLoadingForm(false)
+      setLoadingBranches(false)
     }
   }
 
@@ -776,6 +807,18 @@ const PurchaseRequests = () => {
 
   const calculateTotal = () => {
     return items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0)
+  }
+
+  const handleProjectChange = (projectName) => {
+    setProject(projectName)
+    const selectedBranch = branches.find((branch) => (branch?.branch_name || '') === projectName)
+    if (!selectedBranch) {
+      setProjectAddress('')
+      setOrderNumber('')
+      return
+    }
+    setProjectAddress(selectedBranch.branch_address || selectedBranch.address || '')
+    setOrderNumber(selectedBranch.order_number || selectedBranch.code || '')
   }
 
   const handleSubmit = async (e) => {
@@ -1346,13 +1389,21 @@ const PurchaseRequests = () => {
                 <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <Input label="Project" value={project} onChange={(e) => setProject(e.target.value)} />
-                  <Input label="Project Address" value={projectAddress} onChange={(e) => setProjectAddress(e.target.value)} />
+                  <Select
+                    label="Project *"
+                    value={project}
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                    options={branches.map((branch) => ({ value: branch.branch_name, label: branch.branch_name }))}
+                    placeholder={loadingBranches ? 'Loading projects...' : (branches.length ? 'Select project...' : 'No projects available')}
+                    required
+                    disabled={loadingBranches || branches.length === 0}
+                  />
+                  <Input label="Project Address" value={projectAddress} onChange={() => {}} readOnly />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
-                  <Input label="Order Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
+                  <Input label="Order Number" value={orderNumber} onChange={() => {}} readOnly />
                 </div>
 
                 <Select 
@@ -1491,13 +1542,21 @@ const PurchaseRequests = () => {
                 <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
                 
                 <div className="grid grid-cols-2 gap-4">
-                  <Input label="Project" value={project} onChange={(e) => setProject(e.target.value)} />
-                  <Input label="Project Address" value={projectAddress} onChange={(e) => setProjectAddress(e.target.value)} />
+                  <Select
+                    label="Project *"
+                    value={project}
+                    onChange={(e) => handleProjectChange(e.target.value)}
+                    options={branches.map((branch) => ({ value: branch.branch_name, label: branch.branch_name }))}
+                    placeholder={loadingBranches ? 'Loading projects...' : (branches.length ? 'Select project...' : 'No projects available')}
+                    required
+                    disabled={loadingBranches || branches.length === 0}
+                  />
+                  <Input label="Project Address" value={projectAddress} onChange={() => {}} readOnly />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
-                  <Input label="Order Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
+                  <Input label="Order Number" value={orderNumber} onChange={() => {}} readOnly />
                 </div>
 
                 <Select 

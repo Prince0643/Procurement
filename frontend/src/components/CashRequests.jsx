@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { cashRequestService } from '../services/cashRequests'
 import { supplierService } from '../services/suppliers'
+import { projectService } from '../services/projects'
 import { ChevronUp, ChevronDown, Plus, X, Download, Edit, Trash2, Send, CheckCircle, Clock, Search, Eye } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import CRPreviewModal from './cash-requests/CRPreviewModal'
@@ -353,19 +354,10 @@ const CashRequests = () => {
     try {
       const [suppliersData, branchesData] = await Promise.all([
         supplierService.getAll(),
-        fetch('https://jajr.xandree.com/get_branches_api.php').then(r => r.json())
+        projectService.getActive()
       ])
       setSuppliers(suppliersData)
-      // Handle branches API response format
-      let branchList = []
-      if (Array.isArray(branchesData)) {
-        branchList = branchesData
-      } else if (branchesData && Array.isArray(branchesData.data)) {
-        branchList = branchesData.data
-      } else if (branchesData && Array.isArray(branchesData.branches)) {
-        branchList = branchesData.branches
-      }
-      setBranches(branchList)
+      setBranches(branchesData)
     } catch (err) {
       console.error('Failed to load data', err)
     } finally {
@@ -404,19 +396,10 @@ const CashRequests = () => {
 
       const [suppliersData, branchesData] = await Promise.all([
         supplierService.getAll(),
-        fetch('https://jajr.xandree.com/get_branches_api.php').then(r => r.json())
+        projectService.getActive()
       ])
       setSuppliers(suppliersData)
-      // Handle branches API response format
-      let branchList = []
-      if (Array.isArray(branchesData)) {
-        branchList = branchesData
-      } else if (branchesData && Array.isArray(branchesData.data)) {
-        branchList = branchesData.data
-      } else if (branchesData && Array.isArray(branchesData.branches)) {
-        branchList = branchesData.branches
-      }
-      setBranches(branchList)
+      setBranches(branchesData)
     } catch (err) {
       console.error('Failed to load data', err)
     } finally {
