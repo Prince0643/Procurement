@@ -11,7 +11,8 @@ import {
   Settings,
   UserCheck,
   CheckCircle,
-  Gavel
+  Gavel,
+  Users
 } from 'lucide-react';
 
 // Navigation configuration - centralized for easy management
@@ -120,6 +121,14 @@ export const navigationItems = [
   
   // Settings
   {
+    path: '/dashboard/employees',
+    label: 'Employees',
+    icon: Users,
+    roles: ['super_admin']
+  },
+  
+  // Settings
+  {
     path: '/dashboard/settings',
     label: 'Settings',
     icon: Settings,
@@ -156,7 +165,7 @@ export const navigationGroups = [
   },
   {
     title: 'Administration',
-    items: ['/dashboard/approvals', '/dashboard/settings', '/dashboard/attendance']
+    items: ['/dashboard/approvals', '/dashboard/employees', '/dashboard/settings', '/dashboard/attendance']
   }
 ];
 

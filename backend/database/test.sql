@@ -714,7 +714,6 @@ CREATE TABLE `service_requests` (
   KEY `service_type` (`service_type`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-
 DROP TABLE IF EXISTS `service_request_payment_schedules`;
 CREATE TABLE `service_request_payment_schedules` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
