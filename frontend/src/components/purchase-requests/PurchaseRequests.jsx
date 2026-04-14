@@ -233,7 +233,6 @@ const PurchaseRequests = () => {
   const [superAdminItemRemarks, setSuperAdminItemRemarks] = useState({})
   
   // Modal state
-  const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingPR, setEditingPR] = useState(null)
   const [suppliers, setSuppliers] = useState([])
@@ -702,7 +701,7 @@ const PurchaseRequests = () => {
         order_number: orderNumber || null,
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
-        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_terms_note: paymentTermsNote.trim() || null,
         payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: items.map(item => ({
@@ -725,30 +724,6 @@ const PurchaseRequests = () => {
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const openCreateModal = async () => {
-    setShowCreateModal(true)
-    setLoadingForm(true)
-    setLoadingBranches(true)
-    try {
-      const [suppliersData, branchList] = await Promise.all([
-        supplierService.getAll(),
-        projectService.getActive()
-      ])
-      setSuppliers(suppliersData)
-      setBranches(branchList)
-    } catch (err) {
-      console.error('Failed to load create form data', err)
-    } finally {
-      setLoadingForm(false)
-      setLoadingBranches(false)
-    }
-  }
-
-  const closeCreateModal = () => {
-    setShowCreateModal(false)
-    resetForm()
   }
 
   const resetForm = () => {
@@ -856,47 +831,6 @@ const PurchaseRequests = () => {
     }
     setProjectAddress(selectedBranch.branch_address || selectedBranch.address || '')
     setOrderNumber(selectedBranch.order_number || selectedBranch.code || '')
-  }
-
-  const handleSubmit = async (e) => {
-    e.preventDefault()
-    if (!purpose) { alert('Purpose is required'); return }
-    if (items.length === 0) { alert('At least one item is required'); return }
-
-    try {
-      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
-      if (paymentBasis === 'debt' && normalizedSchedules.length === 0) {
-        alert('At least one payment schedule is required for debt/with account PR')
-        return
-      }
-      validateScheduleTotals(normalizedSchedules)
-      setSubmitting(true)
-      const prData = {
-        purpose,
-        project: project || null,
-        project_address: projectAddress || null,
-        date_needed: dateNeeded || null,
-        order_number: orderNumber || null,
-        supplier_id: selectedSupplier || null,
-        payment_basis: paymentBasis,
-        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
-        payment_schedules: normalizedSchedules,
-        remarks: remarks || null,
-        items: items.map(item => ({
-          item_id: parseInt(item.item_id),
-          quantity: parseFloat(item.quantity),
-          unit_price: parseFloat(item.unit_price)
-        }))
-      }
-      await purchaseRequestService.create(prData)
-      await fetchPurchaseRequests()
-      closeCreateModal()
-      alert('Purchase Request created successfully!')
-    } catch (err) {
-      alert('Failed to create PR: ' + (err.response?.data?.message || err.message))
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   const handleMarkAsReceived = async (pr) => {
@@ -1405,167 +1339,6 @@ const PurchaseRequests = () => {
           </div>
         </div>
       </Card>
-
-      {/* Create PR Modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Create Purchase Request</h3>
-              <button onClick={closeCreateModal} className="text-gray-400 hover:text-gray-600">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            {loadingForm ? (
-              <div className="p-8 text-center">
-                <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
-                <p className="mt-2 text-sm text-gray-500">Loading...</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="p-6">
-                <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <Select
-                    label="Project *"
-                    value={project}
-                    onChange={(e) => handleProjectChange(e.target.value)}
-                    options={branches.map((branch) => ({ value: branch.branch_name, label: branch.branch_name }))}
-                    placeholder={loadingBranches ? 'Loading projects...' : (branches.length ? 'Select project...' : 'No projects available')}
-                    required
-                    disabled={loadingBranches || branches.length === 0}
-                  />
-                  <Input label="Project Address" value={projectAddress} onChange={() => {}} readOnly />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
-                  <Input label="Order Number" value={orderNumber} onChange={() => {}} readOnly />
-                </div>
-
-                <Select 
-                  label="Supplier (Optional)" 
-                  value={selectedSupplier} 
-                  onChange={(e) => setSelectedSupplier(e.target.value)} 
-                  options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} 
-                />
-
-                <Select 
-                  label="Payment Basis *" 
-                  value={paymentBasis} 
-                  onChange={(e) => setPaymentBasis(e.target.value)} 
-                  options={[
-                    { value: 'debt', label: 'Debt (with supplier account)' },
-                    { value: 'non_debt', label: 'Cash/Non-debt (immediate payment)' }
-                  ]} 
-                  required 
-                />
-                <Input
-                  label={paymentBasis === 'debt' ? 'Payment Terms and Conditions *' : 'Payment Terms and Conditions'}
-                  value={paymentTermsNote}
-                  onChange={(e) => setPaymentTermsNote(e.target.value)}
-                  placeholder="Ex: Net 30 after invoice receipt"
-                  multiline
-                  rows={4}
-                  required={false}
-                />
-
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      Payment Dates {paymentBasis === 'debt' && <span className="text-red-500">*</span>}
-                    </label>
-                    <Button type="button" variant="secondary" size="sm" onClick={addPaymentSchedule}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Date
-                    </Button>
-                  </div>
-                  {paymentSchedules.map((schedule, index) => (
-                    <div key={`create-schedule-${index}`} className="grid grid-cols-12 gap-2 mb-2 items-end">
-                      <div className="col-span-4">
-                        <input
-                          type="date"
-                          value={schedule.payment_date}
-                          onChange={(e) => updatePaymentSchedule(index, 'payment_date', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        />
-                      </div>
-                      <div className="col-span-3">
-                        <input
-                          type="number"
-                          placeholder="Amount (optional)"
-                          value={schedule.amount}
-                          onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
-                          onWheel={preventNumberScroll}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                          min="0"
-                          step="0.01"
-                        />
-                      </div>
-                      <div className="col-span-4">
-                        <input
-                          type="text"
-                          placeholder="Note (optional)"
-                          value={schedule.note}
-                          onChange={(e) => updatePaymentSchedule(index, 'note', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
-                        />
-                      </div>
-                      <div className="col-span-1 text-right">
-                        {paymentSchedules.length > 1 && (
-                          <Button type="button" variant="ghost" size="sm" onClick={() => removePaymentSchedule(index)}>
-                            <X className="w-4 h-4 text-red-500" />
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  {paymentBasis === 'debt' && (
-                    <div className={`mt-2 rounded-md border px-3 py-2 text-sm ${paymentScheduleDifference === 0 ? 'border-green-200 bg-green-50 text-green-700' : 'border-red-200 bg-red-50 text-red-700'}`}>
-                      <p>Scheduled Total: {formatCurrency(paymentScheduleTotal)}</p>
-                      <p>PR Total: {formatCurrency(itemsTotal)}</p>
-                      <p>Difference: {paymentScheduleDifferenceLabel}</p>
-                    </div>
-                  )}
-                </div>
-
-                <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
-
-                {/* Items */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">Items *</label>
-                    <Button type="button" variant="secondary" size="sm" onClick={addItem}>
-                      <Plus className="w-4 h-4 mr-1" /> Add Item
-                    </Button>
-                  </div>
-                  {items.map((item, index) => (
-                    <div key={index} className="flex gap-2 mb-2 items-end">
-                      <div className="flex-1">
-                        <input type="text" placeholder="Item ID" value={item.item_id} onChange={(e) => updateItem(index, 'item_id', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" required />
-                      </div>
-                      <div className="w-24">
-                        <input type="number" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(index, 'quantity', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="1" required />
-                      </div>
-                      <div className="w-32">
-                        <input type="number" placeholder="Unit Price" value={item.unit_price} onChange={(e) => updateItem(index, 'unit_price', e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm" min="0" step="0.01" required />
-                      </div>
-                      <div className="w-24 text-right text-sm font-medium">{formatCurrency(item.quantity * item.unit_price)}</div>
-                      {items.length > 1 && <Button type="button" variant="ghost" size="sm" onClick={() => removeItem(index)}><X className="w-4 h-4 text-red-500" /></Button>}
-                    </div>
-                  ))}
-                  <div className="text-right font-semibold text-lg mt-2">Total: {formatCurrency(calculateTotal())}</div>
-                </div>
-
-                <div className="flex justify-end gap-3 pt-4 border-t">
-                  <Button type="button" variant="secondary" onClick={closeCreateModal}>Cancel</Button>
-                  <Button type="submit" disabled={submitting}>{submitting ? 'Creating...' : 'Create Purchase Request'}</Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Edit PR Modal */}
       {showEditModal && (

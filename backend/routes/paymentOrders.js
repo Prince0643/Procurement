@@ -188,13 +188,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
     
     const [result] = await db.query(
       `INSERT INTO payment_orders 
-       (po_number, service_request_id, cash_request_id, reimbursement_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, remarks, requested_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (po_number, service_request_id, cash_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, remarks, requested_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         poNumber,
         service_request_id || null,
         cash_request_id || null,
-        reimbursement_id || null,
         payee_name || null,
         payee_address || null,
         purpose || sourcePurpose,

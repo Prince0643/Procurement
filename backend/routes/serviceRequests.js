@@ -841,6 +841,12 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     const sr = srs[0];
 
+    // Fetch payment schedules for this service request
+    const [paymentSchedules] = await db.query(
+      'SELECT * FROM service_request_payment_schedules WHERE service_request_id = ? ORDER BY payment_date',
+      [req.params.id]
+    );
+
     // Create Excel workbook from template
     const workbook = new ExcelJS.Workbook();
     const templatePath = resolveExcelTemplatePath('Service Request.xlsx');
@@ -886,10 +892,68 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Fill in the service line item
     setCellValue(`A${currentRow}`, quantity);
     setCellValue(`B${currentRow}`, sr.unit || 'hours');
-    setCellValue(`D${currentRow}`, sr.purpose || sr.description || '');
+    // Set purpose with black font - set font BEFORE value to override template
+    const purposeCell = worksheet.getCell(`D${currentRow}`);
+    purposeCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+    purposeCell.value = sr.purpose || sr.description || '';
     setCellValue(`H${currentRow}`, amount);
 
-    // Grand Total
+    // Add payment terms and schedules below the item
+    currentRow++; // Move to next row after the item
+    
+    // Helper to format date
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    };
+
+    // Add "*** NOTHING FOLLOWS ***" marker
+    const nothingFollowsRow = currentRow;
+    // Set font BEFORE value to override template styling
+    const nothingFollowsCell = worksheet.getCell(`D${currentRow}`);
+    nothingFollowsCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+    nothingFollowsCell.value = '*** NOTHING FOLLOWS ***';
+    currentRow++;
+
+    // Add payment terms note if exists
+    const paymentTermsNote = String(sr.payment_terms_note || '').trim();
+    if (paymentTermsNote) {
+      const noteCell = worksheet.getCell(`A${currentRow}`);
+      noteCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+      noteCell.value = `Payment Terms: ${paymentTermsNote}`;
+      currentRow++;
+    }
+
+    // Add payment schedules
+    if (paymentSchedules.length > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      paymentSchedules.forEach((schedule) => {
+        const scheduleDate = schedule.payment_date;
+        const amount = parseFloat(schedule.amount) || 0;
+        
+        // Determine status
+        let statusLabel = '';
+        if (scheduleDate < todayYmd) {
+          statusLabel = ' (OVERDUE)';
+        } else if (scheduleDate === todayYmd) {
+          statusLabel = ' (DUE TODAY)';
+        } else {
+          statusLabel = ' (UPCOMING)';
+        }
+        
+        const line = `${formatDate(scheduleDate)} | ${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}${schedule.note ? ` | ${schedule.note}` : ''}${statusLabel}`;
+        const scheduleCell = worksheet.getCell(`A${currentRow}`);
+        scheduleCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+        scheduleCell.value = line;
+        currentRow++;
+      });
+    }
+
+    // Grand Total - keep at row 21 or adjust if needed
     setCellValue('G21', totalAmount);
 
     // Prepared by, Reviewed by, Approved by - row 26

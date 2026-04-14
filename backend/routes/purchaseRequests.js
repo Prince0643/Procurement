@@ -399,7 +399,7 @@ router.post('/', authenticate, async (req, res) => {
     const status = isDraft ? 'Draft' : 'For Procurement Review';
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
     const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
-    const paymentTermsCode = paymentBasis === 'debt' && paymentTermsNote ? 'CUSTOM' : null;
+    const paymentTermsCode = paymentTermsNote ? 'CUSTOM' : null;
     const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
 
     if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
@@ -467,8 +467,8 @@ router.post('/', authenticate, async (req, res) => {
         paymentBasis,
         paymentTermsCode,
         paymentTermsNote,
-        paymentTermsCode ? req.user.id : null,
-        paymentTermsCode ? new Date() : null,
+        paymentTermsNote ? req.user.id : null,
+        paymentTermsNote ? new Date() : null,
         supplier_id || null,
         supplierAddress,
         totalAmount
@@ -599,10 +599,8 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     }
 
     const nextPaymentBasis = payment_basis ?? pr.payment_basis;
-    const nextPaymentTermsNote = nextPaymentBasis === 'debt'
-      ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
-      : null;
-    const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
+    const nextPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note);
+    const nextPaymentTermsCode = nextPaymentTermsNote ? 'CUSTOM' : null;
     const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
     const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
     const schedulesForValidation = hasPaymentSchedulesField
@@ -631,8 +629,8 @@ router.put('/:id/draft', authenticate, async (req, res) => {
         nextPaymentBasis,
         nextPaymentTermsCode,
         nextPaymentTermsNote,
-        nextPaymentTermsCode ? req.user.id : null,
-        nextPaymentTermsCode ? new Date() : null,
+        nextPaymentTermsNote ? req.user.id : null,
+        nextPaymentTermsNote ? new Date() : null,
         supplier_id ?? pr.supplier_id,
         supplierAddress,
         totalAmount,
@@ -1300,7 +1298,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
       } catch (mergeError) {
         console.warn(`Failed to merge note row ${noteRowNumber} (${mergeRange}):`, mergeError?.message || mergeError);
       }
-      worksheet.getRow(noteRowNumber).getCell(1).value = line;
+      const cell = worksheet.getRow(noteRowNumber).getCell(1);
+      cell.value = line;
+      cell.font = { color: { argb: 'FF0000' } };
       noteRowNumber++;
     }
     
@@ -1343,10 +1343,8 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
     const pr = prs[0];
     const nextPaymentBasis = payment_basis ?? pr.payment_basis;
-    const nextPaymentTermsNote = nextPaymentBasis === 'debt'
-      ? normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note)
-      : null;
-    const nextPaymentTermsCode = nextPaymentBasis === 'debt' && nextPaymentTermsNote ? 'CUSTOM' : null;
+    const nextPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note);
+    const nextPaymentTermsCode = nextPaymentTermsNote ? 'CUSTOM' : null;
     const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
     const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
 
@@ -1428,8 +1426,8 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
         nextPaymentBasis,
         nextPaymentTermsCode,
         nextPaymentTermsNote,
-        nextPaymentTermsCode ? req.user.id : null,
-        nextPaymentTermsCode ? new Date() : null,
+        nextPaymentTermsNote ? req.user.id : null,
+        nextPaymentTermsNote ? new Date() : null,
         supplier_id ?? pr.supplier_id,
         supplierAddress,
         totalAmount,

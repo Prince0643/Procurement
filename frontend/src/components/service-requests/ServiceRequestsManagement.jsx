@@ -720,7 +720,7 @@ const ServiceRequestsManagement = () => {
                   >
                     <Download className="w-4 h-4" />
                   </Button>
-                  {user?.role === 'engineer' && sr.status === 'Draft' && sr.requested_by === user?.id && (
+                  {(user?.role === 'engineer' || user?.role === 'admin') && sr.status === 'Draft' && sr.requested_by === user?.id && (
                     <>
                       <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)}>
                         <Send className="w-4 h-4" />
@@ -750,7 +750,7 @@ const ServiceRequestsManagement = () => {
                         onClick={() => handleProcurementApproveClick(sr)}
                         title="Review and Approve"
                       >
-                        <CheckCircle className="w-4 h-4 text-yellow-600" />
+                        <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -808,7 +808,7 @@ const ServiceRequestsManagement = () => {
                     </div>
                     <div>
                       <span className="text-gray-500">Description:</span>
-                      <span className="ml-2 text-gray-900">{sr.description || '-'}</span>
+                      <span className="ml-2 text-gray-900">{sr.purpose || '-'}</span>
                     </div>
                     <div>
                       <span className="text-gray-500">Remarks:</span>
@@ -899,7 +899,7 @@ const ServiceRequestsManagement = () => {
                   >
                     <Download className="w-4 h-4" />
                   </Button>
-                  {user?.role === 'engineer' && sr.status === 'Draft' && sr.requested_by === user?.id && (
+                  {(user?.role === 'engineer' || user?.role === 'admin') && sr.status === 'Draft' && sr.requested_by === user?.id && (
                     <>
                       <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)} title="Submit">
                         <Send className="w-4 h-4" />
@@ -929,7 +929,7 @@ const ServiceRequestsManagement = () => {
                         onClick={() => handleProcurementApproveClick(sr)}
                         title="Review and Approve"
                       >
-                        <CheckCircle className="w-4 h-4 text-yellow-600" />
+                        <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
                       <Button
                         variant="ghost"
@@ -974,7 +974,7 @@ const ServiceRequestsManagement = () => {
                   <div className="mt-3 pt-3 border-t border-gray-200 space-y-2 text-xs text-gray-600">
                     <p><span className="text-gray-500">Project:</span> <span className="text-gray-900">{sr.project || '-'}</span></p>
                     <p><span className="text-gray-500">Project Address:</span> <span className="text-gray-900">{sr.project_address || '-'}</span></p>
-                    <p><span className="text-gray-500">Description:</span> <span className="text-gray-900">{sr.description || '-'}</span></p>
+                    <p><span className="text-gray-500">Description:</span> <span className="text-gray-900">{sr.purpose || '-'}</span></p>
                     <p><span className="text-gray-500">Remarks:</span> <span className="text-gray-900">{sr.remarks || '-'}</span></p>
                     {sr.rejection_reason && (
                       <p><span className="text-red-500">Rejection Reason:</span> <span className="text-red-700">{sr.rejection_reason}</span></p>

@@ -144,7 +144,7 @@ const getSourceRow = async (conn, sourceType, sourceId) => {
 
   if (sourceType === 'payment_order') {
     const [rows] = await conn.query(
-      `SELECT id, status, service_request_id, cash_request_id, reimbursement_id
+      `SELECT id, status, service_request_id, cash_request_id
        FROM payment_orders
        WHERE id = ?`,
       [sourceId]
@@ -176,13 +176,17 @@ const getSourceRow = async (conn, sourceType, sourceId) => {
 };
 
 const getSchedulesForSource = async (conn, sourceType, sourceId) => {
+  console.log('DEBUG getSchedulesForSource:', { sourceType, sourceId });
   const sourceRow = await getSourceRow(conn, sourceType, sourceId);
+  console.log('DEBUG sourceRow:', sourceRow);
   if (!sourceRow) {
     return { sourceRow: null, scheduleConfig: null, schedules: [], sourceColumn: getSourceColumnForDv(sourceType) };
   }
 
   const scheduleConfig = getScheduleConfigForSource(sourceType, sourceRow);
   const sourceColumn = getSourceColumnForDv(sourceType);
+  console.log('DEBUG scheduleConfig:', scheduleConfig);
+  console.log('DEBUG sourceColumn:', sourceColumn);
 
   if (!scheduleConfig || !scheduleConfig.fkValue || !sourceColumn) {
     return { sourceRow, scheduleConfig: null, schedules: [], sourceColumn };
@@ -195,6 +199,7 @@ const getSchedulesForSource = async (conn, sourceType, sourceId) => {
      ORDER BY payment_date ASC`,
     [scheduleConfig.fkValue]
   );
+  console.log('DEBUG schedules found:', schedules.length, schedules);
 
   if (!schedules.length) {
     return { sourceRow, scheduleConfig, schedules: [], sourceColumn };
@@ -206,9 +211,11 @@ const getSchedulesForSource = async (conn, sourceType, sourceId) => {
      WHERE ${sourceColumn} = ? AND status != 'Cancelled'`,
     [sourceId]
   );
+  console.log('DEBUG consumedRows:', consumedRows);
   const consumedDates = new Set(
     consumedRows.map((row) => String(row?.payment_date || '').trim()).filter(Boolean)
   );
+  console.log('DEBUG consumedDates:', Array.from(consumedDates));
   const todayYmd = getTodayYmd();
 
   const mapped = schedules.map((schedule) => {
@@ -247,6 +254,9 @@ router.get('/', authenticate, async (req, res) => {
              pr.pr_number,
              sr.sr_number,
              cr.cr_number,
+             sr2.sr_number as payment_request_sr_number,
+             prq.payee_name,
+             prq.pr_number as payment_request_pr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -259,6 +269,8 @@ router.get('/', authenticate, async (req, res) => {
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
       LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
       LEFT JOIN cash_requests cr ON dv.cash_request_id = cr.id
+      LEFT JOIN payment_requests prq ON dv.payment_request_id = prq.id
+      LEFT JOIN service_requests sr2 ON prq.service_request_id = sr2.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -308,6 +320,7 @@ router.get('/schedules', authenticate, requireAdmin, async (req, res) => {
     }
 
     const { sourceRow, scheduleConfig, schedules } = await getSchedulesForSource(db, sourceType, sourceId);
+    console.log('DEBUG returning schedules:', { count: schedules.length, schedules });
     if (!sourceRow) {
       return res.status(404).json({ message: 'Source document not found' });
     }
@@ -337,6 +350,8 @@ router.get('/:id', authenticate, async (req, res) => {
              pr.pr_number, pr.project_address,
              sr.sr_number, sr.purpose as sr_purpose,
              cr.cr_number, cr.receiver as cr_receiver, cr.purpose as cr_purpose,
+             sr2.sr_number as payment_request_sr_number,
+             prq.payee_name, prq.pr_number as payment_request_pr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -349,6 +364,8 @@ router.get('/:id', authenticate, async (req, res) => {
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
       LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
       LEFT JOIN cash_requests cr ON dv.cash_request_id = cr.id
+      LEFT JOIN payment_requests prq ON dv.payment_request_id = prq.id
+      LEFT JOIN service_requests sr2 ON prq.service_request_id = sr2.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -876,6 +893,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
              s.supplier_name, s.address as supplier_address,
              po.po_number,
              pr.pr_number,
+             sr.sr_number,
+             sr2.sr_number as payment_request_sr_number,
+             prq.pr_number as payment_request_pr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name,
              accounting.first_name as accounting_first_name,
@@ -886,6 +906,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
       LEFT JOIN suppliers s ON dv.supplier_id = s.id
       LEFT JOIN purchase_orders po ON dv.purchase_order_id = po.id
       LEFT JOIN purchase_requests pr ON dv.purchase_request_id = pr.id
+      LEFT JOIN service_requests sr ON dv.service_request_id = sr.id
+      LEFT JOIN payment_requests prq ON dv.payment_request_id = prq.id
+      LEFT JOIN service_requests sr2 ON prq.service_request_id = sr2.id
       LEFT JOIN employees e ON dv.prepared_by = e.id
       LEFT JOIN employees accounting ON dv.certified_by_accounting = accounting.id
       LEFT JOIN employees manager ON dv.certified_by_manager = manager.id
@@ -938,11 +961,10 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     // F3: Date
     worksheet.getCell('F3').value = formatDate(dv.dv_date);
-    
-    // F3: Date
-    worksheet.getCell('F3').value = formatDate(dv.dv_date);
     // F4: PR NO. value (F4 is master of merged F4:F5)
-    worksheet.getCell('F4').value = dv.pr_number || '';
+    // Use SR number for SR-based payment requests, otherwise use PR number
+    const refNumber = dv.pr_number || dv.payment_request_pr_number || dv.sr_number || dv.payment_request_sr_number || '';
+    worksheet.getCell('F4').value = refNumber;
     // F6: Order No.
     worksheet.getCell('F6').value = dv.order_number || '';
     // F7: DV No.
@@ -983,7 +1005,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // F30: Bank Name
     worksheet.getCell('F30').value = dv.bank_name || '';
     // F31: PR No.
-    worksheet.getCell('F31').value = dv.pr_number || '';
+    worksheet.getCell('F31').value = refNumber;
     // F32: Date (payment date)
     worksheet.getCell('F32').value = formatDate(dv.payment_date);
 

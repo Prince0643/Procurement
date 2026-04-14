@@ -430,7 +430,7 @@ const PaymentRequests = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200">
-                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Source Ref</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Payee Name</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
@@ -443,7 +443,14 @@ const PaymentRequests = () => {
               {paymentRequests.map(pr => (
                 <React.Fragment key={pr.id}>
                   <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}>
-                    <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                    <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                      {(() => {
+                        if (pr.original_pr_number) return <span><span className="text-xs text-gray-400">PR</span> {pr.original_pr_number}</span>;
+                        if (pr.original_sr_number) return <span><span className="text-xs text-gray-400">SR</span> {pr.original_sr_number}</span>;
+                        if (pr.original_cr_number) return <span><span className="text-xs text-gray-400">CR</span> {pr.original_cr_number}</span>;
+                        return '-';
+                      })()}
+                    </td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
@@ -480,7 +487,7 @@ const PaymentRequests = () => {
                           size="sm" 
                           onClick={(e) => { 
                             e.stopPropagation(); 
-                            handleExport(pr.id, pr.pr_number); 
+                            handleExport(pr.id, pr.pr_number || `PRQ-${pr.id}`); 
                           }}
                           title="Export to Excel"
                         >
@@ -497,6 +504,17 @@ const PaymentRequests = () => {
                       <td colSpan="6" className="bg-gray-50 p-4">
                         <div className="space-y-4">
                           <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Source Ref</p>
+                              <p className="text-sm text-gray-900">
+                                {(() => {
+                                  if (pr.original_pr_number) return <span>PR {pr.original_pr_number}</span>;
+                                  if (pr.original_sr_number) return <span>SR {pr.original_sr_number}</span>;
+                                  if (pr.original_cr_number) return <span>CR {pr.original_cr_number}</span>;
+                                  return '-';
+                                })()}
+                              </p>
+                            </div>
                             <div>
                               <p className="text-xs text-gray-500 uppercase">Payee Address</p>
                               <p className="text-sm text-gray-900">{pr.payee_address || '-'}</p>
@@ -539,7 +557,7 @@ const PaymentRequests = () => {
               ))}
               {paymentRequests.length === 0 && (
                 <tr>
-                  <td colSpan="7" className="py-8 text-center text-gray-500">
+                  <td colSpan="6" className="py-8 text-center text-gray-500">
                     No payment requests found
                   </td>
                 </tr>
@@ -563,7 +581,14 @@ const PaymentRequests = () => {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <p className="text-xs text-gray-500 font-mono">{pr.pr_number}</p>
+                    <p className="text-xs text-gray-500 font-mono">
+                      {(() => {
+                        if (pr.original_pr_number) return `PR ${pr.original_pr_number}`;
+                        if (pr.original_sr_number) return `SR ${pr.original_sr_number}`;
+                        if (pr.original_cr_number) return `CR ${pr.original_cr_number}`;
+                        return '-';
+                      })()}
+                    </p>
                     <p className="text-sm font-semibold text-gray-900">{pr.payee_name}</p>
                   </div>
                   <div className="flex items-center gap-1">

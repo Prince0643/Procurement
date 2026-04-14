@@ -166,10 +166,12 @@ router.get('/', authenticate, async (req, res) => {
     let query = `
       SELECT pr.*, 
              p.pr_number as original_pr_number,
+             sr.sr_number as original_sr_number,
              e.first_name as prepared_by_first_name,
              e.last_name as prepared_by_last_name
       FROM payment_requests pr
       LEFT JOIN purchase_requests p ON pr.purchase_request_id = p.id
+      LEFT JOIN service_requests sr ON pr.service_request_id = sr.id
       LEFT JOIN employees e ON pr.requested_by = e.id
     `;
     
@@ -367,19 +369,21 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       sourceRequestedBy = crDetails.requested_by;
     }
     
-    // Generate Payment Request number (MTN-YYYY-MM-### format)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    
-    const initials = 'MTN';
-    
-    const [countResult] = await db.query(
-      "SELECT COUNT(*) as count FROM payment_requests WHERE pr_number LIKE ?",
-      [`${initials}-${year}-${month}-%`]
-    );
-    const sequence = String(countResult[0].count + 1).padStart(3, '0');
-    const prNumber = `${initials}-${year}-${month}-${sequence}`;
+    // Generate Payment Request number only for PR-based requests
+    let prNumber = null;
+    if (purchase_request_id) {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const initials = 'MTN';
+      
+      const [countResult] = await db.query(
+        "SELECT COUNT(*) as count FROM payment_requests WHERE pr_number LIKE ?",
+        [`${initials}-${year}-${month}-%`]
+      );
+      const sequence = String(countResult[0].count + 1).padStart(3, '0');
+      prNumber = `${initials}-${year}-${month}-${sequence}`;
+    }
 
     // Calculate total amount if not provided
     const totalAmount = amount || items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
@@ -403,13 +407,12 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
       // Create payment request
       const [paymentResult] = await connection.query(
         `INSERT INTO payment_requests 
-         (pr_number, purchase_request_id, service_request_id, cash_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, requested_by)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (pr_number, purchase_request_id, service_request_id, payee_name, payee_address, purpose, project, project_address, order_number, amount, status, requested_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           prNumber,
           purchase_request_id || null,
           service_request_id || null,
-          cash_request_id || null,
           payee_name || null,
           payee_address || null,
           purpose || sourcePurpose,

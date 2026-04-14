@@ -157,7 +157,7 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
                 PR Number
               </div>
               <div className="col-span-4 px-3 py-2 border-r border-gray-300 text-sm font-mono text-gray-900">
-                {payment.pr_number}
+                {payment.pr_number || '-'}
               </div>
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
                 Date

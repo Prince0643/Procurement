@@ -1978,7 +1978,7 @@ const Approvals = () => {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">PR Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Source Ref</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Payee Name</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
                   <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
@@ -1993,7 +1993,14 @@ const Approvals = () => {
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                       onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                     >
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                        {(() => {
+                          if (pr.original_pr_number) return <span><span className="text-xs text-gray-400">PR</span> {pr.original_pr_number}</span>;
+                          if (pr.original_sr_number) return <span><span className="text-xs text-gray-400">SR</span> {pr.original_sr_number}</span>;
+                          if (pr.original_cr_number) return <span><span className="text-xs text-gray-400">CR</span> {pr.original_cr_number}</span>;
+                          return '-';
+                        })()}
+                      </td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
@@ -2066,7 +2073,14 @@ const Approvals = () => {
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                       onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                     >
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                        {(() => {
+                          if (pr.original_pr_number) return <span><span className="text-xs text-gray-400">PR</span> {pr.original_pr_number}</span>;
+                          if (pr.original_sr_number) return <span><span className="text-xs text-gray-400">SR</span> {pr.original_sr_number}</span>;
+                          if (pr.original_cr_number) return <span><span className="text-xs text-gray-400">CR</span> {pr.original_cr_number}</span>;
+                          return '-';
+                        })()}
+                      </td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
@@ -2139,7 +2153,14 @@ const Approvals = () => {
                       className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                       onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                     >
-                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{pr.pr_number}</td>
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                        {(() => {
+                          if (pr.original_pr_number) return <span><span className="text-xs text-gray-400">PR</span> {pr.original_pr_number}</span>;
+                          if (pr.original_sr_number) return <span><span className="text-xs text-gray-400">SR</span> {pr.original_sr_number}</span>;
+                          if (pr.original_cr_number) return <span><span className="text-xs text-gray-400">CR</span> {pr.original_cr_number}</span>;
+                          return '-';
+                        })()}
+                      </td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
@@ -2217,7 +2238,14 @@ const Approvals = () => {
             {paymentSubTab === 'pending' && pendingPaymentRequests.map(pr => (
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {(() => {
+                      if (pr.original_pr_number) return `PR ${pr.original_pr_number}`;
+                      if (pr.original_sr_number) return `SR ${pr.original_sr_number}`;
+                      if (pr.original_cr_number) return `CR ${pr.original_cr_number}`;
+                      return '-';
+                    })()}
+                  </span>
                   {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />
@@ -2252,7 +2280,14 @@ const Approvals = () => {
             {paymentSubTab === 'on-hold' && onHoldPaymentRequests.map(pr => (
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {(() => {
+                      if (pr.original_pr_number) return `PR ${pr.original_pr_number}`;
+                      if (pr.original_sr_number) return `SR ${pr.original_sr_number}`;
+                      if (pr.original_cr_number) return `CR ${pr.original_cr_number}`;
+                      return '-';
+                    })()}
+                  </span>
                   {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />
@@ -2282,7 +2317,14 @@ const Approvals = () => {
             {paymentSubTab === 'approved' && approvedPaymentRequests.map(pr => (
               <div key={pr.id} className="bg-white border border-gray-200 rounded-lg p-3 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-gray-900">{pr.pr_number}</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {(() => {
+                      if (pr.original_pr_number) return `PR ${pr.original_pr_number}`;
+                      if (pr.original_sr_number) return `SR ${pr.original_sr_number}`;
+                      if (pr.original_cr_number) return `CR ${pr.original_cr_number}`;
+                      return '-';
+                    })()}
+                  </span>
                   {renderStatusWithLock(pr)}
                 </div>
                 <InfoRow label="Payee" value={pr.payee_name || '-'} />

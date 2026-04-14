@@ -5,7 +5,8 @@ import { paymentRequestService } from '../../services/paymentRequests';
 import { paymentOrderService } from '../../services/paymentOrders';
 import { serviceRequestService } from '../../services/serviceRequests';
 import { cashRequestService } from '../../services/cashRequests';
-import { FileText, Plus, Download, Search, ChevronDown, ChevronUp, X, CheckCircle } from 'lucide-react';
+import { FileText, Plus, Download, Search, ChevronDown, ChevronUp, X, CheckCircle, Eye } from 'lucide-react';
+import DVPreviewModal from './DVPreviewModal';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Card = ({ children, className = '' }) => (
@@ -97,6 +98,9 @@ const DisbursementVouchers = () => {
   const [loadingSchedules, setLoadingSchedules] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [payingVoucherId, setPayingVoucherId] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewVoucher, setPreviewVoucher] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const { user } = useAuth();
 
   const [formData, setFormData] = useState({
@@ -214,6 +218,16 @@ const DisbursementVouchers = () => {
     }
   };
 
+  const openPreview = (voucher) => {
+    setPreviewVoucher(voucher);
+    setShowPreviewModal(true);
+  };
+
+  const closePreview = () => {
+    setShowPreviewModal(false);
+    setPreviewVoucher(null);
+  };
+
   const handleMarkPaid = async (voucher) => {
     if (!voucher?.id) return;
 
@@ -244,9 +258,26 @@ const DisbursementVouchers = () => {
 
   // Helper to get source reference number
   const getSourceRef = (voucher) => {
+    console.log('DV Source Debug:', {
+      dv_number: voucher.dv_number,
+      dv_type: voucher.dv_type,
+      po_number: voucher.po_number,
+      pr_number: voucher.pr_number,
+      payment_request_pr_number: voucher.payment_request_pr_number,
+      payment_request_sr_number: voucher.payment_request_sr_number,
+      sr_number: voucher.sr_number,
+      cr_number: voucher.cr_number,
+      service_request_id: voucher.service_request_id,
+      purchase_request_id: voucher.purchase_request_id,
+      payment_request_id: voucher.payment_request_id,
+      purchase_order_id: voucher.purchase_order_id,
+      cash_request_id: voucher.cash_request_id
+    });
     if (voucher.po_number) return { num: voucher.po_number, type: 'PO' };
     if (voucher.pr_number) return { num: voucher.pr_number, type: 'PR' };
+    if (voucher.payment_request_pr_number) return { num: voucher.payment_request_pr_number, type: 'PR' };
     if (voucher.sr_number) return { num: voucher.sr_number, type: 'SR' };
+    if (voucher.payment_request_sr_number) return { num: voucher.payment_request_sr_number, type: 'SR' };
     if (voucher.cr_number) return { num: voucher.cr_number, type: 'CR' };
     return { num: '-', type: '' };
   };
@@ -407,7 +438,16 @@ const DisbursementVouchers = () => {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={(e) => { e.stopPropagation(); openPreview(voucher); }}
+                          title="Preview"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={(e) => { e.stopPropagation(); handleExport(voucher.id); }}
+                          title="Export to Excel"
                         >
                           <Download className="w-4 h-4" />
                         </Button>
@@ -626,7 +666,7 @@ const DisbursementVouchers = () => {
                             <div className="flex items-center justify-between">
                               <div>
                                 <p className="font-medium text-sm text-gray-900">{po.po_number}{typeLabel}</p>
-                                <p className="text-xs text-gray-500">{po.supplier_name} • {formatCurrency(po.total_amount)}</p>
+                                <p className="text-xs text-gray-500">{po.payee_name} • {formatCurrency(po.amount)}</p>
                               </div>
                               {selectedSource?.id === po.id && <CheckCircle className="w-5 h-5 text-yellow-500" />}
                             </div>
@@ -795,6 +835,13 @@ const DisbursementVouchers = () => {
           </div>
         </div>
       )}
+
+      {/* Preview Modal */}
+      <DVPreviewModal
+        dv={previewVoucher}
+        loading={previewLoading}
+        onClose={closePreview}
+      />
     </div>
   );
 };

@@ -297,7 +297,7 @@ const Items = () => {
       supplier_name: suppliers.find(s => s.id === selectedSupplier)?.supplier_name || '-',
       supplier_address: projectAddress,
       payment_basis: paymentBasis,
-      payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+      payment_terms_note: paymentTermsNote.trim() || null,
       payment_schedules: sanitizePaymentSchedules(paymentSchedules),
       remarks,
       status: 'Draft',
@@ -337,7 +337,7 @@ const Items = () => {
         order_number: orderNumber || null,
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
-        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_terms_note: paymentTermsNote.trim() || null,
         payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: cart.map(item => ({
@@ -651,7 +651,7 @@ const Items = () => {
         order_number: orderNumber || null,
         supplier_id: selectedSupplier || null,
         payment_basis: paymentBasis,
-        payment_terms_note: paymentBasis === 'debt' ? paymentTermsNote.trim() : null,
+        payment_terms_note: paymentTermsNote.trim() || null,
         payment_schedules: normalizedSchedules,
         remarks: remarks || null,
         items: cart.map(item => ({

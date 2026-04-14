@@ -33,6 +33,18 @@ const formatScheduleAmount = (amount) => {
   return formatCurrency(amount);
 };
 
+const getScheduleStatus = (paymentDate) => {
+  if (!paymentDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(paymentDate);
+  date.setHours(0, 0, 0, 0);
+  
+  if (date < today) return { label: 'OVERDUE', color: 'text-red-600 font-semibold' };
+  if (date.getTime() === today.getTime()) return { label: 'DUE TODAY', color: 'text-orange-600 font-semibold' };
+  return { label: 'UPCOMING', color: 'text-blue-600' };
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -226,11 +238,15 @@ const SRPreviewModal = ({ sr, loading, onClose, onApprove, onHold, processingId,
                   <p>-</p>
                 ) : (
                   <div className="space-y-1">
-                    {(sr.payment_schedules || []).map((schedule) => (
-                      <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`}>
-                        {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
-                      </p>
-                    ))}
+                    {(sr.payment_schedules || []).map((schedule) => {
+                      const status = getScheduleStatus(schedule.payment_date);
+                      return (
+                        <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`}>
+                          {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                          {status && <span className={`ml-2 text-xs ${status.color}`}>({status.label})</span>}
+                        </p>
+                      );
+                    })}
                   </div>
                 )}
               </div>
