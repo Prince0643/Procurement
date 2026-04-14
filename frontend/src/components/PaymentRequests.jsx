@@ -91,6 +91,16 @@ const formatDate = (dateString) => {
   })
 }
 
+const formatPaymentTerms = (record) => {
+  const note = String(record?.payment_terms_note || '').trim()
+  if (note) return note
+  const term = String(record?.payment_term || '').trim()
+  if (term) return term
+  const code = String(record?.payment_terms_code || '').trim().toUpperCase()
+  if (!code) return '-'
+  return code.replace(/_/g, ' ')
+}
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -424,6 +434,7 @@ const PaymentRequests = () => {
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Payee Name</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Payment Terms</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               </tr>
@@ -436,6 +447,7 @@ const PaymentRequests = () => {
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.payee_name}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{pr.project}</td>
                     <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(pr.amount)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-600">{formatPaymentTerms(pr)}</td>
                     <td className="py-3 px-4"><StatusBadge status={pr.status} /></td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
@@ -501,6 +513,17 @@ const PaymentRequests = () => {
                               <p className="text-xs text-gray-500 uppercase">Order Number</p>
                               <p className="text-sm text-gray-900">{pr.order_number || '-'}</p>
                             </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Payment Terms</p>
+                              <p className="text-sm text-gray-900">{formatPaymentTerms(pr)}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-500 uppercase">Payment Schedules</p>
+                              <p className="text-sm text-gray-900">
+                                {pr.payment_schedule_count || 0}
+                                {pr.next_payment_date ? ` • next ${formatDate(pr.next_payment_date)}` : ''}
+                              </p>
+                            </div>
                           </div>
                           {pr.remarks && (
                             <div>
@@ -516,7 +539,7 @@ const PaymentRequests = () => {
               ))}
               {paymentRequests.length === 0 && (
                 <tr>
-                  <td colSpan="6" className="py-8 text-center text-gray-500">
+                  <td colSpan="7" className="py-8 text-center text-gray-500">
                     No payment requests found
                   </td>
                 </tr>
@@ -563,12 +586,17 @@ const PaymentRequests = () => {
                 <div className="mb-2">
                   <p className="text-sm text-gray-600">{pr.project}</p>
                   <p className="text-sm font-medium text-gray-700">{formatCurrency(pr.amount)}</p>
+                  <p className="mt-1 text-xs text-gray-500">Terms: {formatPaymentTerms(pr)}</p>
                 </div>
                 <StatusBadge status={pr.status} />
                 {expandedId === pr.id && (
                   <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
                     <p className="text-xs text-gray-500">Purpose: {pr.purpose}</p>
                     {pr.payee_address && <p className="text-xs text-gray-500">Address: {pr.payee_address}</p>}
+                    <p className="text-xs text-gray-500">
+                      Payment schedules: {pr.payment_schedule_count || 0}
+                      {pr.next_payment_date ? ` • next ${formatDate(pr.next_payment_date)}` : ''}
+                    </p>
                     {pr.remarks && <p className="text-xs text-gray-500">Remarks: {pr.remarks}</p>}
                   </div>
                 )}

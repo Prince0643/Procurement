@@ -179,5 +179,8 @@ export const filterNavigationByRole = (items, userRole) => {
 
 // Get navigation item by path
 export const getNavigationItemByPath = (path) => {
-  return navigationItems.find(item => item.path === path);
+  if (!path) return undefined;
+
+  const normalizedPath = path.startsWith('/dashboard') ? path : `/dashboard/${path}`.replace(/\/+/g, '/');
+  return navigationItems.find(item => item.path === normalizedPath);
 };

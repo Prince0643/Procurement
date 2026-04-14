@@ -8,6 +8,153 @@ import { assertProjectIsActive } from '../utils/branchProjects.js';
 import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
+const PAYMENT_TERM_LABELS = {
+  CASH: 'CASH',
+  COD: 'COD',
+  NET_7: 'NET 7',
+  NET_15: 'NET 15',
+  NET_30: 'NET 30',
+  CUSTOM: 'CUSTOM'
+};
+
+const resolveInheritedPaymentTerm = (code, note) => {
+  const normalizedNote = String(note || '').trim();
+  if (normalizedNote) return normalizedNote;
+
+  const normalizedCode = String(code || '').trim().toUpperCase();
+  if (!normalizedCode) return null;
+  return PAYMENT_TERM_LABELS[normalizedCode] || normalizedCode.replace(/_/g, ' ');
+};
+
+const getPaymentRequestSourceMeta = async (conn, paymentRequest, includeSchedules = false) => {
+  if (!paymentRequest) {
+    return {
+      source_type: null,
+      source_number: null,
+      payment_terms_code: null,
+      payment_terms_note: null,
+      payment_term: null,
+      payment_schedule_source_type: null,
+      payment_schedule_count: 0,
+      next_payment_date: null,
+      payment_schedules: []
+    };
+  }
+
+  if (paymentRequest.purchase_request_id) {
+    const [rows] = await conn.query(
+      `SELECT pr_number, payment_terms_code, payment_terms_note
+       FROM purchase_requests
+       WHERE id = ?`,
+      [paymentRequest.purchase_request_id]
+    );
+    const sourceRow = rows[0] || {};
+    let paymentSchedules = [];
+
+    if (includeSchedules) {
+      const [scheduleRows] = await conn.query(
+        `SELECT id, DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date, amount, note
+         FROM purchase_request_payment_schedules
+         WHERE purchase_request_id = ?
+         ORDER BY payment_date ASC`,
+        [paymentRequest.purchase_request_id]
+      );
+      paymentSchedules = scheduleRows;
+    }
+
+    return {
+      source_type: 'purchase_request',
+      source_number: sourceRow.pr_number || null,
+      payment_terms_code: sourceRow.payment_terms_code || null,
+      payment_terms_note: sourceRow.payment_terms_note || null,
+      payment_term: resolveInheritedPaymentTerm(sourceRow.payment_terms_code, sourceRow.payment_terms_note),
+      payment_schedule_source_type: 'pr',
+      payment_schedule_count: includeSchedules ? paymentSchedules.length : null,
+      next_payment_date: includeSchedules ? (paymentSchedules[0]?.payment_date || null) : null,
+      payment_schedules: paymentSchedules
+    };
+  }
+
+  if (paymentRequest.service_request_id) {
+    const [rows] = await conn.query(
+      `SELECT sr_number, payment_terms_note
+       FROM service_requests
+       WHERE id = ?`,
+      [paymentRequest.service_request_id]
+    );
+    const sourceRow = rows[0] || {};
+    let paymentSchedules = [];
+
+    if (includeSchedules) {
+      const [scheduleRows] = await conn.query(
+        `SELECT id, DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date, amount, note
+         FROM service_request_payment_schedules
+         WHERE service_request_id = ?
+         ORDER BY payment_date ASC`,
+        [paymentRequest.service_request_id]
+      );
+      paymentSchedules = scheduleRows;
+    }
+
+    return {
+      source_type: 'service_request',
+      source_number: sourceRow.sr_number || null,
+      payment_terms_code: null,
+      payment_terms_note: sourceRow.payment_terms_note || null,
+      payment_term: resolveInheritedPaymentTerm(null, sourceRow.payment_terms_note),
+      payment_schedule_source_type: 'sr',
+      payment_schedule_count: includeSchedules ? paymentSchedules.length : null,
+      next_payment_date: includeSchedules ? (paymentSchedules[0]?.payment_date || null) : null,
+      payment_schedules: paymentSchedules
+    };
+  }
+
+  if (paymentRequest.cash_request_id) {
+    const [rows] = await conn.query(
+      `SELECT cr_number, payment_terms_note
+       FROM cash_requests
+       WHERE id = ?`,
+      [paymentRequest.cash_request_id]
+    );
+    const sourceRow = rows[0] || {};
+    let paymentSchedules = [];
+
+    if (includeSchedules) {
+      const [scheduleRows] = await conn.query(
+        `SELECT id, DATE_FORMAT(payment_date, '%Y-%m-%d') AS payment_date, amount, note
+         FROM cash_request_payment_schedules
+         WHERE cash_request_id = ?
+         ORDER BY payment_date ASC`,
+        [paymentRequest.cash_request_id]
+      );
+      paymentSchedules = scheduleRows;
+    }
+
+    return {
+      source_type: 'cash_request',
+      source_number: sourceRow.cr_number || null,
+      payment_terms_code: null,
+      payment_terms_note: sourceRow.payment_terms_note || null,
+      payment_term: resolveInheritedPaymentTerm(null, sourceRow.payment_terms_note),
+      payment_schedule_source_type: 'cr',
+      payment_schedule_count: includeSchedules ? paymentSchedules.length : null,
+      next_payment_date: includeSchedules ? (paymentSchedules[0]?.payment_date || null) : null,
+      payment_schedules: paymentSchedules
+    };
+  }
+
+  return {
+    source_type: null,
+    source_number: null,
+    payment_terms_code: null,
+    payment_terms_note: null,
+    payment_term: null,
+    payment_schedule_source_type: null,
+    payment_schedule_count: 0,
+    next_payment_date: null,
+    payment_schedules: []
+  };
+};
 
 // Get all Payment Requests
 router.get('/', authenticate, async (req, res) => {
@@ -48,7 +195,19 @@ router.get('/', authenticate, async (req, res) => {
     const [paymentRequests] = await db.query(query, [...params, pageSize, offset]);
     const [countRows] = await db.query(countQuery, countParams);
 
-    res.json({ paymentRequests, page, pageSize, total: countRows?.[0]?.total ?? 0 });
+    const enrichedPaymentRequests = await Promise.all(
+      paymentRequests.map(async (paymentRequest) => {
+        const inherited = await getPaymentRequestSourceMeta(db, paymentRequest, true);
+        return {
+          ...paymentRequest,
+          ...inherited,
+          payment_schedule_count: inherited.payment_schedule_count ?? 0,
+          next_payment_date: inherited.next_payment_date || null
+        };
+      })
+    );
+
+    res.json({ paymentRequests: enrichedPaymentRequests, page, pageSize, total: countRows?.[0]?.total ?? 0 });
   } catch (error) {
     console.error('Failed to fetch payment requests', error);
     res.status(500).json({ message: 'Failed to fetch payment requests' });
@@ -61,12 +220,16 @@ router.get('/:id', authenticate, async (req, res) => {
     const [paymentRequests] = await db.query(`
       SELECT pr.*, 
              p.pr_number as original_pr_number,
+             sr.sr_number as original_sr_number,
+             cr.cr_number as original_cr_number,
              e.first_name as requested_by_first_name,
              e.last_name as requested_by_last_name,
              e2.first_name as approved_by_first_name,
              e2.last_name as approved_by_last_name
       FROM payment_requests pr
       LEFT JOIN purchase_requests p ON pr.purchase_request_id = p.id
+      LEFT JOIN service_requests sr ON pr.service_request_id = sr.id
+      LEFT JOIN cash_requests cr ON pr.cash_request_id = cr.id
       LEFT JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN employees e2 ON pr.approved_by = e2.id
       WHERE pr.id = ?
@@ -83,7 +246,15 @@ router.get('/:id', authenticate, async (req, res) => {
       WHERE pri.payment_request_id = ?
     `, [req.params.id]);
 
-    res.json({ paymentRequest: { ...paymentRequests[0], items } });
+    const inherited = await getPaymentRequestSourceMeta(db, paymentRequests[0], true);
+
+    res.json({
+      paymentRequest: {
+        ...paymentRequests[0],
+        ...inherited,
+        items
+      }
+    });
   } catch (error) {
     console.error('Failed to fetch payment request', error);
     res.status(500).json({ message: 'Failed to fetch payment request' });
@@ -455,9 +626,11 @@ router.get('/:id/export', authenticate, async (req, res) => {
   try {
     // Fetch payment request with PR details (if any)
     const [paymentRequests] = await db.query(
-      `SELECT pr.*, prr.pr_number as pr_pr_number, e.first_name, e.last_name 
+      `SELECT pr.*, prr.pr_number as pr_pr_number, sr.sr_number, cr.cr_number, e.first_name, e.last_name 
        FROM payment_requests pr
        LEFT JOIN purchase_requests prr ON pr.purchase_request_id = prr.id
+       LEFT JOIN service_requests sr ON pr.service_request_id = sr.id
+       LEFT JOIN cash_requests cr ON pr.cash_request_id = cr.id
        LEFT JOIN employees e ON pr.requested_by = e.id
        WHERE pr.id = ?`,
       [req.params.id]
@@ -468,6 +641,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     }
 
     const paymentRequest = paymentRequests[0];
+    const inherited = await getPaymentRequestSourceMeta(db, paymentRequest, true);
 
     // If payment request is from Service Request, fetch SR details
     let srNumber = null;
@@ -484,7 +658,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     }
 
     // Use PR number if available, otherwise use SR number
-    const sourceNumber = paymentRequest.pr_pr_number || srNumber || '';
+    const sourceNumber = paymentRequest.pr_pr_number || paymentRequest.sr_number || paymentRequest.cr_number || srNumber || '';
 
     // Fetch payment request items
     const [items] = await db.query(
@@ -565,6 +739,29 @@ router.get('/:id/export', authenticate, async (req, res) => {
     const finalTotal = totalAmount > 0 ? totalAmount : (parseFloat(paymentRequest.amount) || 0);
     const totalCell = setCellValue('G21', finalTotal);
     totalCell.numFmt = '#,##0.00';
+
+    let notesRow = currentRow + 1;
+    const exportNoteLines = [];
+    if (inherited.payment_term) {
+      exportNoteLines.push(`Payment Terms: ${inherited.payment_term}`);
+    }
+    if (Array.isArray(inherited.payment_schedules) && inherited.payment_schedules.length > 0) {
+      const today = new Date();
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const firstUpcomingOrToday = inherited.payment_schedules.find((schedule) => schedule.payment_date >= todayYmd);
+      const targetSchedule = firstUpcomingOrToday || inherited.payment_schedules[inherited.payment_schedules.length - 1];
+      if (targetSchedule?.payment_date) {
+        const amountNumber = Number(targetSchedule.amount);
+        const amountSuffix = Number.isFinite(amountNumber)
+          ? ` | Amount: ${amountNumber.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : '';
+        exportNoteLines.push(`Next Payment: ${targetSchedule.payment_date}${amountSuffix}`);
+      }
+    }
+    exportNoteLines.forEach((line) => {
+      setCellValue(`C${notesRow}`, line);
+      notesRow += 1;
+    });
 
     // Prepared by
     const preparedByName = `${paymentRequest.first_name || ''} ${paymentRequest.last_name || ''}`.trim().toUpperCase();

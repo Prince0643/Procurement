@@ -686,6 +686,87 @@ const Items = () => {
     'pcs', 'box', 'set', 'unit', 'meter', 'roll', 'kg', 'liter', 'gallon', 'sheet', 'pack', 'bundle'
   ]
 
+  const cartContent = (
+    <>
+      <div className="flex items-center justify-between border-b border-yellow-200 px-4 py-4">
+        <div>
+          <h3 className="font-semibold text-gray-900">Selected Items</h3>
+          <p className="text-sm text-gray-500">
+            {cart.length === 0 ? 'Your cart is empty' : `${cart.length} item${cart.length === 1 ? '' : 's'} selected`}
+          </p>
+        </div>
+        <button onClick={() => setShowCart(false)} className="rounded-md p-2 text-gray-400 hover:bg-white hover:text-gray-600">
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      {cart.length === 0 ? (
+        <div className="px-4 py-10 text-center text-gray-500">
+          <ShoppingCart className="mx-auto mb-3 h-10 w-10 text-yellow-300" />
+          <p>No items selected yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 px-4 py-4">
+            {cart.map(item => (
+              <div
+                key={item.item_id}
+                className="rounded-xl border border-yellow-200 bg-white p-3 shadow-sm"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 break-words">{item.item_name}</p>
+                    <p className="mt-1 text-xs text-gray-500 break-words">{item.item_code} • {item.unit}</p>
+                  </div>
+                  <button
+                    onClick={() => removeFromCart(item.item_id)}
+                    className="rounded-md p-1 text-red-500 hover:bg-red-50 hover:text-red-700"
+                    aria-label="Remove from cart"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => updateCartQuantity(item.item_id, item.quantity - 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-gray-50 text-base font-semibold text-gray-700 hover:bg-gray-100"
+                    >
+                      -
+                    </button>
+                    <span className="w-8 text-center text-sm font-semibold text-gray-900">{item.quantity}</span>
+                    <button
+                      onClick={() => updateCartQuantity(item.item_id, item.quantity + 1)}
+                      className="flex h-9 w-9 items-center justify-center rounded-md border border-gray-300 bg-gray-50 text-base font-semibold text-gray-700 hover:bg-gray-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {formatCurrency(item.quantity * item.unit_price)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-yellow-200 bg-white px-4 py-4">
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm text-gray-500">Total</span>
+              <span className="text-lg font-semibold text-gray-900">{formatCurrency(calculateCartTotal())}</span>
+            </div>
+            {user?.role !== 'super_admin' && (
+              <Button onClick={openPRModal} className="w-full">
+                Create Purchase Request
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  )
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -703,12 +784,12 @@ const Items = () => {
   return (
     <div className="space-y-6">
       {/* Header with Cart */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-gray-900">Items Catalog</h2>
           <p className="text-sm text-gray-500">Select items and quantities for your purchase request</p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
           {canManageCatalog && (
             <Button variant="secondary" onClick={() => setShowCategoryModal(true)} className="px-3 py-2">
               <Tag className="w-4 h-4 mr-2" />
@@ -725,7 +806,7 @@ const Items = () => {
           )}
           <button
             onClick={() => setShowCart(!showCart)}
-            className="relative flex items-center gap-2 px-3 py-2 bg-yellow-100 text-yellow-700 rounded-md hover:bg-yellow-200 transition-colors"
+            className="relative flex min-w-[7rem] items-center justify-center gap-2 rounded-md bg-yellow-100 px-3 py-2 text-yellow-700 transition-colors hover:bg-yellow-200 sm:min-w-0"
           >
             <ShoppingCart className="w-5 h-5" />
             <span className="font-medium hidden sm:inline">Cart ({cart.length})</span>
@@ -739,69 +820,28 @@ const Items = () => {
         </div>
       </div>
 
-      {/* Cart Panel */}
+      {/* Mobile Cart Sheet */}
       {showCart && (
-        <Card className="p-4 bg-yellow-50 border-yellow-200">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900">Selected Items</h3>
-            <button onClick={() => setShowCart(false)} className="text-gray-400 hover:text-gray-600">
-              <X className="w-5 h-5" />
-            </button>
+        <div className="fixed inset-0 z-40 sm:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setShowCart(false)} />
+          <div className="absolute inset-x-0 bottom-0 max-h-[82vh] overflow-hidden rounded-t-2xl bg-yellow-50 shadow-2xl">
+            <div className="max-h-[82vh] overflow-y-auto">
+              {cartContent}
+            </div>
           </div>
-          
-          {cart.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">No items selected yet</p>
-          ) : (
-            <>
-              <div className="space-y-2 mb-4">
-                {cart.map(item => (
-                  <div key={item.item_id} className="flex items-center justify-between bg-white p-3 rounded-md">
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{item.item_name}</p>
-                      <p className="text-xs text-gray-500">{item.item_code} • {item.unit}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="flex items-center gap-1">
-                        <button 
-                          onClick={() => updateCartQuantity(item.item_id, item.quantity - 1)}
-                          className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded hover:bg-gray-200"
-                        >-</button>
-                        <span className="w-10 text-center font-medium">{item.quantity}</span>
-                        <button 
-                          onClick={() => updateCartQuantity(item.item_id, item.quantity + 1)}
-                          className="w-7 h-7 flex items-center justify-center bg-gray-100 rounded hover:bg-gray-200"
-                        >+</button>
-                      </div>
-                      <span className="text-sm font-medium w-20 text-right">
-                        {formatCurrency(item.quantity * item.unit_price)}
-                      </span>
-                      <button 
-                        onClick={() => removeFromCart(item.item_id)}
-                        className="text-red-500 hover:text-red-700"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              
-              <div className="flex items-center justify-between pt-3 border-t border-yellow-200">
-                <span className="font-semibold">Total: {formatCurrency(calculateCartTotal())}</span>
-                {user?.role !== 'super_admin' && (
-                  <Button onClick={openPRModal}>
-                    Create Purchase Request
-                  </Button>
-                )}
-              </div>
-            </>
-          )}
+        </div>
+      )}
+
+      {/* Desktop Cart Panel */}
+      {showCart && (
+        <Card className="hidden border-yellow-200 bg-yellow-50 sm:block">
+          {cartContent}
         </Card>
       )}
 
       {/* Search and Filter */}
-      <div className="flex gap-4">
-        <div className="flex-1 relative">
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -814,7 +854,7 @@ const Items = () => {
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 bg-white"
+          className="w-full rounded-md border border-gray-300 bg-white px-4 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-500 sm:w-56"
         >
           {filterCategories.map(cat => (
             <option key={cat} value={cat}>
@@ -834,82 +874,94 @@ const Items = () => {
           </div>
         ) : (
           <>
-            {/* Mobile grid */}
-            <div className="grid grid-cols-2 gap-3 p-3 sm:hidden">
+            {/* Mobile list */}
+            <div className="space-y-3 p-3 sm:hidden">
               {items.map(item => {
                 const inCart = cart.find(c => c.item_id === item.id)
                 return (
-                  <div key={item.id} className="border border-gray-200 rounded-lg p-3 flex flex-col">
+                  <div key={item.id} className="rounded-xl border border-gray-200 p-4 shadow-sm">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Package className="w-5 h-5 text-gray-400" />
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl bg-gray-100">
+                        <Package className="h-5 w-5 text-gray-400" />
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-gray-900 leading-snug break-words">
-                          {item.item_name}
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5 break-words">
-                          {item.item_code} • {item.unit || 'pcs'}
-                        </p>
-                        {item.last_unit_price && (
-                          <p className="text-xs text-green-600 font-medium mt-1">
-                            {formatCurrency(item.last_unit_price)}
-                          </p>
-                        )}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="text-sm font-semibold leading-snug text-gray-900 break-words">
+                              {item.item_name}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500 break-words">
+                              {item.item_code} • {item.unit || 'pcs'}
+                            </p>
+                          </div>
+                          {canManageCatalog && (
+                            <button
+                              onClick={() => openEditItemModal(item)}
+                              className="rounded-md border border-gray-200 p-2 text-gray-600 hover:bg-gray-50"
+                              aria-label="Edit item"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          {getItemCategoryName(item) && (
+                            <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+                              {getItemCategoryName(item)}
+                            </span>
+                          )}
+                          {item.last_unit_price ? (
+                            <span className="text-xs font-semibold text-green-700">
+                              {formatCurrency(item.last_unit_price)}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">No recent price</span>
+                          )}
+                        </div>
                       </div>
                     </div>
 
-                    <div className="mt-3">
+                    <div className="mt-4 border-t border-gray-100 pt-3">
                       {inCart ? (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-medium text-green-700">In cart: {inCart.quantity}</span>
-                          <div className="flex items-center gap-2">
-                            {canManageCatalog && (
-                              <button
-                                onClick={() => openEditItemModal(item)}
-                                className="text-gray-500 hover:text-gray-700"
-                                aria-label="Edit item"
-                              >
-                                <Pencil className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => removeFromCart(item.id)}
-                              className="text-red-500 hover:text-red-700"
-                              aria-label="Remove from cart"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-green-700">In cart: {inCart.quantity}</p>
+                            <p className="text-xs text-gray-500">
+                              {formatCurrency(inCart.quantity * inCart.unit_price)}
+                            </p>
                           </div>
+                          <button
+                            onClick={() => removeFromCart(item.id)}
+                            className="inline-flex items-center gap-2 rounded-md border border-red-200 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50"
+                            aria-label="Remove from cart"
+                          >
+                            <X className="h-4 w-4" />
+                            Remove
+                          </button>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="1"
-                            value={itemQuantities[item.id] ?? 1}
-                            onChange={(e) => updateItemQuantity(item.id, e.target.value)}
-                            className="w-14 px-2 py-1 border border-gray-300 rounded text-center text-sm"
-                          />
+                        <div className="flex items-center gap-3">
+                          <label className="flex min-w-[5.5rem] items-center rounded-md border border-gray-300 bg-white px-2 py-2">
+                            <span className="sr-only">Quantity</span>
+                            <input
+                              type="number"
+                              min="1"
+                              value={itemQuantities[item.id] ?? 1}
+                              onChange={(e) => updateItemQuantity(item.id, e.target.value)}
+                              className="w-full border-0 bg-transparent text-center text-sm font-medium focus:outline-none focus:ring-0"
+                            />
+                          </label>
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => addToCart(item)}
                             className="flex-1"
                           >
-                            <Plus className="w-4 h-4 mr-1" />
-                            Add
+                            <Plus className="mr-1 h-4 w-4" />
+                            Add to Cart
                           </Button>
-                          {canManageCatalog && (
-                            <button
-                              onClick={() => openEditItemModal(item)}
-                              className="px-2 py-1 border border-gray-300 rounded text-gray-600 hover:bg-gray-50"
-                              aria-label="Edit item"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
                         </div>
                       )}
                     </div>

@@ -28,6 +28,11 @@ const formatPaymentTerms = (record) => {
   return code.replace(/_/g, ' ');
 };
 
+const formatScheduleAmount = (amount) => {
+  if (amount == null || amount === '') return '-';
+  return formatCurrency(Number(amount) || 0);
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -139,6 +144,7 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
               <p><span className="text-gray-500">Project:</span> {payment.project || '-'}</p>
               <p><span className="text-gray-500">Order Number:</span> {payment.order_number || '-'}</p>
               <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(payment)}</p>
+              <p><span className="text-gray-500">Schedules:</span> {(payment.payment_schedules || []).length}</p>
               {payment.remarks && <p><span className="text-gray-500">Remarks:</span> {payment.remarks}</p>}
             </div>
           </div>
@@ -240,8 +246,8 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
                 Prepared By
               </div>
               <div className="col-span-4 px-3 py-2 border-r border-gray-300 text-sm text-gray-900">
-                {payment.first_name || payment.last_name ? 
-                  `${payment.first_name || ''} ${payment.last_name || ''}`.trim() : '-'}
+                {payment.requested_by_first_name || payment.requested_by_last_name ? 
+                  `${payment.requested_by_first_name || ''} ${payment.requested_by_last_name || ''}`.trim() : '-'}
               </div>
               <div className="col-span-2 px-3 py-2 border-r border-gray-300 bg-gray-50 text-xs font-semibold text-gray-600 uppercase">
                 Approved By
@@ -264,6 +270,32 @@ const PaymentRequestPreviewModal = ({ payment, loading, onClose, onApprove, onHo
               </div>
             )}
           </div>
+
+          {Array.isArray(payment.payment_schedules) && payment.payment_schedules.length > 0 && (
+            <div className="mt-6">
+              <p className="mb-2 text-xs font-semibold text-gray-600 uppercase">Inherited Payment Schedules</p>
+              <div className="border border-gray-300 rounded overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr className="border-b border-gray-300">
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Payment Date</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Amount</th>
+                      <th className="text-left py-2 px-3 text-xs font-semibold text-gray-600 uppercase">Note</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payment.payment_schedules.map((schedule) => (
+                      <tr key={schedule.id || `${schedule.payment_date}-${schedule.amount}`} className="border-b border-gray-200 last:border-0">
+                        <td className="py-2 px-3 text-sm text-gray-900">{formatDate(schedule.payment_date)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-900">{formatScheduleAmount(schedule.amount)}</td>
+                        <td className="py-2 px-3 text-sm text-gray-900">{schedule.note || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           {/* Supporting Documents Section */}
           {payment.documents && payment.documents.length > 0 && (

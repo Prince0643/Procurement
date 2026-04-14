@@ -130,11 +130,11 @@ const DisbursementVouchers = () => {
       const approvedPOs = posData.filter(po => po.status === 'Approved');
       setPurchaseOrders(approvedPOs);
       
-      // Filter only Approved Payment Requests that don't have a DV yet
-      const approvedPRs = prData.filter(pr => pr.status === 'Approved' && pr.payment_basis === 'non_debt');
-      const prIdsWithDV = new Set(vouchersData.filter(v => v.payment_request_id).map(v => v.payment_request_id));
-      const availablePRs = approvedPRs.filter(pr => !prIdsWithDV.has(pr.id));
-      setPaymentRequests(availablePRs);
+      const approvedPRs = prData.filter(pr =>
+        (pr.status === 'Approved' || pr.status === 'DV Created') &&
+        (pr.payment_schedule_count || 0) > 0
+      );
+      setPaymentRequests(approvedPRs);
 
       // Filter approved Payment Orders that don't have a DV yet
       const approvedPOsData = poData.filter(po => po.status === 'Approved');

@@ -11,8 +11,7 @@ const Header = ({ user, notifications = [], onToggleSidebar, isSidebarOpen, setN
   const dropdownRef = useRef(null);
   
   // Get current page title from navigation config
-  const currentPath = location.pathname.replace('/dashboard/', '');
-  const navItem = getNavigationItemByPath(currentPath);
+  const navItem = getNavigationItemByPath(location.pathname);
   const pageTitle = navItem?.label || 'Dashboard';
 
   // Close dropdown when clicking outside
