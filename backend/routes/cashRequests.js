@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getAdmins } from '../utils/notifications.js';
+import { createNotification, getAdmins, getProcurementOfficers } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';
@@ -451,7 +451,7 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Submit Cash Request (Draft -> Pending)
+// Submit Cash Request (Draft -> For Procurement Review)
 router.put('/:id/submit', authenticate, async (req, res) => {
   let conn;
   try {
@@ -490,26 +490,26 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     await conn.beginTransaction();
 
     await conn.query(
-      "UPDATE cash_requests SET status = 'Pending', updated_at = NOW() WHERE id = ?",
+      "UPDATE cash_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
       [req.params.id]
     );
 
     await conn.commit();
 
-    // Notify admins for approval
-    const admins = await getAdmins();
-    for (const adminId of admins) {
+    // Notify procurement for review
+    const procurementUsers = await getProcurementOfficers();
+    for (const userId of procurementUsers) {
       await createNotification(
-        adminId,
-        'New Cash Request',
-        `Cash Request ${cr.cr_number} has been submitted and requires your approval`,
+        userId,
+        'Cash Request For Review',
+        `Cash Request ${cr.cr_number} has been submitted and requires Procurement review`,
         'PR Created',
         cr.id,
         'cash_request'
       );
     }
 
-    res.json({ message: 'Cash request submitted successfully', status: 'Pending' });
+    res.json({ message: 'Cash request submitted successfully', status: 'For Procurement Review' });
   } catch (error) {
     if (conn) {
       try {
@@ -524,92 +524,8 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     if (conn) conn.release();
   }
 });
-
-// Approve/Reject Cash Request (admin/super admin)
-router.put('/:id/approve', authenticate, requireAdmin, async (req, res) => {
-  let conn;
-  try {
-    const { status, rejection_reason } = req.body; // status: 'approved' | 'rejected'
-
-    const [crs] = await db.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
-    if (crs.length === 0) {
-      return res.status(404).json({ message: 'Cash request not found' });
-    }
-
-    const cr = crs[0];
-
-    // Only Pending CRs can be approved/rejected
-    if (cr.status !== 'Pending' && cr.status !== 'For Approval') {
-      return res.status(400).json({ message: 'Cash request not ready for approval' });
-    }
-
-    conn = await db.getConnection();
-    await conn.beginTransaction();
-
-    let newStatus;
-    if (status === 'approved') {
-      const scheduleCount = await getPaymentScheduleCount(conn, req.params.id);
-      if (scheduleCount === 0) {
-        await conn.rollback();
-        return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
-      }
-      newStatus = 'Approved';
-      await conn.query(
-        'UPDATE cash_requests SET status = ?, approved_by = ?, approved_at = NOW(), updated_at = NOW() WHERE id = ?',
-        [newStatus, req.user.id, req.params.id]
-      );
-    } else {
-      newStatus = 'Rejected';
-      await conn.query(
-        'UPDATE cash_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
-        [newStatus, rejection_reason || null, req.params.id]
-      );
-    }
-
-    await conn.commit();
-
-    // Notify engineer
-    if (status === 'approved') {
-      await createNotification(
-        cr.requested_by,
-        'Cash Request Approved',
-        `Your Cash Request ${cr.cr_number} has been approved and is ready for DV creation`,
-        'PR Approved',
-        cr.id,
-        'cash_request'
-      );
-    } else {
-      await createNotification(
-        cr.requested_by,
-        'Cash Request Rejected',
-        `Your Cash Request ${cr.cr_number} has been rejected${rejection_reason ? ': ' + rejection_reason : ''}`,
-        'PR Rejected',
-        cr.id,
-        'cash_request'
-      );
-    }
-
-    res.json({ message: `Cash request ${status} successfully`, status: newStatus });
-  } catch (error) {
-    if (conn) {
-      try {
-        await conn.rollback();
-      } catch {
-        // ignore
-      }
-    }
-    if (error?.statusCode) {
-      return res.status(error.statusCode).json({ message: error.message });
-    }
-    console.error('Approve cash request error:', error);
-    res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });
-  } finally {
-    if (conn) conn.release();
-  }
-});
-
-// Admin Approval/Reject Cash Request (moves to For Super Admin Final Approval)
-router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, res) => {
+// Procurement Approval/Reject Cash Request (moves to For Super Admin Final Approval)
+router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
   let conn;
   try {
     const { status, remarks } = req.body;
@@ -621,9 +537,9 @@ router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, r
 
     const cr = crs[0];
 
-    // Only Pending CRs can be admin approved
-    if (cr.status !== 'Pending' && cr.status !== 'For Admin Approval') {
-      return res.status(400).json({ message: 'Cash request not ready for admin approval' });
+    // Only For Procurement Review CRs can be procurement approved
+    if (cr.status !== 'For Procurement Review') {
+      return res.status(400).json({ message: 'Cash request not ready for Procurement review' });
     }
 
     conn = await db.getConnection();
@@ -661,8 +577,8 @@ router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, r
     if (status === 'approved') {
       await createNotification(
         cr.requested_by,
-        'Cash Request Approved by Admin',
-        `Your Cash Request ${cr.cr_number} has been approved by admin and is waiting for Super Admin final approval`,
+        'Cash Request Approved by Procurement',
+        `Your Cash Request ${cr.cr_number} has been reviewed by Procurement and is waiting for Super Admin final approval`,
         'PR Approved',
         cr.id,
         'cash_request'
@@ -699,7 +615,7 @@ router.put('/:id/admin-approve', authenticate, requireProcurement, async (req, r
     if (error?.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
-    console.error('Admin approve cash request error:', error);
+    console.error('Procurement approve cash request error:', error);
     res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });
   } finally {
     if (conn) conn.release();
@@ -760,7 +676,7 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       await createNotification(
         cr.requested_by,
         'Cash Request Approved',
-        `Your Cash Request ${cr.cr_number} has been approved and is ready for DV creation`,
+        `Your Cash Request ${cr.cr_number} has been fully approved and is ready for Payment Request creation`,
         'PR Approved',
         cr.id,
         'cash_request'

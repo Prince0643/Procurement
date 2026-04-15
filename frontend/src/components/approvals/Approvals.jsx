@@ -362,6 +362,11 @@ const Approvals = () => {
     sr.status === 'Approved' || sr.status === 'PO Created' || sr.status === 'Paid' || sr.status === 'Received'
   );
 
+  // Filter Cash Requests that need Procurement review
+  const procurementReviewCashRequests = cashRequests.filter(cr => 
+    cr.status === 'For Procurement Review'
+  );
+
   // Filter Cash Requests that need Super Admin final approval
   const pendingCashRequests = cashRequests.filter(cr => 
     cr.status === 'For Super Admin Final Approval'
@@ -661,6 +666,20 @@ const Approvals = () => {
       await fetchData();
     } catch (err) {
       alert('Failed to reject service request: ' + err.message);
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleProcurementApproveCR = async (id, action) => {
+    const row = cashRequests.find((item) => item.id === id);
+    if (blockIfLockedOrder(row?.order_number)) return;
+    try {
+      setProcessingId(id);
+      await cashRequestService.procurementApprove(id, action);
+      await fetchData();
+    } catch (err) {
+      alert('Failed to process cash request: ' + err.message);
     } finally {
       setProcessingId(null);
     }

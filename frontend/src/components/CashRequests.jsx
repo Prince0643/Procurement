@@ -148,8 +148,7 @@ const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
       'Draft': 'bg-gray-100 text-gray-800',
-      'Pending': 'bg-yellow-100 text-yellow-800',
-      'For Admin Approval': 'bg-blue-100 text-blue-800',
+      'For Procurement Review': 'bg-yellow-100 text-yellow-800',
       'For Super Admin Final Approval': 'bg-purple-100 text-purple-800',
       'Approved': 'bg-green-100 text-green-800',
       'Cash Request Created': 'bg-indigo-100 text-indigo-800',
@@ -172,8 +171,7 @@ const StatusBadge = ({ status }) => {
 
 const STATUS_FILTER_OPTIONS = [
   'Draft',
-  'Pending',
-  'For Admin Approval',
+  'For Procurement Review',
   'For Super Admin Final Approval',
   'Approved',
   'Cash Request Created',
@@ -623,10 +621,20 @@ const CashRequests = () => {
     }
   }
 
-  const handleApproveCR = async (id, status) => {
+  const handleProcurementApprove = async (id, status) => {
     try {
-      await cashRequestService.adminApprove(id, status)
-      alert(`Cash Request ${status === 'approved' ? 'approved' : 'put on hold'} successfully!`)
+      await cashRequestService.procurementApprove(id, status)
+      alert(`Cash Request ${status === 'approved' ? 'approved by Procurement' : 'put on hold'} successfully!`)
+      await fetchCashRequests()
+    } catch (err) {
+      alert('Failed to process: ' + (err.message || err.response?.data?.message))
+    }
+  }
+
+  const handleSuperAdminApprove = async (id, status) => {
+    try {
+      await cashRequestService.superAdminApprove(id, status)
+      alert(`Cash Request ${status === 'approved' ? 'fully approved' : 'put on hold'} successfully!`)
       await fetchCashRequests()
     } catch (err) {
       alert('Failed to process: ' + (err.message || err.response?.data?.message))
@@ -776,7 +784,7 @@ const CashRequests = () => {
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleExport(cr.id, cr.cr_number); }} title="Export to Excel">
                           <Download className="w-4 h-4" />
                         </Button>
-                        {cr.status === 'Draft' && (
+                        {cr.status === 'Draft' && cr.requested_by === user?.id && (
                           <>
                             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditModal(cr); }} title="Edit">
                               <Edit className="w-4 h-4" />
@@ -789,12 +797,22 @@ const CashRequests = () => {
                             </Button>
                           </>
                         )}
-                        {(cr.status === 'Pending' || cr.status === 'For Admin Approval') && (
+                        {cr.status === 'For Procurement Review' && (
                           <>
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleApproveCR(cr.id, 'approved'); }} title="Approve">
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleProcurementApprove(cr.id, 'approved'); }} title="Approve">
                               <CheckCircle className="w-4 h-4 text-green-500" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleApproveCR(cr.id, 'hold'); }} title="Hold">
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleProcurementApprove(cr.id, 'hold'); }} title="Hold">
+                              <Clock className="w-4 h-4 text-orange-500" />
+                            </Button>
+                          </>
+                        )}
+                        {cr.status === 'For Super Admin Final Approval' && (
+                          <>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleSuperAdminApprove(cr.id, 'approved'); }} title="Approve">
+                              <CheckCircle className="w-4 h-4 text-green-500" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleSuperAdminApprove(cr.id, 'hold'); }} title="Hold">
                               <Clock className="w-4 h-4 text-orange-500" />
                             </Button>
                           </>
