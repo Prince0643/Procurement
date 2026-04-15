@@ -4,8 +4,8 @@ import { purchaseOrderService } from '../services/purchaseOrders'
 import { serviceRequestService } from '../services/serviceRequests'
 import { cashRequestService } from '../services/cashRequests'
 import pricingHistoryService from '../services/pricingHistory'
-import { FileText, Clock, CheckCircle, ShoppingCart, AlertCircle, CreditCard, TrendingUp, Eye } from 'lucide-react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
+import { FileText, Clock, CheckCircle, ShoppingCart, AlertCircle, CreditCard, TrendingUp } from 'lucide-react'
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 
 // UI Components
 const Card = ({ children, className = '' }) => (
@@ -57,6 +57,8 @@ const Dashboard = () => {
   const [isMobile, setIsMobile] = useState(false)
   const [purchaseRequests, setPurchaseRequests] = useState([])
   const [purchaseOrders, setPurchaseOrders] = useState([])
+  const [serviceRequests, setServiceRequests] = useState([])
+  const [cashRequests, setCashRequests] = useState([])
   const [stats, setStats] = useState({
     totalPRs: 0,
     pendingPRs: 0,
@@ -74,6 +76,7 @@ const Dashboard = () => {
   const [selectedItem, setSelectedItem] = useState('')
   const [selectedYear, setSelectedYear] = useState('')
   const [availableYears, setAvailableYears] = useState([])
+  const [monthlySpending, setMonthlySpending] = useState([])
 
   useEffect(() => {
     fetchDashboardData()
@@ -122,6 +125,8 @@ const Dashboard = () => {
       // Store full data for tabs
       setPurchaseRequests(prs)
       setPurchaseOrders(pos)
+      setServiceRequests(srs)
+      setCashRequests(crs)
 
       // Calculate stats
       const pendingPRs = prs.filter(pr => pr.status === 'Pending' || pr.status === 'For Approval').length
@@ -139,6 +144,27 @@ const Dashboard = () => {
         totalCRs: crTotal,
         pendingCRs
       })
+
+      // Calculate monthly spending from PRs and POs
+      const spendingByMonth = {}
+      const allTransactions = [
+        ...prs.map(pr => ({ date: pr.created_at, amount: pr.total_amount || 0, type: 'PR' })),
+        ...pos.map(po => ({ date: po.created_at, amount: po.total_amount || 0, type: 'PO' }))
+      ]
+      
+      allTransactions.forEach(tx => {
+        if (!tx.date) return
+        const month = new Date(tx.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short' })
+        spendingByMonth[month] = (spendingByMonth[month] || 0) + (tx.amount || 0)
+      })
+      
+      // Convert to array and sort by date
+      const spendingData = Object.entries(spendingByMonth)
+        .map(([month, amount]) => ({ month, amount: Math.round(amount) }))
+        .sort((a, b) => new Date(a.month) - new Date(b.month))
+        .slice(-6) // Last 6 months
+      
+      setMonthlySpending(spendingData)
 
       // Create recent activity feed: latest 5 overall across modules
       const activity = [
@@ -206,7 +232,17 @@ const Dashboard = () => {
       'For Approval': 'bg-blue-100 text-blue-800',
       'Approved': 'bg-green-100 text-green-800',
       'Rejected': 'bg-red-100 text-red-800',
-      'For Procurement Review': 'bg-orange-100 text-orange-800'
+      'For Procurement Review': 'bg-orange-100 text-orange-800',
+      'For Super Admin Final Approval': 'bg-blue-100 text-blue-800',
+      'PO Created': 'bg-purple-100 text-purple-800',
+      'For Purchase': 'bg-blue-100 text-blue-800',
+      'Completed': 'bg-green-100 text-green-800',
+      'Cancelled': 'bg-red-100 text-red-800',
+      'For Admin Approval': 'bg-blue-100 text-blue-800',
+      'Payment Request Created': 'bg-indigo-100 text-indigo-800',
+      'Payment Order Created': 'bg-indigo-100 text-indigo-800',
+      'Paid': 'bg-green-100 text-green-800',
+      'Received': 'bg-teal-100 text-teal-800'
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
@@ -214,7 +250,7 @@ const Dashboard = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
       </div>
     )
   }
@@ -269,6 +305,36 @@ const Dashboard = () => {
               </span>
             </div>
           </button>
+          <button
+            onClick={() => setActiveTab('service-requests')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'service-requests'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>Service Requests</span>
+              <span className="px-2 py-0.5 bg-orange-100 text-orange-800 rounded-full text-xs">
+                {stats.totalSRs}
+              </span>
+            </div>
+          </button>
+          <button
+            onClick={() => setActiveTab('cash-requests')}
+            className={`pb-3 text-sm font-medium border-b-2 transition-colors ${
+              activeTab === 'cash-requests'
+                ? 'border-yellow-500 text-yellow-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              <span>Cash Requests</span>
+              <span className="px-2 py-0.5 bg-teal-100 text-teal-800 rounded-full text-xs">
+                {stats.totalCRs}
+              </span>
+            </div>
+          </button>
         </nav>
       </div>
 
@@ -318,6 +384,66 @@ const Dashboard = () => {
           subtitle={`${stats.pendingCRs} pending approval`}
         />
       </div>
+
+      {/* Monthly Spending Trend */}
+      <Card className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-semibold text-gray-900">Monthly Spending Trend</h3>
+            <p className="text-xs text-gray-500">Total procurement spend over the last 6 months</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-yellow-500" />
+          </div>
+        </div>
+        
+        {monthlySpending.length > 0 ? (
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={monthlySpending} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                <XAxis 
+                  dataKey="month" 
+                  tick={{ fontSize: 11 }}
+                  stroke="#9ca3af"
+                  axisLine={false}
+                />
+                <YAxis 
+                  width={60}
+                  tick={{ fontSize: 11 }}
+                  stroke="#9ca3af"
+                  axisLine={false}
+                  tickFormatter={(value) => `₱${value >= 1000 ? (value/1000) + 'k' : value}`}
+                />
+                <Tooltip 
+                  formatter={(value) => [formatCurrency(value), 'Total Spend']}
+                  labelStyle={{ color: '#374151', fontSize: 12 }}
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    fontSize: 12
+                  }}
+                />
+                <Bar 
+                  dataKey="amount" 
+                  fill="#f59e0b" 
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={50}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <div className="h-48 flex items-center justify-center text-gray-500">
+            <div className="text-center">
+              <TrendingUp className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No spending data available</p>
+              <p className="text-xs text-gray-400 mt-1">Create purchase requests to see trends</p>
+            </div>
+          </div>
+        )}
+      </Card>
 
       {/* Pricing Trends Chart */}
       <Card className="p-4">
@@ -605,6 +731,167 @@ const Dashboard = () => {
                   <tr>
                     <td colSpan="6" className="py-8 text-center text-gray-500">
                       No purchase orders found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Service Requests Tab */}
+      {activeTab === 'service-requests' && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Recent Service Requests</h3>
+            <span className="text-sm text-gray-500">{serviceRequests.length} shown of {stats.totalSRs}</span>
+          </div>
+
+          {/* Mobile list */}
+          <div className="space-y-3 md:hidden">
+            {serviceRequests.length > 0 ? (
+              serviceRequests.map((sr) => (
+                <div key={sr.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{sr.sr_number}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{sr.service_type || '-'}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(sr.status)}`}>
+                      {sr.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <InfoRow label="Type" value={sr.sr_type === 'payment_order' ? 'Payment Order' : 'Payment Request'} />
+                    <InfoRow label="Purpose" value={sr.purpose || '-'} />
+                    <InfoRow label="Amount" value={formatCurrency(sr.amount)} />
+                    <InfoRow label="Date" value={formatDate(sr.created_at)} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-8">No service requests found</p>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">SR Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Service Type</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {serviceRequests.length > 0 ? (
+                  serviceRequests.map((sr) => (
+                    <tr key={sr.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{sr.sr_number}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${
+                          sr.sr_type === 'payment_order' ? 'bg-green-100 text-green-800' : 'bg-purple-100 text-purple-800'
+                        }`}>
+                          {sr.sr_type === 'payment_order' ? 'Payment Order' : 'Payment Request'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{sr.service_type || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{sr.purpose || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(sr.amount)}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(sr.status)}`}>
+                          {sr.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{formatDate(sr.created_at)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="7" className="py-8 text-center text-gray-500">
+                      No service requests found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Cash Requests Tab */}
+      {activeTab === 'cash-requests' && (
+        <Card className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-gray-900">Recent Cash Requests</h3>
+            <span className="text-sm text-gray-500">{cashRequests.length} shown of {stats.totalCRs}</span>
+          </div>
+
+          {/* Mobile list */}
+          <div className="space-y-3 md:hidden">
+            {cashRequests.length > 0 ? (
+              cashRequests.map((cr) => (
+                <div key={cr.id} className="p-3 border border-gray-200 rounded-lg">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{cr.cr_number}</p>
+                      <p className="text-xs text-gray-500 mt-0.5">{cr.project || '-'}</p>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(cr.status)}`}>
+                      {cr.status}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1">
+                    <InfoRow label="Purpose" value={cr.purpose || '-'} />
+                    <InfoRow label="Amount" value={formatCurrency(cr.amount)} />
+                    <InfoRow label="Date" value={formatDate(cr.created_at)} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-center text-gray-500 py-8">No cash requests found</p>
+            )}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">CR Number</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Purpose</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Project</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Amount</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Status</th>
+                  <th className="text-left py-3 px-4 text-xs font-medium text-gray-500 uppercase">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cashRequests.length > 0 ? (
+                  cashRequests.map((cr) => (
+                    <tr key={cr.id} className="border-b border-gray-100 hover:bg-gray-50">
+                      <td className="py-3 px-4 text-sm font-medium text-gray-900">{cr.cr_number}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{cr.purpose || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{cr.project || '-'}</td>
+                      <td className="py-3 px-4 text-sm text-gray-600">{formatCurrency(cr.amount)}</td>
+                      <td className="py-3 px-4">
+                        <span className={`px-2 py-0.5 rounded-full text-xs ${getStatusColor(cr.status)}`}>
+                          {cr.status}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-sm text-gray-500">{formatDate(cr.created_at)}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="6" className="py-8 text-center text-gray-500">
+                      No cash requests found
                     </td>
                   </tr>
                 )}

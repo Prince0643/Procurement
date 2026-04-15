@@ -865,6 +865,12 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
     console.log('Exporting Cash Request - date_needed from DB:', cr.date_needed, 'type:', typeof cr.date_needed);
 
+    // Fetch payment schedules for this cash request
+    const [paymentSchedules] = await db.query(
+      'SELECT * FROM cash_request_payment_schedules WHERE cash_request_id = ? ORDER BY payment_date',
+      [req.params.id]
+    );
+
     const workbook = new ExcelJS.Workbook();
     
     // Load template
@@ -910,6 +916,59 @@ router.get('/:id/export', authenticate, async (req, res) => {
     setCellValue('C14', cr.purpose || ''); // DESCRIPTION
     setCellValue('E14', cr.amount / (cr.quantity || 1)); // UNIT COST
     setCellValue('F14', cr.amount); // AMOUNT
+    
+    // Add payment terms and schedules below the item
+    let currentRow = 15; // Start after line item
+    
+    // Helper to format date
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
+    };
+
+    // Add "*** NOTHING FOLLOWS ***" marker
+    const nothingFollowsCell = worksheet.getCell(`C${currentRow}`);
+    nothingFollowsCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+    nothingFollowsCell.value = '*** NOTHING FOLLOWS ***';
+    currentRow++;
+
+    // Add payment terms note if exists
+    const paymentTermsNote = String(cr.payment_terms_note || '').trim();
+    if (paymentTermsNote) {
+      const noteCell = worksheet.getCell(`C${currentRow}`);
+      noteCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+      noteCell.value = `Payment Terms: ${paymentTermsNote}`;
+      currentRow++;
+    }
+
+    // Add payment schedules
+    if (paymentSchedules.length > 0) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayYmd = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      
+      paymentSchedules.forEach((schedule) => {
+        const scheduleDate = schedule.payment_date;
+        const amount = parseFloat(schedule.amount) || 0;
+        
+        // Determine status
+        let statusLabel = '';
+        if (scheduleDate < todayYmd) {
+          statusLabel = ' (OVERDUE)';
+        } else if (scheduleDate === todayYmd) {
+          statusLabel = ' (DUE TODAY)';
+        } else {
+          statusLabel = ' (UPCOMING)';
+        }
+        
+        const line = `${formatDate(scheduleDate)} | ${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}${schedule.note ? ` | ${schedule.note}` : ''}${statusLabel}`;
+        const scheduleCell = worksheet.getCell(`C${currentRow}`);
+        scheduleCell.font = { name: 'Arial', size: 10, color: { argb: '000000' }, bold: false };
+        scheduleCell.value = line;
+        currentRow++;
+      });
+    }
     
     // Total (row 31)
     setCellValue('F31', cr.amount); // TOTAL

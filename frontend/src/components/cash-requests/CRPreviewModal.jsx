@@ -33,6 +33,29 @@ const formatScheduleAmount = (amount) => {
   return formatCurrency(amount);
 };
 
+const getScheduleStatus = (paymentDate) => {
+  if (!paymentDate) return { label: '-', color: 'bg-gray-100 text-gray-600' };
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const scheduleDate = new Date(paymentDate);
+  scheduleDate.setHours(0, 0, 0, 0);
+  
+  const diffTime = scheduleDate - today;
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  
+  if (diffDays < 0) {
+    return { label: 'Overdue', color: 'bg-red-100 text-red-700' };
+  } else if (diffDays === 0) {
+    return { label: 'Due Today', color: 'bg-orange-100 text-orange-700' };
+  } else if (diffDays <= 7) {
+    return { label: `Due in ${diffDays} day${diffDays === 1 ? '' : 's'}`, color: 'bg-yellow-100 text-yellow-700' };
+  } else {
+    return { label: 'Upcoming', color: 'bg-green-100 text-green-700' };
+  }
+};
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -144,6 +167,26 @@ const CRPreviewModal = ({ cr, loading, onClose, onApprove, onHold, processingId,
               <p><span className="text-gray-500">Amount:</span> {formatCurrency(cr.amount)}</p>
               <p><span className="text-gray-500">Supplier:</span> {cr.supplier_name || '-'}</p>
               <p><span className="text-gray-500">Payment Terms:</span> {formatPaymentTerms(cr)}</p>
+              {(cr.payment_schedules || []).length > 0 && (
+                <div className="mt-2 pt-2 border-t border-gray-100">
+                  <p className="text-gray-500 mb-1">Payment Schedules:</p>
+                  <div className="space-y-1">
+                    {(cr.payment_schedules || []).map((schedule) => {
+                      const status = getScheduleStatus(schedule.payment_date);
+                      return (
+                        <div key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="flex items-center gap-1.5 flex-wrap">
+                          <span>{formatDate(schedule.payment_date)}</span>
+                          <span className="text-gray-400">|</span>
+                          <span>{formatScheduleAmount(schedule.amount)}</span>
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${status.color}`}>
+                            {status.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -208,12 +251,26 @@ const CRPreviewModal = ({ cr, loading, onClose, onApprove, onHold, processingId,
                 {(cr.payment_schedules || []).length === 0 ? (
                   <p>-</p>
                 ) : (
-                  <div className="space-y-1">
-                    {(cr.payment_schedules || []).map((schedule) => (
-                      <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`}>
-                        {formatDate(schedule.payment_date)} | {formatScheduleAmount(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
-                      </p>
-                    ))}
+                  <div className="space-y-2">
+                    {(cr.payment_schedules || []).map((schedule) => {
+                      const status = getScheduleStatus(schedule.payment_date);
+                      return (
+                        <div key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{formatDate(schedule.payment_date)}</span>
+                          <span className="text-gray-400">|</span>
+                          <span className="font-medium">{formatScheduleAmount(schedule.amount)}</span>
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${status.color}`}>
+                            {status.label}
+                          </span>
+                          {schedule.note && (
+                            <>
+                              <span className="text-gray-400">|</span>
+                              <span className="text-gray-600">{schedule.note}</span>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

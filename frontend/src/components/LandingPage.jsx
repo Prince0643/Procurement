@@ -151,6 +151,74 @@ const LandingPage = () => {
           </div>
         </div>
       </div>
+
+      {/* How It Works */}
+      <div className='py-16 bg-gray-50'>
+        <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
+          <div className='text-center'>
+            <h2 className='text-3xl font-bold text-gray-900'>How It Works</h2>
+            <p className='mt-4 mb-12 text-xl text-gray-500'>From request to payment in 4 simple steps</p>
+          </div>
+
+          <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8'>
+            {/* Step 1 */}
+            <div className='relative'>
+              <div className='bg-white rounded-lg p-6 shadow-sm border border-gray-200 relative z-10'>
+                <div className='w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mb-4'>
+                  <span className='text-yellow-600 font-bold text-lg'>1</span>
+                </div>
+                <h3 className='text-lg font-medium text-gray-900'>Create Request</h3>
+                <p className='text-sm text-gray-500'>Submit a purchase request with items, quantities, and specifications</p>
+              </div>
+              {/* Arrow connecting to next step */}
+              <div className='hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2 z-0'>
+                <ArrowRight className='w-8 h-8 text-gray-300' />
+              </div>
+            </div>
+            
+            {/* Step 2 */}
+            <div className='relative'>
+              <div className='bg-white rounded-lg p-6 shadow-sm border border-gray-200 relative z-10'>
+                <div className='w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-4'>
+                  <span className='text-blue-600 font-bold text-lg'>2</span>
+                </div>
+                <h3 className='text-lg font-semibold text-gray-900 mb-2'>Approval Flow</h3>
+                <p className='text-sm text-gray-500'>Get approvals from authorized personnel</p>
+              </div>
+              {/* Arrow connecting to next step */}
+              <div className='hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2 z-0'>
+                <ArrowRight className='w-8 h-8 text-gray-300' />
+              </div>
+            </div>
+            
+            {/* Step 3 */}
+            <div className='relative'>
+              <div className='bg-white rounded-lg p-6 shadow-sm border border-gray-200 relative z-10'>
+                <div className='w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mb-4'>
+                  <span className='text-purple-600 font-bold text-lg'>3</span>
+                </div>
+                <h3 className='text-lg font-semibold text-gray-900 mb-2'>Generate PO</h3>
+                <p className='text-sm text-gray-500'>Procurement converts approved requests to purchase orders</p>
+              </div>
+              {/* Arrow connecting to next step */}
+              <div className='hidden lg:block absolute top-1/2 -right-4 transform -translate-y-1/2 z-0'>
+                <ArrowRight className='w-8 h-8 text-gray-300' />
+              </div>
+            </div>
+            
+            {/* Step 4 */}
+            <div className='relative'>
+              <div className='bg-white rounded-lg p-6 shadow-sm border border-gray-200 relative z-10'>
+                <div className='w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-4'>
+                  <span className='text-green-600 font-bold text-lg'>4</span>
+                </div>
+                <h3 className='text-lg font-semibold text-gray-900 mb-2'>Track & Pay</h3>
+                <p className='text-sm text-gray-500'>Monitor delivery and process payment via disbursement voucher</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
