@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate, requireProcurement } from '../middleware/auth.js';
+import { authenticate, requireItemManagement } from '../middleware/auth.js';
 import db from '../config/database.js';
 
 const router = express.Router();
@@ -76,8 +76,8 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Create item (procurement, admin, super_admin can create)
-router.post('/', authenticate, requireProcurement, async (req, res) => {
+// Create item (procurement, admin, super_admin, engineer can create)
+router.post('/', authenticate, requireItemManagement, async (req, res) => {
   try {
     const { item_code, item_name, description, category_id, unit } = req.body;
     const created_by = req.user.id;
@@ -119,8 +119,8 @@ router.post('/', authenticate, requireProcurement, async (req, res) => {
   }
 });
 
-// Update item (procurement, admin, super_admin can update)
-router.put('/:id', authenticate, requireProcurement, async (req, res) => {
+// Update item (procurement, admin, super_admin, engineer can update)
+router.put('/:id', authenticate, requireItemManagement, async (req, res) => {
   try {
     const { item_code, item_name, description, category_id, unit } = req.body;
     const normalizedCategoryId = Number(category_id);
@@ -158,8 +158,8 @@ router.put('/:id', authenticate, requireProcurement, async (req, res) => {
   }
 });
 
-// Delete item (procurement, admin, super_admin can delete - soft delete)
-router.delete('/:id', authenticate, requireProcurement, async (req, res) => {
+// Delete item (procurement, admin, super_admin, engineer can delete - soft delete)
+router.delete('/:id', authenticate, requireItemManagement, async (req, res) => {
   try {
     await db.query("UPDATE items SET status = 'Inactive' WHERE id = ?", [req.params.id]);
     res.json({ message: 'Item deleted successfully' });

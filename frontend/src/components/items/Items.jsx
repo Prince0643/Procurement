@@ -671,7 +671,7 @@ const Items = () => {
     }
   }
 
-  const canManageCatalog = ['procurement', 'admin', 'super_admin'].includes(user?.role)
+  const canManageCatalog = ['procurement', 'admin', 'super_admin', 'engineer'].includes(user?.role)
 
   // Get categories from database + add 'all' option
   const filterCategories = [

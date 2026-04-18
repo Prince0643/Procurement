@@ -62,6 +62,7 @@ export const authorize = (...roles) => {
 // Role-specific middleware helpers
 export const requireEngineer = authorize('engineer', 'procurement', 'admin', 'super_admin');
 export const requireProcurement = authorize('procurement', 'admin', 'super_admin');
+export const requireItemManagement = authorize('procurement', 'admin', 'super_admin', 'engineer');
 export const requireAdmin = authorize('admin', 'super_admin');
 export const requireAdminOnly = authorize('admin');
 export const requireSuperAdmin = authorize('super_admin');

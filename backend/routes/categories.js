@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate, requireProcurement } from '../middleware/auth.js';
+import { authenticate, requireItemManagement } from '../middleware/auth.js';
 import db from '../config/database.js';
 
 const router = express.Router();
@@ -54,8 +54,8 @@ router.get('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Create category (procurement, admin, super_admin can create)
-router.post('/', authenticate, requireProcurement, async (req, res) => {
+// Create category (procurement, admin, super_admin, engineer can create)
+router.post('/', authenticate, requireItemManagement, async (req, res) => {
   try {
     const { name, description } = req.body;
     const created_by = req.user.id;
@@ -75,8 +75,8 @@ router.post('/', authenticate, requireProcurement, async (req, res) => {
   }
 });
 
-// Update category (procurement, admin, super_admin can update)
-router.put('/:id', authenticate, requireProcurement, async (req, res) => {
+// Update category (procurement, admin, super_admin, engineer can update)
+router.put('/:id', authenticate, requireItemManagement, async (req, res) => {
   try {
     const { name, description } = req.body;
     
@@ -92,8 +92,8 @@ router.put('/:id', authenticate, requireProcurement, async (req, res) => {
   }
 });
 
-// Delete category (procurement, admin, super_admin can delete)
-router.delete('/:id', authenticate, requireProcurement, async (req, res) => {
+// Delete category (procurement, admin, super_admin, engineer can delete)
+router.delete('/:id', authenticate, requireItemManagement, async (req, res) => {
   try {
     await db.query('DELETE FROM categories WHERE id = ?', [req.params.id]);
     res.json({ message: 'Category deleted successfully' });
