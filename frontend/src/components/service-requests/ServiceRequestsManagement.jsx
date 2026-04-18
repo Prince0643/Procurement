@@ -180,6 +180,7 @@ const ServiceRequestsManagement = () => {
     payment_terms_note: '',
     payment_schedules: [{ payment_date: '', amount: '', note: '' }]
   });
+  const [scheduleAmountTouched, setScheduleAmountTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const updateQueryParams = useCallback((updater, { replace = false } = {}) => {
@@ -230,6 +231,25 @@ const ServiceRequestsManagement = () => {
       socketService.off('sr_status_changed', handleSRStatusChange);
     };
   }, []);
+
+  useEffect(() => {
+    if (formData.sr_type !== 'payment_request') return;
+    if (scheduleAmountTouched) return;
+
+    const amountNum = Number(formData.amount);
+    const qtyNum = Number(formData.quantity);
+    if (!Number.isFinite(amountNum) || !Number.isFinite(qtyNum) || amountNum <= 0 || qtyNum <= 0) return;
+    const computed = (amountNum * qtyNum).toFixed(2);
+
+    setFormData((prev) => {
+      const schedules = Array.isArray(prev.payment_schedules) ? prev.payment_schedules : [];
+      const row0 = schedules[0] || { payment_date: '', amount: '', note: '' };
+
+      const nextSchedules = [...schedules];
+      nextSchedules[0] = { ...row0, amount: String(computed) };
+      return { ...prev, payment_schedules: nextSchedules };
+    });
+  }, [formData.sr_type, formData.amount, formData.quantity, scheduleAmountTouched]);
 
   const fetchBranches = async () => {
     try {
@@ -366,6 +386,16 @@ const ServiceRequestsManagement = () => {
     }
   };
 
+  const openCreateModal = () => {
+    setScheduleAmountTouched(false);
+    setShowCreateModal(true);
+  };
+
+  const closeCreateModal = () => {
+    setShowCreateModal(false);
+    setScheduleAmountTouched(false);
+  };
+
   const sanitizePaymentSchedules = (schedules = []) => {
     const seenDates = new Set();
     const normalized = [];
@@ -430,7 +460,7 @@ const ServiceRequestsManagement = () => {
         payment_terms_note: formData.payment_terms_note.trim() || null,
         payment_schedules: normalizedSchedules
       });
-      setShowCreateModal(false);
+      closeCreateModal();
       setFormData({
         purpose: '',
         description: '',
@@ -593,7 +623,7 @@ const ServiceRequestsManagement = () => {
           <p className="text-sm sm:text-base text-gray-500 mt-1">Manage rent, job orders, and contractor services</p>
         </div>
         {canCreate && (
-          <Button onClick={() => setShowCreateModal(true)} className="w-full sm:w-auto">
+          <Button onClick={openCreateModal} className="w-full sm:w-auto">
             <Plus className="w-4 h-4 mr-2" />
             New Service Request
           </Button>
@@ -1291,7 +1321,7 @@ const ServiceRequestsManagement = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    className="w-full sm:w-auto"
+                    className="w-full sm:w-auto !hidden"
                     onClick={() => setFormData((prev) => ({
                       ...prev,
                       payment_schedules: [...(prev.payment_schedules || []), { payment_date: '', amount: '', note: '' }]
@@ -1322,10 +1352,13 @@ const ServiceRequestsManagement = () => {
                         min="0"
                         step="0.01"
                         value={schedule.amount}
-                        onChange={(e) => setFormData((prev) => ({
-                          ...prev,
-                          payment_schedules: prev.payment_schedules.map((row, i) => i === index ? { ...row, amount: e.target.value } : row)
-                        }))}
+                        onChange={(e) => {
+                          if (index === 0) setScheduleAmountTouched(true);
+                          setFormData((prev) => ({
+                            ...prev,
+                            payment_schedules: prev.payment_schedules.map((row, i) => i === index ? { ...row, amount: e.target.value } : row)
+                          }));
+                        }}
                         placeholder="Optional"
                         className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                       />
@@ -1364,7 +1397,7 @@ const ServiceRequestsManagement = () => {
               </div>
             </div>
             <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <Button className="w-full sm:w-auto" variant="secondary" onClick={() => setShowCreateModal(false)} disabled={submitting}>
+              <Button className="w-full sm:w-auto" variant="secondary" onClick={closeCreateModal} disabled={submitting}>
                 Cancel
               </Button>
               <Button className="w-full sm:w-auto" onClick={handleCreate} disabled={submitting}>

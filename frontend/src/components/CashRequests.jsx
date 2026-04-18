@@ -233,6 +233,7 @@ const CashRequests = () => {
   const [orderNumber, setOrderNumber] = useState('')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
   const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
+  const [scheduleAmountTouched, setScheduleAmountTouched] = useState(false)
   const [branches, setBranches] = useState([])
   const [crType, setCrType] = useState('payment_request')
 
@@ -290,6 +291,26 @@ const CashRequests = () => {
   useEffect(() => {
     fetchCashRequests()
   }, [fetchCashRequests])
+
+  // Auto-fill first payment schedule amount = amount * quantity (Create modal only; until user edits it)
+  useEffect(() => {
+    if (!showCreateModal) return
+    if (crType !== 'payment_request') return
+    if (scheduleAmountTouched) return
+
+    const amountNum = Number(amount)
+    const qtyNum = Number(quantity)
+    if (!Number.isFinite(amountNum) || !Number.isFinite(qtyNum) || amountNum <= 0 || qtyNum <= 0) return
+
+    const computed = (amountNum * qtyNum).toFixed(2)
+    setPaymentSchedules((prev) => {
+      const schedules = Array.isArray(prev) ? prev : []
+      const row0 = schedules[0] || { payment_date: '', amount: '', note: '' }
+      const next = [...schedules]
+      next[0] = { ...row0, amount: String(computed) }
+      return next
+    })
+  }, [showCreateModal, crType, scheduleAmountTouched, amount, quantity])
 
   const openPreviewCR = async (cr) => {
     setPreviewCR(cr)
@@ -378,6 +399,7 @@ const CashRequests = () => {
   }
 
   const openCreateModal = async () => {
+    setScheduleAmountTouched(false)
     setShowCreateModal(true)
     setLoadingForm(true)
     try {
@@ -459,6 +481,7 @@ const CashRequests = () => {
     setOrderNumber('')
     setPaymentTermsNote('')
     setPaymentSchedules([{ payment_date: '', amount: '', note: '' }])
+    setScheduleAmountTouched(false)
     setCrType('payment_request')
   }
 
@@ -1141,6 +1164,7 @@ const CashRequests = () => {
                       type="button"
                       variant="secondary"
                       size="sm"
+                      className="!hidden"
                       onClick={() => setPaymentSchedules((prev) => [...prev, { payment_date: '', amount: '', note: '' }])}
                     >
                       <Plus className="w-4 h-4 mr-1" />
@@ -1165,7 +1189,10 @@ const CashRequests = () => {
                           min="0"
                           step="0.01"
                           value={schedule.amount}
-                          onChange={(e) => setPaymentSchedules((prev) => prev.map((row, i) => i === index ? { ...row, amount: e.target.value } : row))}
+                          onChange={(e) => {
+                            if (index === 0) setScheduleAmountTouched(true)
+                            setPaymentSchedules((prev) => prev.map((row, i) => i === index ? { ...row, amount: e.target.value } : row))
+                          }}
                           className="w-full px-2 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                           placeholder="Optional"
                         />
