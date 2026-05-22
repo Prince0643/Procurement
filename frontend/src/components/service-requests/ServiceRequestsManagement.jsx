@@ -138,7 +138,9 @@ const ServiceRequestsManagement = () => {
 
   const [serviceRequests, setServiceRequests] = useState([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
+  const hasLoadedListOnce = useRef(false);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState(urlQ);
   const [statusFilter, setStatusFilter] = useState(urlStatus);
@@ -276,8 +278,13 @@ const ServiceRequestsManagement = () => {
   }
 
   const fetchServiceRequests = useCallback(async () => {
+    const isInitialLoad = !hasLoadedListOnce.current;
     try {
-      setLoading(true);
+      if (isInitialLoad) {
+        setInitialLoading(true);
+      } else {
+        setListLoading(true);
+      }
       setError('');
 
       const view = user?.role === 'engineer' && urlView === 'all' ? 'all' : null;
@@ -293,11 +300,13 @@ const ServiceRequestsManagement = () => {
       setServiceRequests(rows);
       setTotal(Number.isFinite(payload?.total) ? payload.total : rows.length);
       setExpandedSRId(null);
+      hasLoadedListOnce.current = true;
     } catch (err) {
       setError('Failed to fetch service requests');
       console.error('Failed to fetch service requests', err);
     } finally {
-      setLoading(false);
+      setInitialLoading(false);
+      setListLoading(false);
     }
   }, [user?.role, urlView, page, pageSize, urlStatus, urlQ]);
 
@@ -606,14 +615,6 @@ const ServiceRequestsManagement = () => {
   const canProcurementApprove = ['procurement', 'admin', 'super_admin'].includes(user?.role);
   const canSuperAdminApprove = ['super_admin'].includes(user?.role);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-yellow-500"></div>
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -698,7 +699,18 @@ const ServiceRequestsManagement = () => {
       )}
 
       {/* Service Requests List */}
-      <Card>
+      <Card className="relative">
+        {initialLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent" />
+          </div>
+        ) : (
+          <>
+            {listLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/60">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent" />
+              </div>
+            )}
         <div className="hidden md:block divide-y divide-gray-200">
           {serviceRequests.map((sr) => (
             <div
@@ -1035,7 +1047,7 @@ const ServiceRequestsManagement = () => {
                     <Button
                       variant="secondary"
                       size="sm"
-                      disabled={page <= 1}
+                      disabled={page <= 1 || listLoading}
                       onClick={() => goToPage(page - 1)}
                     >
                       Prev
@@ -1048,6 +1060,7 @@ const ServiceRequestsManagement = () => {
                             key={`mobile-page-${p}`}
                             variant={p === page ? 'primary' : 'secondary'}
                             size="sm"
+                            disabled={listLoading}
                             onClick={() => goToPage(p)}
                           >
                             {p}
@@ -1057,7 +1070,7 @@ const ServiceRequestsManagement = () => {
                     <Button
                       variant="secondary"
                       size="sm"
-                      disabled={page >= totalPages}
+                      disabled={page >= totalPages || listLoading}
                       onClick={() => goToPage(page + 1)}
                     >
                       Next
@@ -1072,7 +1085,7 @@ const ServiceRequestsManagement = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={page <= 1}
+                    disabled={page <= 1 || listLoading}
                     onClick={() => goToPage(page - 1)}
                   >
                     Prev
@@ -1086,6 +1099,7 @@ const ServiceRequestsManagement = () => {
                           key={p}
                           variant={p === page ? 'primary' : 'secondary'}
                           size="sm"
+                          disabled={listLoading}
                           onClick={() => goToPage(p)}
                         >
                           {p}
@@ -1096,7 +1110,7 @@ const ServiceRequestsManagement = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    disabled={page >= totalPages}
+                    disabled={page >= totalPages || listLoading}
                     onClick={() => goToPage(page + 1)}
                   >
                     Next
@@ -1110,6 +1124,8 @@ const ServiceRequestsManagement = () => {
             )}
           </div>
         </div>
+          </>
+        )}
       </Card>
 
       {/* Preview Modal */}

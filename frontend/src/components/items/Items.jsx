@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { itemService } from '../../services/items'
 import { supplierService } from '../../services/suppliers'
 import { categoryService } from '../../services/categories'
@@ -117,7 +117,9 @@ const DEFAULT_ITEM_FORM = {
 const Items = () => {
   const { user } = useAuth()
   const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [initialLoading, setInitialLoading] = useState(true)
+  const [itemsLoading, setItemsLoading] = useState(false)
+  const hasLoadedItemsOnce = useRef(false)
   const [error, setError] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('')
@@ -231,8 +233,13 @@ const Items = () => {
   }
 
   const fetchItems = async () => {
+    const isInitialLoad = !hasLoadedItemsOnce.current
     try {
-      setLoading(true)
+      if (isInitialLoad) {
+        setInitialLoading(true)
+      } else {
+        setItemsLoading(true)
+      }
       setError('')
       const data = await itemService.getPage({
         page: currentPage,
@@ -254,10 +261,12 @@ const Items = () => {
         })
         return next
       })
+      hasLoadedItemsOnce.current = true
     } catch (err) {
       setError('Failed to fetch items')
     } finally {
-      setLoading(false)
+      setInitialLoading(false)
+      setItemsLoading(false)
     }
   }
 
@@ -767,20 +776,6 @@ const Items = () => {
     </>
   )
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="text-center py-12 text-red-600">{error}</div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       {/* Header with Cart */}
@@ -864,9 +859,19 @@ const Items = () => {
         </select>
       </div>
 
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
       {/* Items List View */}
-      <Card>
-        {items.length === 0 ? (
+      <Card className="relative">
+        {initialLoading ? (
+          <div className="flex items-center justify-center py-16">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent" />
+          </div>
+        ) : items.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             <Package className="w-12 h-12 mx-auto mb-4 text-gray-300" />
             <p>No items found</p>
@@ -874,6 +879,11 @@ const Items = () => {
           </div>
         ) : (
           <>
+            {itemsLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-white/60">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-yellow-500 border-t-transparent" />
+              </div>
+            )}
             {/* Mobile list */}
             <div className="space-y-3 p-3 sm:hidden">
               {items.map(item => {
@@ -1062,7 +1072,7 @@ const Items = () => {
                   variant="secondary"
                   size="sm"
                   onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
-                  disabled={currentPage <= 1 || loading}
+                  disabled={currentPage <= 1 || itemsLoading}
                 >
                   Previous
                 </Button>
@@ -1073,7 +1083,7 @@ const Items = () => {
                   variant="secondary"
                   size="sm"
                   onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
-                  disabled={currentPage >= totalPages || loading || totalItems === 0}
+                  disabled={currentPage >= totalPages || itemsLoading || totalItems === 0}
                 >
                   Next
                 </Button>
