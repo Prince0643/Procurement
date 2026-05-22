@@ -103,6 +103,30 @@ const formatDate = (dateString) => {
   })
 }
 
+const isEligibleDebtPRForPO = (pr) =>
+  pr?.status === 'For Purchase' && pr?.payment_basis !== 'non_debt'
+
+const buildPRSearchHaystack = (pr) =>
+  [
+    pr?.pr_number,
+    pr?.project,
+    pr?.purpose,
+    pr?.order_number,
+    pr?.payee_name,
+    pr?.supplier_name,
+    pr?.requester_first_name,
+    pr?.requester_last_name
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+
+const filterPRsByQuery = (sourcePrs, query) => {
+  const normalizedQuery = String(query || '').trim().toLowerCase()
+  if (!normalizedQuery) return sourcePrs
+  return sourcePrs.filter((pr) => buildPRSearchHaystack(pr).includes(normalizedQuery))
+}
+
 const StatusBadge = ({ status }) => {
   const getStatusColor = (status) => {
     const colors = {
@@ -168,6 +192,15 @@ const PurchaseOrders = () => {
     fetchPurchaseOrders()
   }, [])
 
+  useEffect(() => {
+    if (!showCreateModal || sourceType !== 'pr') return
+    if (prSearchQuery.trim() === '') {
+      setPrSearchResults([])
+      return
+    }
+    setPrSearchResults(filterPRsByQuery(prs, prSearchQuery))
+  }, [prs, prSearchQuery, showCreateModal, sourceType])
+
   const fetchPurchaseOrders = async () => {
     try {
       setLoading(true)
@@ -185,12 +218,17 @@ const PurchaseOrders = () => {
     setLoadingForm(true)
     try {
       const [prsData, srsData, suppliersData] = await Promise.all([
-        purchaseRequestService.getAll('all'),
+        purchaseRequestService.getAll('all', { status: 'For Purchase' }),
         serviceRequestService.getAll(),
         supplierService.getAll()
       ])
-      // Show PRs with 'For Purchase' status that are debt-based (non-cash must use Payment Requests)
-      setPrs(prsData.filter(pr => pr.status === 'For Purchase' && pr.payment_basis !== 'non_debt'))
+      // Debt-based PRs only (cash/non-debt PRs use Payment Requests)
+      const eligiblePrs = (prsData || []).filter(isEligibleDebtPRForPO)
+      setPrs(eligiblePrs)
+      if (prSearchQuery.trim() !== '') {
+        setPrSearchResults(filterPRsByQuery(eligiblePrs, prSearchQuery))
+        setShowPrResults(true)
+      }
       setSrs(srsData.filter(sr => sr.status === 'Approved' || sr.status === 'For Super Admin Final Approval'))
       setSuppliers(suppliersData)
     } catch (err) {
@@ -640,26 +678,24 @@ const PurchaseOrders = () => {
                       onChange={(e) => {
                         const query = e.target.value
                         setPrSearchQuery(query)
+                        setShowPrResults(true)
                         if (query.trim() === '') {
                           setPrSearchResults([])
                           setShowPrResults(false)
-                        } else {
-                          const filtered = prs.filter(pr => 
-                            pr.pr_number?.toLowerCase().includes(query.toLowerCase()) ||
-                            pr.project?.toLowerCase().includes(query.toLowerCase()) ||
-                            pr.payee_name?.toLowerCase().includes(query.toLowerCase())
-                          )
-                          setPrSearchResults(filtered)
-                          setShowPrResults(true)
                         }
                       }}
                       onFocus={() => {
-                        if (prSearchQuery.trim() !== '') {
-                          setShowPrResults(true)
-                        }
+                        if (loadingForm) return
+                        setShowPrResults(true)
+                        setPrSearchResults(
+                          prSearchQuery.trim() === ''
+                            ? prs
+                            : filterPRsByQuery(prs, prSearchQuery)
+                        )
                       }}
-                      placeholder="Search by PR number, project, or payee..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                      disabled={loadingForm}
+                      placeholder={loadingForm ? 'Loading purchase requests...' : 'Search by PR number, project, purpose, or payee...'}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:bg-gray-50"
                       required={!selectedPR}
                     />
                     {showPrResults && prSearchResults.length > 0 && (
@@ -684,9 +720,11 @@ const PurchaseOrders = () => {
                         ))}
                       </div>
                     )}
-                    {showPrResults && prSearchQuery.trim() !== '' && prSearchResults.length === 0 && (
+                    {showPrResults && !loadingForm && prSearchQuery.trim() !== '' && prSearchResults.length === 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg px-3 py-2 text-sm text-gray-500">
-                        No matching purchase requests found
+                        {prs.length === 0
+                          ? 'No debt-based purchase requests are ready for PO (status must be For Purchase). Cash PRs belong under Payment Requests.'
+                          : 'No matching purchase requests found'}
                       </div>
                     )}
                     <input type="hidden" value={selectedPR} required />

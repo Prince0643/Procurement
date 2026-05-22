@@ -38,8 +38,9 @@ export const purchaseRequestService = {
     });
   },
 
-  getAll: async (view) => {
-    const key = `getAll-${view || 'default'}`;
+  getAll: async (view, filters = {}) => {
+    const status = filters?.status ?? null;
+    const key = `getAll-${view || 'default'}-${status || 'any'}`;
     return dedupeRequest(key, async () => {
       const pageSize = 100;
       const all = [];
@@ -47,8 +48,12 @@ export const purchaseRequestService = {
       let total = Infinity;
 
       while (all.length < total) {
+        const params = { page, pageSize };
+        if (view) params.view = view;
+        if (status) params.status = status;
+
         const response = await api.get('/purchase-requests', {
-          params: { ...(view ? { view } : {}), page, pageSize },
+          params,
           cache: false
         });
 
