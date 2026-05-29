@@ -1,14 +1,18 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { LogOut } from 'lucide-react';
 import { navigationItems, filterNavigationByRole, navigationGroups } from '../../config/navigation';
 
 const Sidebar = ({ user, onLogout, pendingCount }) => {
+  const location = useLocation();
   // Filter navigation items based on user role
   const filteredNavItems = filterNavigationByRole(navigationItems, user?.role);
-  
+
   // Create a map for quick lookup
   const navItemMap = new Map(filteredNavItems.map(item => [item.path, item]));
+
+  // Get current path for comparison
+  const currentPath = location.pathname + location.search;
 
   return (
     <aside className="w-64 bg-white border-r border-gray-200 flex flex-col h-full">
@@ -75,13 +79,24 @@ const Sidebar = ({ user, onLogout, pendingCount }) => {
                       <NavLink
                         to={item.path}
                         end={item.path === '/dashboard'}
-                        className={({ isActive }) => `
-                          flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors
-                          ${isActive 
-                            ? 'bg-yellow-50 text-yellow-700 border-r-2 border-yellow-500' 
-                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        className={({ isActive }) => {
+                          // Custom active state check for purchase requests and reviews
+                          const isPurchaseRequests = item.path === '/dashboard/purchase-requests';
+                          const isForReviews = item.path === '/dashboard/purchase-requests?tab=reviews';
+
+                          let customActive = isActive;
+                          if (isPurchaseRequests || isForReviews) {
+                            customActive = currentPath === item.path;
                           }
-                        `}
+
+                          return `
+                            flex items-center gap-3 px-4 py-2.5 text-sm font-medium transition-colors
+                            ${customActive
+                              ? 'bg-yellow-50 text-yellow-700 border-r-2 border-yellow-500'
+                              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                            }
+                          `;
+                        }}
                       >
                         <Icon className="w-5 h-5 flex-shrink-0" />
                         <span className="flex-1">{item.label}</span>

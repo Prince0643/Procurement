@@ -22,8 +22,9 @@ export const purchaseRequestService = {
     const pageSize = params?.pageSize ?? null;
     const status = params?.status ?? null;
     const q = params?.q ?? null;
+    const pending_review = params?.pending_review ?? null;
 
-    const key = `list-${JSON.stringify({ view, page, pageSize, status, q })}`;
+    const key = `list-${JSON.stringify({ view, page, pageSize, status, q, pending_review })}`;
 
     return dedupeRequest(key, async () => {
       const queryParams = {};
@@ -32,6 +33,7 @@ export const purchaseRequestService = {
       if (pageSize) queryParams.pageSize = pageSize;
       if (status) queryParams.status = Array.isArray(status) ? status.join(',') : status;
       if (q) queryParams.q = q;
+      if (pending_review) queryParams.pending_review = pending_review;
 
       const response = await api.get('/purchase-requests', { params: queryParams, cache: false });
       return response.data;
@@ -86,10 +88,24 @@ export const purchaseRequestService = {
     });
   },
 
-  create: async (prData) => {
-    const response = await api.post('/purchase-requests', prData);
-    return response.data;
-  },
+create: async (prData) => {
+  const response = await api.post('/purchase-requests', {
+    purpose: prData.purpose,
+    project: prData.project,
+    project_address: prData.project_address,
+    date_needed: prData.date_needed,
+    order_number: prData.order_number,
+    supplier_id: prData.supplier_id,
+    supplier_name: prData.supplier_name,
+    supplier_address: prData.supplier_address, // ← ADD THIS LINE
+    payment_basis: prData.payment_basis,
+    payment_terms_note: prData.payment_terms_note,
+    payment_schedules: prData.payment_schedules,
+    remarks: prData.remarks,
+    items: prData.items
+  });
+  return response.data;
+},
 
   superAdminFirstApprove: async (id, status, remarks, itemRemarks) => {
     const response = await api.put(`/purchase-requests/${id}/super-admin-first-approve`, { status, remarks, item_remarks: itemRemarks });
@@ -148,10 +164,25 @@ export const purchaseRequestService = {
     return response.data;
   },
 
-  saveDraft: async (prData) => {
-    const response = await api.post('/purchase-requests', { ...prData, save_as_draft: true });
-    return response.data;
-  },
+saveDraft: async (prData) => {
+  const response = await api.post('/purchase-requests', {
+    purpose: prData.purpose,
+    project: prData.project,
+    project_address: prData.project_address,
+    date_needed: prData.date_needed,
+    order_number: prData.order_number,
+    supplier_id: prData.supplier_id,
+    supplier_name: prData.supplier_name,
+    supplier_address: prData.supplier_address, // ← ADD THIS LINE
+    payment_basis: prData.payment_basis,
+    payment_terms_note: prData.payment_terms_note,
+    payment_schedules: prData.payment_schedules,
+    remarks: prData.remarks,
+    items: prData.items,
+    save_as_draft: true
+  });
+  return response.data;
+},
 
   updateDraft: async (id, prData) => {
     const response = await api.put(`/purchase-requests/${id}/draft`, prData);
@@ -160,6 +191,14 @@ export const purchaseRequestService = {
 
   submitDraft: async (id) => {
     const response = await api.put(`/purchase-requests/${id}/submit-draft`);
+    return response.data;
+  },
+
+  review: async (id, reviewStatus, reviewComment) => {
+    const response = await api.post(`/purchase-requests/${id}/review`, {
+      review_status: reviewStatus,
+      review_comment: reviewComment
+    });
     return response.data;
   }
 };

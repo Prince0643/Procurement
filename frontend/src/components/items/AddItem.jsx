@@ -135,7 +135,7 @@ const AddItem = () => {
     e.preventDefault()
     
     if (!formData.item_code || !formData.item_name) {
-      alert('Item Code and Item Name are required')
+      alert('SKU and Item Name are required')
       return
     }
 
@@ -180,10 +180,10 @@ const AddItem = () => {
         <form onSubmit={handleSubmit}>
           <div className="grid grid-cols-2 gap-4">
             <Input
-              label="Item Code"
+              label="SKU"
               value={formData.item_code}
               onChange={(e) => handleChange('item_code', e.target.value)}
-              placeholder="e.g., ITM001"
+              placeholder="e.g., CEM-001"
               required
             />
             

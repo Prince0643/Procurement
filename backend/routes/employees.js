@@ -97,6 +97,31 @@ router.get('/',
   }
 );
 
+// Get employees by role (authenticated)
+router.get('/by-role/:role',
+  authenticate,
+  async (req, res) => {
+    try {
+      const { role } = req.params;
+      const validRoles = ['engineer', 'procurement', 'admin', 'super_admin'];
+      
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ message: 'Invalid role' });
+      }
+
+      const [rows] = await db.query(
+        'SELECT id, employee_no, first_name, middle_initial, last_name, role, department, is_active FROM employees WHERE role = ? AND is_active = true ORDER BY last_name, first_name',
+        [role]
+      );
+
+      res.json({ employees: rows });
+    } catch (error) {
+      console.error('Get employees by role error:', error);
+      res.status(500).json({ message: 'Server error fetching employees by role' });
+    }
+  }
+);
+
 // Update employee (Super Admin only)
 router.put('/:id',
   authenticate,

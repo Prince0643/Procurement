@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useAuth } from '../../contexts/AuthContext';
@@ -6,6 +7,7 @@ import { reimbursementService } from '../../services/reimbursements';
 
 const Layout = ({ user, notifications, setNotifications, onLogout, children }) => {
   const { logout } = useAuth();
+  const navigate = useNavigate();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
 
@@ -53,6 +55,7 @@ const Layout = ({ user, notifications, setNotifications, onLogout, children }) =
 
   const handleLogout = () => {
     logout();
+    navigate('/');
   };
 
   return (

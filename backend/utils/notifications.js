@@ -84,3 +84,57 @@ export async function getAdmins() {
     return [];
   }
 }
+
+/**
+ * Get engineers who should be notified
+ * @returns {Promise<number[]>} - Array of user IDs with engineer role
+ */
+export async function getEngineers() {
+  try {
+    const [users] = await db.query(`
+      SELECT id FROM employees WHERE role = 'engineer' AND is_active = 1
+    `);
+    return users.map(u => u.id);
+  } catch (error) {
+    console.error('Failed to get engineers:', error);
+    return [];
+  }
+}
+
+/**
+ * Get reviewers for a PR based on requester role
+ * @param {string} requesterRole - The role of the person who created the PR
+ * @returns {Promise<number[]>} - Array of user IDs who should review the PR
+ */
+export async function getReviewersForPR(requesterRole) {
+  try {
+    let reviewers = [];
+    
+    if (requesterRole === 'engineer') {
+      // If requester is Engineer: reviewers are all Engineers + Procurement + Super Admin
+      const engineers = await getEngineers();
+      const procurement = await getProcurementOfficers();
+      const superAdmins = await getSuperAdmins();
+      reviewers = [...engineers, ...procurement, ...superAdmins];
+    } else if (requesterRole === 'admin') {
+      // If requester is Admin: reviewers are all Admins + Super Admin
+      const admins = await getAdmins();
+      const superAdmins = await getSuperAdmins();
+      reviewers = [...admins, ...superAdmins];
+    } else if (requesterRole === 'procurement') {
+      // If requester is Procurement: reviewers are all Procurement + Super Admin
+      const procurement = await getProcurementOfficers();
+      const superAdmins = await getSuperAdmins();
+      reviewers = [...procurement, ...superAdmins];
+    } else {
+      // Super Admin doesn't need review
+      reviewers = [];
+    }
+    
+    // Remove duplicates and filter out the requester themselves
+    return [...new Set(reviewers)];
+  } catch (error) {
+    console.error('Failed to get reviewers for PR:', error);
+    return [];
+  }
+}

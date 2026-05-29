@@ -197,6 +197,7 @@ const PurchaseRequests = () => {
   const urlStatus = searchParams.get('status') || 'ALL'
   const urlQ = searchParams.get('q') || ''
   const urlView = searchParams.get('view') || ''
+  const urlTab = searchParams.get('tab') || 'my-prs'
 
   const [purchaseRequests, setPurchaseRequests] = useState([])
   const [total, setTotal] = useState(0)
@@ -231,7 +232,13 @@ const PurchaseRequests = () => {
   const [superAdminAction, setSuperAdminAction] = useState('')
   const [superAdminRemarks, setSuperAdminRemarks] = useState('')
   const [superAdminItemRemarks, setSuperAdminItemRemarks] = useState({})
-  
+
+  // Review modal state
+  const [showReviewModal, setShowReviewModal] = useState(false)
+  const [selectedPRForReview, setSelectedPRForReview] = useState(null)
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewSubmitting, setReviewSubmitting] = useState(false)
+
   // Modal state
   const [showEditModal, setShowEditModal] = useState(false)
   const [editingPR, setEditingPR] = useState(null)
@@ -305,13 +312,14 @@ const PurchaseRequests = () => {
       setLoading(true)
       setError('')
       const view = user?.role === 'engineer' && urlView === 'all' ? 'all' : null
-      console.log('Fetching with view:', view, 'user role:', user?.role)
+      console.log('Fetching with view:', view, 'user role:', user?.role, 'tab:', urlTab)
       const payload = await purchaseRequestService.list({
         view,
         page,
         pageSize,
         status: urlStatus !== 'ALL' ? urlStatus : null,
-        q: urlQ.trim() ? urlQ.trim() : null
+        q: urlQ.trim() ? urlQ.trim() : null,
+        pending_review: urlTab === 'reviews' ? 'true' : null
       })
       const rows = Array.isArray(payload?.purchaseRequests) ? payload.purchaseRequests : []
       setPurchaseRequests(rows)
@@ -861,6 +869,34 @@ const PurchaseRequests = () => {
     }
   }
 
+  const openReviewModal = (pr) => {
+    setSelectedPRForReview(pr)
+    setReviewComment('')
+    setShowReviewModal(true)
+  }
+
+  const closeReviewModal = () => {
+    setShowReviewModal(false)
+    setSelectedPRForReview(null)
+    setReviewComment('')
+  }
+
+  const handleReview = async (reviewStatus) => {
+    if (!selectedPRForReview) return
+
+    try {
+      setReviewSubmitting(true)
+      await purchaseRequestService.review(selectedPRForReview.id, reviewStatus, reviewComment)
+      closeReviewModal()
+      await fetchPurchaseRequests()
+      alert(`Purchase request ${reviewStatus} successfully`)
+    } catch (err) {
+      alert(err.response?.data?.message || `Failed to ${reviewStatus} purchase request`)
+    } finally {
+      setReviewSubmitting(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1063,9 +1099,9 @@ const PurchaseRequests = () => {
                         )}
                         {(pr.status === 'Draft' || pr.status === 'Rejected') && user?.role === 'engineer' && (
                           <>
-                            <Button 
-                              variant="ghost" 
-                              size="sm" 
+                            <Button
+                              variant="ghost"
+                              size="sm"
                               title="Edit"
                               onClick={(e) => {
                                 e.stopPropagation()
@@ -1076,6 +1112,22 @@ const PurchaseRequests = () => {
                             </Button>
                             <Button variant="ghost" size="sm" title="Delete">
                               <Trash2 className="w-4 h-4 text-red-500" />
+                            </Button>
+                          </>
+                        )}
+                        {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Procurement Review') && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openReviewModal(pr)
+                              }}
+                              title="Review"
+                              disabled={reviewSubmitting}
+                            >
+                              <CheckCircle className="w-4 h-4 text-green-600" />
                             </Button>
                           </>
                         )}
@@ -1242,16 +1294,29 @@ const PurchaseRequests = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={(e) => { 
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
                         e.stopPropagation()
                         handleExport(pr.id, pr.pr_number)
                       }}
                     >
                       <FileSpreadsheet className="w-4 h-4" />
                     </Button>
+                    {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Procurement Review') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openReviewModal(pr)
+                        }}
+                        disabled={reviewSubmitting}
+                      >
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      </Button>
+                    )}
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === pr.id ? null : pr.id); }}>
                       {expandedId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </Button>
@@ -1506,6 +1571,15 @@ const PurchaseRequests = () => {
         pr={previewPR}
         loading={previewLoading}
         onClose={closePreview}
+        onApprove={user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (_, pr) => {
+          closePreview()
+          openProcurementApproval(pr)
+        } : undefined}
+        onReject={user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (pr) => {
+          closePreview()
+          openProcurementReject(pr)
+        } : undefined}
+        processingId={procurementSubmitting ? previewPR?.id : null}
       />
 
       {showProcurementApprovalModal && (
@@ -1748,6 +1822,52 @@ const PurchaseRequests = () => {
                   {superAdminSubmitting ? 'Processing...' : 
                    superAdminAction === 'approved' ? 'Approve' : 
                    superAdminAction === 'hold' ? 'Put on Hold' : 'Reject'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review Modal */}
+      {showReviewModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900">Review Purchase Request</h3>
+              <button onClick={closeReviewModal} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {selectedPRForReview && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <p className="text-sm text-gray-600">PR Number: <span className="font-semibold text-gray-900">{selectedPRForReview.pr_number}</span></p>
+                  <p className="text-sm text-gray-600">Project: <span className="font-semibold text-gray-900">{selectedPRForReview.project}</span></p>
+                  <p className="text-sm text-gray-600">Amount: <span className="font-semibold text-gray-900">{formatCurrency(selectedPRForReview.total_amount)}</span></p>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Review Comment (optional)
+                </label>
+                <textarea
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  placeholder="Enter your review comment (optional)"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  rows="3"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t">
+                <Button variant="danger" onClick={() => handleReview('rejected')} disabled={reviewSubmitting}>
+                  {reviewSubmitting ? 'Processing...' : 'Reject'}
+                </Button>
+                <Button variant="primary" onClick={() => handleReview('approved')} disabled={reviewSubmitting}>
+                  {reviewSubmitting ? 'Processing...' : 'Approve'}
                 </Button>
               </div>
             </div>

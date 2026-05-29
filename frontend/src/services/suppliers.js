@@ -17,10 +17,10 @@ const dedupeRequest = async (key, requestFn) => {
 };
 
 export const supplierService = {
-  getAll: async () => {
+  getAll: async (params = {}) => {
     return dedupeRequest('suppliers-getAll', async () => {
-      const response = await api.get('/suppliers');
-      return response.data.suppliers;
+      const response = await api.get('/suppliers', { params });
+      return response.data;
     });
   },
 
@@ -41,6 +41,46 @@ export const supplierService = {
 
   delete: async (id) => {
     const response = await api.delete(`/suppliers/${id}`);
+    return response.data;
+  },
+
+  getFromPRRequests: async () => {
+    const response = await api.get('/suppliers/from-pr-requests');
+    return response.data.suppliers;
+  },
+
+  updateAccreditation: async (supplierName, accredited, accreditationNotes) => {
+    const response = await api.put(`/suppliers/${encodeURIComponent(supplierName)}/accredit`, { accredited, accreditation_notes: accreditationNotes });
+    return response.data;
+  },
+
+  uploadAccreditationFiles: async (supplierName, files) => {
+    const formData = new FormData();
+    files.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const response = await api.post(`/suppliers/${encodeURIComponent(supplierName)}/accreditation-files`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
+  },
+
+  deleteAccreditationFile: async (supplierName, filename) => {
+    const response = await api.delete(`/suppliers/${encodeURIComponent(supplierName)}/accreditation-files/${encodeURIComponent(filename)}`);
+    return response.data;
+  },
+
+  getAccreditationFileUrl: (supplierName, filename) => {
+    return `/api/suppliers/${encodeURIComponent(supplierName)}/accreditation-files/${filename}`;
+  },
+
+  getAccreditationFile: async (supplierName, filename) => {
+    const response = await api.get(`/suppliers/${encodeURIComponent(supplierName)}/accreditation-files/${encodeURIComponent(filename)}`, {
+      responseType: 'blob'
+    });
     return response.data;
   }
 };

@@ -83,7 +83,7 @@ router.post('/', authenticate, requireItemManagement, async (req, res) => {
     const created_by = req.user.id;
 
     if (!item_code || !String(item_code).trim()) {
-      return res.status(400).json({ message: 'Item code is required' });
+      return res.status(400).json({ message: 'SKU is required' });
     }
 
     if (!item_name || !String(item_name).trim()) {
@@ -115,6 +115,9 @@ router.post('/', authenticate, requireItemManagement, async (req, res) => {
     });
   } catch (error) {
     console.error('Create item error:', error);
+    if (error?.code === 'ER_DUP_ENTRY' && String(error?.message || '').includes('item_code')) {
+      return res.status(400).json({ message: 'SKU already exists' });
+    }
     res.status(500).json({ message: 'Failed to create item: ' + error.message });
   }
 });
@@ -126,7 +129,7 @@ router.put('/:id', authenticate, requireItemManagement, async (req, res) => {
     const normalizedCategoryId = Number(category_id);
 
     if (!item_code || !String(item_code).trim()) {
-      return res.status(400).json({ message: 'Item code is required' });
+      return res.status(400).json({ message: 'SKU is required' });
     }
 
     if (!item_name || !String(item_name).trim()) {
@@ -154,6 +157,9 @@ router.put('/:id', authenticate, requireItemManagement, async (req, res) => {
     res.json({ message: 'Item updated successfully' });
   } catch (error) {
     console.error('Update item error:', error);
+    if (error?.code === 'ER_DUP_ENTRY' && String(error?.message || '').includes('item_code')) {
+      return res.status(400).json({ message: 'SKU already exists' });
+    }
     res.status(500).json({ message: 'Failed to update item: ' + error.message });
   }
 });

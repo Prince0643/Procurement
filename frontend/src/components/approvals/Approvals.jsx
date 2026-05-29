@@ -135,6 +135,14 @@ const LockedBadge = () => (
   </span>
 );
 
+const canApproveByStatus = (status, userRole) => {
+  if (status === 'For Engineer Review') return userRole === 'engineer';
+  if (status === 'For Admin Review') return userRole === 'admin';
+  if (status === 'For Procurement Review') return userRole === 'procurement';
+  if (status === 'For Super Admin Final Approval') return userRole === 'super_admin';
+  return true;
+};
+
 const Approvals = () => {
   const [activeTab, setActiveTab] = useState('purchase-orders');
   const [poSubTab, setPoSubTab] = useState('pending');
@@ -325,7 +333,10 @@ const Approvals = () => {
   const pendingPRs = purchaseRequests.filter(pr => 
     pr.status === 'Pending' || 
     pr.status === 'For Approval' || 
-    pr.status === 'For Super Admin Final Approval'
+    pr.status === 'For Super Admin Final Approval' ||
+    pr.status === 'For Engineer Review' ||
+    pr.status === 'For Admin Review' ||
+    pr.status === 'For Procurement Review'
   );
 
   const onHoldPRs = purchaseRequests.filter(pr => 
@@ -1529,7 +1540,7 @@ const Approvals = () => {
                   {/* Pending PRs */}
                   {prSubTab === 'pending' && pendingPRs.map(pr => (
                     <React.Fragment key={pr.id}>
-                      <tr 
+                      <tr
                         className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                         onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                       >
@@ -1543,7 +1554,7 @@ const Approvals = () => {
                             <Button
                               variant="success"
                               size="sm"
-                              disabled={processingId === pr.id}
+                              disabled={processingId === pr.id || !canApproveByStatus(pr.status, user?.role)}
                               onClick={(e) => { e.stopPropagation(); handleApprovePR(pr.id); }}
                             >
                               <CheckCircle className="w-4 h-4" />
@@ -1612,7 +1623,7 @@ const Approvals = () => {
                   {/* On Hold PRs */}
                   {prSubTab === 'on-hold' && onHoldPRs.map(pr => (
                     <React.Fragment key={pr.id}>
-                      <tr 
+                      <tr
                         className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
                         onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                       >
@@ -1626,7 +1637,7 @@ const Approvals = () => {
                             <Button
                               variant="success"
                               size="sm"
-                              disabled={processingId === pr.id}
+                              disabled={processingId === pr.id || !canApproveByStatus(pr.status, user?.role)}
                               onClick={(e) => { e.stopPropagation(); handleApprovePR(pr.id); }}
                             >
                               <CheckCircle className="w-4 h-4" />
@@ -1765,7 +1776,7 @@ const Approvals = () => {
                       <Button
                         variant="success"
                         size="sm"
-                        disabled={processingId === pr.id}
+                        disabled={processingId === pr.id || !canApproveByStatus(pr.status, user?.role)}
                         onClick={() => handleApprovePR(pr.id)}
                         className="px-2"
                       >
@@ -1832,7 +1843,7 @@ const Approvals = () => {
                       <Button
                         variant="success"
                         size="sm"
-                        disabled={processingId === pr.id}
+                        disabled={processingId === pr.id || !canApproveByStatus(pr.status, user?.role)}
                         onClick={() => handleApprovePR(pr.id)}
                         className="px-2"
                       >
@@ -3954,6 +3965,7 @@ const Approvals = () => {
           loading={loadingPreview}
           onClose={() => setPreviewPR(null)}
           onApprove={handleApprovePR}
+          onReject={handleRejectPR}
           processingId={processingId}
         />
       )}

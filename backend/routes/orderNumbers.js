@@ -425,7 +425,7 @@ router.get('/dashboard/:orderNumber/purchase-requests/export-items', authenticat
       { header: 'Requested By', key: 'requested_by', width: 22 },
       { header: 'Created At', key: 'created_at', width: 16 },
       { header: 'Date Needed', key: 'date_needed', width: 16 },
-      { header: 'Item Code', key: 'item_code', width: 16 },
+      { header: 'SKU', key: 'item_code', width: 16 },
       { header: 'Item Name', key: 'item_name', width: 28 },
       { header: 'Unit', key: 'unit', width: 10 },
       { header: 'Quantity', key: 'quantity', width: 10 },

@@ -12,7 +12,8 @@ import {
   UserCheck,
   CheckCircle,
   Gavel,
-  Users
+  Users,
+  Truck
 } from 'lucide-react';
 
 // Navigation configuration - centralized for easy management
@@ -33,14 +34,22 @@ export const navigationItems = [
     roles: ['engineer', 'procurement', 'admin']
   },
   
-  // Service Requests
+  // For Reviews
   {
-    path: '/dashboard/service-requests',
-    label: 'Service Requests',
-    icon: ClipboardCheck,
+    path: '/dashboard/purchase-requests?tab=reviews',
+    label: 'For Reviews',
+    icon: CheckCircle,
     roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
-  
+
+  // Service Requests - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/service-requests',
+  //   label: 'Service Requests',
+  //   icon: ClipboardCheck,
+  //   roles: ['engineer', 'procurement', 'admin', 'super_admin']
+  // },
+
   // Approvals - for super admin
   {
     path: '/dashboard/approvals',
@@ -56,11 +65,21 @@ export const navigationItems = [
     icon: Package,
     roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
+
+  // Pricing History - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/pricing-history',
+  //   label: 'Pricing History',
+  //   icon: History,
+  //   roles: ['procurement', 'admin', 'super_admin']
+  // },
+
+  // Suppliers
   {
-    path: '/dashboard/pricing-history',
-    label: 'Pricing History',
-    icon: History,
-    roles: ['procurement', 'admin', 'super_admin']
+    path: '/dashboard/suppliers',
+    label: 'Suppliers',
+    icon: Truck,
+    roles: ['admin', 'super_admin']
   },
   
   // Purchase Orders
@@ -70,55 +89,55 @@ export const navigationItems = [
     icon: ShoppingCart,
     roles: ['admin']
   },
-  
-  // Payment Requests
-  {
-    path: '/dashboard/payment-requests',
-    label: 'Payment Requests',
-    icon: Receipt,
-    roles: ['admin', 'super_admin']
-  },
-  
-  // Payment Orders
-  {
-    path: '/dashboard/payment-orders',
-    label: 'Payment Orders',
-    icon: DollarSign,
-    roles: ['admin', 'super_admin']
-  },
-  
-  // Disbursement Vouchers
-  {
-    path: '/dashboard/disbursement-vouchers',
-    label: 'Disbursement Vouchers',
-    icon: FileText,
-    roles: ['admin', 'super_admin']
-  },
-  
-  // Order Numbers
-  {
-    path: '/dashboard/order-numbers',
-    label: 'Order Numbers',
-    icon: Receipt,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
-  },
-  
-  // Cash Requests
-  {
-    path: '/dashboard/cash-requests',
-    label: 'Cash Requests',
-    icon: DollarSign,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
-  },
-  
-  // Reimbursements
-  {
-    path: '/dashboard/reimbursements',
-    label: 'Reimbursements',
-    icon: Receipt,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
-  },
-  
+
+  // Payment Requests - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/payment-requests',
+  //   label: 'Payment Requests',
+  //   icon: Receipt,
+  //   roles: ['admin', 'super_admin']
+  // },
+
+  // Payment Orders - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/payment-orders',
+  //   label: 'Payment Orders',
+  //   icon: DollarSign,
+  //   roles: ['admin', 'super_admin']
+  // },
+
+  // Disbursement Vouchers - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/disbursement-vouchers',
+  //   label: 'Disbursement Vouchers',
+  //   icon: FileText,
+  //   roles: ['admin', 'super_admin']
+  // },
+
+  // Order Numbers - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/order-numbers',
+  //   label: 'Order Numbers',
+  //   icon: Receipt,
+  //   roles: ['engineer', 'procurement', 'admin', 'super_admin']
+  // },
+
+  // Cash Requests - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/cash-requests',
+  //   label: 'Cash Requests',
+  //   icon: DollarSign,
+  //   roles: ['engineer', 'procurement', 'admin', 'super_admin']
+  // },
+
+  // Reimbursements - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/reimbursements',
+  //   label: 'Reimbursements',
+  //   icon: Receipt,
+  //   roles: ['engineer', 'procurement', 'admin', 'super_admin']
+  // },
+
   // Settings
   {
     path: '/dashboard/employees',
@@ -134,38 +153,38 @@ export const navigationItems = [
     icon: Settings,
     roles: ['engineer', 'procurement', 'admin', 'super_admin']
   },
-  
-  // Attendance
-  {
-    path: '/dashboard/attendance',
-    label: 'Attendance',
-    icon: UserCheck,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin'],
-    externalUrl: 'https://jajr.xandree.com/'
-  }
+
+  // Attendance - TEMPORARILY COMMENTED OUT
+  // {
+  //   path: '/dashboard/attendance',
+  //   label: 'Attendance',
+  //   icon: UserCheck,
+  //   roles: ['engineer', 'procurement', 'admin', 'super_admin'],
+  //   externalUrl: 'https://attendacev2.xandree.com/'
+  // }
 ];
 
 // Group navigation items by category
 export const navigationGroups = [
   {
     title: null,
-    items: ['/dashboard', '/dashboard/purchase-requests', '/dashboard/service-requests']
+    items: ['/dashboard', '/dashboard/purchase-requests', '/dashboard/purchase-requests?tab=reviews'] // service-requests temporarily commented out
   },
   {
     title: 'Orders & Vouchers',
-    items: ['/dashboard/purchase-orders', '/dashboard/payment-requests', '/dashboard/payment-orders', '/dashboard/disbursement-vouchers', '/dashboard/order-numbers']
+    items: ['/dashboard/purchase-orders'] // payment-requests, payment-orders, disbursement-vouchers, order-numbers temporarily commented out
   },
   {
     title: 'Items',
-    items: ['/dashboard/items', '/dashboard/pricing-history']
+    items: ['/dashboard/items', '/dashboard/suppliers'] // pricing-history temporarily commented out
   },
   {
     title: 'Finance',
-    items: ['/dashboard/cash-requests', '/dashboard/reimbursements']
+    items: [] // cash-requests, reimbursements temporarily commented out
   },
   {
     title: 'Administration',
-    items: ['/dashboard/approvals', '/dashboard/employees', '/dashboard/settings', '/dashboard/attendance']
+    items: ['/dashboard/approvals', '/dashboard/employees', '/dashboard/settings'] // attendance temporarily commented out
   }
 ];
 

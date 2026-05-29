@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { itemService } from '../../services/items'
-import { supplierService } from '../../services/suppliers'
 import { categoryService } from '../../services/categories'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { projectService } from '../../services/projects'
@@ -114,6 +113,8 @@ const DEFAULT_ITEM_FORM = {
   unit: 'pcs'
 }
 
+const PAYMENT_DETAILS_ENABLED = false
+
 const Items = () => {
   const { user } = useAuth()
   const [items, setItems] = useState([])
@@ -145,7 +146,6 @@ const Items = () => {
   const [showPRModal, setShowPRModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
   const [previewDraftPR, setPreviewDraftPR] = useState(null)
-  const [suppliers, setSuppliers] = useState([])
   const [submitting, setSubmitting] = useState(false)
   
   // PR Form state
@@ -154,8 +154,9 @@ const Items = () => {
   const [projectAddress, setProjectAddress] = useState('')
   const [dateNeeded, setDateNeeded] = useState('')
   const [orderNumber, setOrderNumber] = useState('')
-  const [selectedSupplier, setSelectedSupplier] = useState('')
-  const [paymentBasis, setPaymentBasis] = useState('debt')
+const [supplierInput, setSupplierInput] = useState('')
+const [supplierAddress, setSupplierAddress] = useState('') // New state for supplier address
+const [paymentBasis, setPaymentBasis] = useState('debt')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
   const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
   const [remarks, setRemarks] = useState('')
@@ -294,6 +295,8 @@ const Items = () => {
   }
 
   const openPreview = () => {
+    const paymentDetails = getPaymentDetailsForRequest()
+
     // Build preview object from form data
     const draftPR = {
       pr_number: 'PREVIEW',
@@ -302,12 +305,12 @@ const Items = () => {
       project_address: projectAddress,
       date_needed: dateNeeded,
       order_number: orderNumber,
-      supplier_id: selectedSupplier,
-      supplier_name: suppliers.find(s => s.id === selectedSupplier)?.supplier_name || '-',
-      supplier_address: projectAddress,
-      payment_basis: paymentBasis,
-      payment_terms_note: paymentTermsNote.trim() || null,
-      payment_schedules: sanitizePaymentSchedules(paymentSchedules),
+supplier_id: null,
+supplier_name: supplierInput.trim() || '-',
+supplier_address: supplierAddress.trim() || '', // Add supplier address to preview
+      payment_basis: paymentDetails.payment_basis,
+      payment_terms_note: paymentDetails.payment_terms_note,
+      payment_schedules: paymentDetails.payment_schedules,
       remarks,
       status: 'Draft',
       created_at: new Date().toISOString(),
@@ -336,7 +339,7 @@ const Items = () => {
     if (cart.length === 0) { alert('At least one item is required'); return }
 
     try {
-      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
+      const paymentDetails = getPaymentDetailsForRequest()
       setSubmitting(true)
       const prData = {
         purpose,
@@ -344,10 +347,10 @@ const Items = () => {
         project_address: projectAddress || null,
         date_needed: dateNeeded || null,
         order_number: orderNumber || null,
-        supplier_id: selectedSupplier || null,
-        payment_basis: paymentBasis,
-        payment_terms_note: paymentTermsNote.trim() || null,
-        payment_schedules: normalizedSchedules,
+supplier_id: null,
+supplier_name: supplierInput.trim() || null,
+supplier_address: supplierAddress.trim() || null, // Add supplier address to data
+...paymentDetails,
         remarks: remarks || null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -368,14 +371,11 @@ const Items = () => {
   const openPRModal = async () => {
     setShowPRModal(true)
     try {
-      const suppliersData = await supplierService.getAll()
-      setSuppliers(suppliersData)
-
       if (branches.length === 0 && !loadingBranches) {
         await fetchBranches()
       }
     } catch (err) {
-      console.error('Failed to load suppliers', err)
+      console.error('Failed to load purchase request form data', err)
     }
   }
 
@@ -387,7 +387,7 @@ const Items = () => {
   const handleAddItemSubmit = async (e) => {
     e.preventDefault()
     if (!newItemForm.item_code || !newItemForm.item_name) {
-      alert('Item Code and Item Name are required')
+      alert('SKU and Item Name are required')
       return
     }
 
@@ -423,7 +423,7 @@ const Items = () => {
     }
 
     if (!editItemForm.item_code || !editItemForm.item_name) {
-      alert('Item Code and Item Name are required')
+      alert('SKU and Item Name are required')
       return
     }
 
@@ -544,21 +544,26 @@ const Items = () => {
     setProjectAddress('')
     setDateNeeded('')
     setOrderNumber('')
-    setSelectedSupplier('')
-    setPaymentBasis('debt')
+setSupplierInput('')
+setSupplierAddress('') // Reset supplier address
+setPaymentBasis('debt')
     setPaymentTermsNote('')
     setPaymentSchedules([{ payment_date: '', amount: '', note: '' }])
     setRemarks('')
   }
 
+  // Parked with the commented payment dates UI for future implementation.
+  // eslint-disable-next-line no-unused-vars
   const addPaymentSchedule = () => {
     setPaymentSchedules((prev) => [...prev, { payment_date: '', amount: '', note: '' }])
   }
 
+  // eslint-disable-next-line no-unused-vars
   const removePaymentSchedule = (index) => {
     setPaymentSchedules((prev) => prev.filter((_, i) => i !== index))
   }
 
+  // eslint-disable-next-line no-unused-vars
   const updatePaymentSchedule = (index, field, value) => {
     setPaymentSchedules((prev) => {
       const next = [...prev]
@@ -591,6 +596,22 @@ const Items = () => {
     }
 
     return cleaned
+  }
+
+  const getPaymentDetailsForRequest = () => {
+    if (!PAYMENT_DETAILS_ENABLED) {
+      return {
+        payment_basis: 'non_debt',
+        payment_terms_note: null,
+        payment_schedules: []
+      }
+    }
+
+    return {
+      payment_basis: paymentBasis,
+      payment_terms_note: paymentTermsNote.trim() || null,
+      payment_schedules: sanitizePaymentSchedules(paymentSchedules)
+    }
   }
 
   const addToCart = (item) => {
@@ -646,8 +667,8 @@ const Items = () => {
     if (cart.length === 0) { alert('At least one item is required'); return }
 
     try {
-      const normalizedSchedules = sanitizePaymentSchedules(paymentSchedules)
-      if (paymentBasis === 'debt' && normalizedSchedules.length === 0) {
+      const paymentDetails = getPaymentDetailsForRequest()
+      if (PAYMENT_DETAILS_ENABLED && paymentBasis === 'debt' && paymentDetails.payment_schedules.length === 0) {
         alert('At least one payment schedule is required for debt/with account PR')
         return
       }
@@ -658,10 +679,10 @@ const Items = () => {
         project_address: projectAddress || null,
         date_needed: dateNeeded || null,
         order_number: orderNumber || null,
-        supplier_id: selectedSupplier || null,
-        payment_basis: paymentBasis,
-        payment_terms_note: paymentTermsNote.trim() || null,
-        payment_schedules: normalizedSchedules,
+supplier_id: null,
+supplier_name: supplierInput.trim() || null,
+supplier_address: supplierAddress.trim() || null, // Add supplier address to data
+...paymentDetails,
         remarks: remarks || null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -725,7 +746,7 @@ const Items = () => {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 break-words">{item.item_name}</p>
-                    <p className="mt-1 text-xs text-gray-500 break-words">{item.item_code} • {item.unit}</p>
+                    <p className="mt-1 text-xs text-gray-500 break-words">SKU: {item.item_code} • {item.unit}</p>
                   </div>
                   <button
                     onClick={() => removeFromCart(item.item_id)}
@@ -840,7 +861,7 @@ const Items = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
-            placeholder="Search items by name or code..."
+            placeholder="Search items by name or SKU..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
@@ -902,7 +923,7 @@ const Items = () => {
                               {item.item_name}
                             </p>
                             <p className="mt-1 text-xs text-gray-500 break-words">
-                              {item.item_code} • {item.unit || 'pcs'}
+                              SKU: {item.item_code} • {item.unit || 'pcs'}
                             </p>
                           </div>
                           {canManageCatalog && (
@@ -1001,7 +1022,7 @@ const Items = () => {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500">{item.item_code} • Unit: {item.unit || 'pcs'}</p>
+                      <p className="text-sm text-gray-500">SKU: {item.item_code} • Unit: {item.unit || 'pcs'}</p>
                       {item.last_unit_price && (
                         <p className="text-sm text-green-600 font-medium">
                           Last Price: {formatCurrency(item.last_unit_price)}
@@ -1156,7 +1177,7 @@ const Items = () => {
                 </div>
               </div>
 
-              <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
+              <Input label="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="mb-4">
@@ -1182,27 +1203,37 @@ const Items = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
-                <Input label="Order Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
+                <Input label="Request Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
               </div>
 
-              <Select 
-                label="Supplier (Optional)" 
-                value={selectedSupplier} 
-                onChange={(e) => setSelectedSupplier(e.target.value)} 
-                options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} 
-              />
+<div className="space-y-4 mb-4">
+  <Input
+    label="Supplier"
+    value={supplierInput}
+    onChange={(e) => setSupplierInput(e.target.value)}
+    placeholder="Type supplier name"
+  />
+  <Input
+    label="Supplier Address"
+    value={supplierAddress}
+    onChange={(e) => setSupplierAddress(e.target.value)}
+    placeholder="Type supplier address"
+  />
+</div>
 
               <Select 
-                label="Payment Basis *" 
+                label="Payment Basis" 
                 value={paymentBasis} 
                 onChange={(e) => setPaymentBasis(e.target.value)} 
                 options={[
-                  { value: 'debt', label: 'Debt (with supplier account)' },
-                  { value: 'non_debt', label: 'Cash/Non-debt (immediate payment)' }
+                  { value: 'debt', label: 'Credit' },
+                  { value: 'non_debt', label: 'Debit' }
                 ]} 
                 required 
               />
 
+              {/*
+              Payment details are intentionally hidden while payment schedule implementation is paused.
               <Input
                 label={paymentBasis === 'debt' ? 'Payment Terms and Conditions *' : 'Payment Terms and Conditions'}
                 value={paymentTermsNote}
@@ -1262,6 +1293,7 @@ const Items = () => {
                   </div>
                 ))}
               </div>
+              */}
 
               <Input label="Remarks" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Optional" />
 
@@ -1408,14 +1440,14 @@ const Items = () => {
             <form onSubmit={handleAddItemSubmit} className="p-6">
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Item Code *"
+                  label="Item Code"
                   value={newItemForm.item_code}
                   onChange={(e) => setNewItemForm({ ...newItemForm, item_code: e.target.value })}
-                  placeholder="e.g., ITM001"
+                  placeholder="e.g., CEM-001"
                   required
                 />
                 <Input
-                  label="Item Name *"
+                  label="Item Name"
                   value={newItemForm.item_name}
                   onChange={(e) => setNewItemForm({ ...newItemForm, item_name: e.target.value })}
                   placeholder="e.g., Cement"
@@ -1428,7 +1460,7 @@ const Items = () => {
                 <textarea
                   value={newItemForm.description}
                   onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })}
-                  placeholder="Optional description..."
+                  placeholder="Description..."
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
                 />
@@ -1436,7 +1468,7 @@ const Items = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <Select
-                  label="Category *"
+                  label="Category"
                   value={newItemForm.category_id || ''}
                   onChange={(e) => setNewItemForm({ ...newItemForm, category_id: e.target.value })}
                   options={categoryOptions}
@@ -1478,10 +1510,10 @@ const Items = () => {
             <form onSubmit={handleEditItemSubmit} className="p-6">
               <div className="grid grid-cols-2 gap-4">
                 <Input
-                  label="Item Code *"
+                  label="SKU *"
                   value={editItemForm.item_code}
                   onChange={(e) => setEditItemForm({ ...editItemForm, item_code: e.target.value })}
-                  placeholder="e.g., ITM001"
+                  placeholder="e.g., CEM-001"
                   required
                 />
                 <Input

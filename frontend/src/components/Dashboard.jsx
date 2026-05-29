@@ -476,7 +476,7 @@ const Dashboard = () => {
               <option value="">All Items (Combined)</option>
               {topItems.map(item => (
                 <option key={item.id} value={item.id}>
-                  {item.item_code} - {item.item_name}
+                  SKU: {item.item_code} - {item.item_name}
                 </option>
               ))}
             </select>

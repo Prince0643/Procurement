@@ -287,7 +287,7 @@ const PricingHistory = () => {
     };
   }, [records]);
 
-  const itemOptions = items.map(item => ({ value: item.id, label: `${item.item_code} - ${item.item_name}` }));
+  const itemOptions = items.map(item => ({ value: item.id, label: `SKU: ${item.item_code} - ${item.item_name}` }));
   const supplierOptions = suppliers.map(sup => ({ value: sup.id, label: sup.supplier_name }));
 
   return (
@@ -444,7 +444,7 @@ const PricingHistory = () => {
                         {record.item_name}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5 break-words">
-                        {record.item_code || '-'}
+                        SKU: {record.item_code || '-'}
                       </p>
                     </div>
                     <div className="shrink-0 text-right">
@@ -541,7 +541,7 @@ const PricingHistory = () => {
                     >
                       <td className="py-3 px-4 text-sm text-gray-600">{formatDate(record.date_recorded)}</td>
                       <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                        {record.item_code && <span className="text-xs text-gray-400 mr-1">{record.item_code}</span>}
+                        {record.item_code && <span className="text-xs text-gray-400 mr-1">SKU: {record.item_code}</span>}
                         {record.item_name}
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">{record.supplier_name || '-'}</td>

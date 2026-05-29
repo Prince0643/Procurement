@@ -20,6 +20,7 @@ const Approvals = lazy(() => import('../components/approvals/Approvals'));
 const DisbursementVouchers = lazy(() => import('../components/disbursement-vouchers/DisbursementVouchers'));
 const PricingHistory = lazy(() => import('../components/pricing/PricingHistory'));
 const OrderNumbers = lazy(() => import('../components/order-numbers/OrderNumbers'));
+const Suppliers = lazy(() => import('../components/suppliers/Suppliers'));
 
 // Simple placeholder components for missing ones
 const Placeholder = ({ title }) => (
@@ -74,6 +75,9 @@ const AppRoutes = () => {
         {/* Items */}
         <Route path="items" element={<Items />} />
         <Route path="pricing-history" element={<PricingHistory />} />
+        
+        {/* Suppliers */}
+        <Route path="suppliers" element={<Suppliers />} />
         
         {/* Cash Requests */}
         <Route path="cash-requests" element={<CashRequests />} />

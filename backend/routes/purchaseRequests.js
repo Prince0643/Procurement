@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getProcurementOfficers, getSuperAdmins } from '../utils/notifications.js';
+import { createNotification, getProcurementOfficers, getSuperAdmins, getEngineers, getReviewersForPR } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';
@@ -10,6 +10,10 @@ import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 const router = express.Router();
 const normalizePaymentTermsNote = (note) => {
   const normalized = note == null ? '' : String(note).trim();
+  return normalized || null;
+};
+const normalizeSupplierName = (name) => {
+  const normalized = name == null ? '' : String(name).trim();
   return normalized || null;
 };
 const createInputError = (message) => {
@@ -134,6 +138,7 @@ router.get('/', authenticate, async (req, res) => {
 
     const { view } = req.query;
     const q = String(req.query.q || '').trim();
+    const pendingReview = req.query.pending_review === 'true';
 
     const statusesRaw = req.query.status;
     const statuses = Array.isArray(statusesRaw)
@@ -145,7 +150,7 @@ router.get('/', authenticate, async (req, res) => {
       .map((s) => String(s || '').trim())
       .filter(Boolean);
 
-    const baseFrom = `
+    let baseFrom = `
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
@@ -154,8 +159,23 @@ router.get('/', authenticate, async (req, res) => {
     const whereClauses = [];
     const whereParams = [];
 
+    // Filter for pending reviews for current user
+    if (pendingReview) {
+      console.log('🔍 Fetching pending reviews for user:', req.user.id, 'role:', req.user.role);
+      baseFrom = `
+        FROM purchase_requests pr
+        JOIN employees e ON pr.requested_by = e.id
+        LEFT JOIN suppliers s ON pr.supplier_id = s.id
+        JOIN purchase_request_reviews prr ON pr.id = prr.purchase_request_id
+      `;
+      whereClauses.push('prr.reviewer_id = ?');
+      whereClauses.push('prr.review_status = ?');
+      whereParams.push(req.user.id, 'pending');
+      console.log('🔍 Pending review query params:', { userId: req.user.id, reviewStatus: 'pending' });
+    }
+
     // Engineers see only their own PRs by default, but can view all with ?view=all
-    if (req.user.role === 'engineer' && view !== 'all') {
+    if (req.user.role === 'engineer' && view !== 'all' && !pendingReview) {
       whereClauses.push('pr.requested_by = ?');
       whereParams.push(req.user.id);
     }
@@ -171,9 +191,10 @@ router.get('/', authenticate, async (req, res) => {
         pr.pr_number LIKE ?
         OR pr.project LIKE ?
         OR CONCAT(e.first_name, ' ', e.last_name) LIKE ?
+        OR pr.supplier_name LIKE ?
         OR s.supplier_name LIKE ?
       )`);
-      whereParams.push(like, like, like, like);
+      whereParams.push(like, like, like, like, like);
     }
 
     const whereSql = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : '';
@@ -182,8 +203,8 @@ router.get('/', authenticate, async (req, res) => {
       SELECT pr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
-             s.supplier_name,
-             s.supplier_name as payee_name,
+             COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
+             COALESCE(pr.supplier_name, s.supplier_name) as payee_name,
              COALESCE(pr.supplier_address, s.address) as payee_address,
              (SELECT COUNT(*) FROM purchase_request_payment_schedules prs WHERE prs.purchase_request_id = pr.id) as payment_schedule_count,
              (SELECT MIN(prs.payment_date) FROM purchase_request_payment_schedules prs WHERE prs.purchase_request_id = pr.id) as next_payment_date
@@ -208,6 +229,11 @@ router.get('/', authenticate, async (req, res) => {
       pageSize,
       total: countRows?.[0]?.total ?? 0
     });
+    
+    if (pendingReview) {
+      console.log('🔍 Pending review results:', prs.length, 'PRs found');
+      console.log('🔍 PR IDs:', prs.map(r => ({ id: r.id, pr_number: r.pr_number, status: r.status })));
+    }
   } catch (error) {
     console.error('Fetch purchase requests error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase requests: ' + error.message });
@@ -222,10 +248,11 @@ router.get('/', authenticate, async (req, res) => {
 	      SELECT pr.*, 
 	             e.first_name as requester_first_name, 
 	             e.last_name as requester_last_name,
+	             e.role as requester_role,
 	             approver.first_name as approver_first_name,
 	             approver.last_name as approver_last_name,
-	             s.supplier_name,
-	             s.supplier_name as payee_name,
+	             COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
+	             COALESCE(pr.supplier_name, s.supplier_name) as payee_name,
 	             COALESCE(pr.supplier_address, s.address) as payee_address,
 	             s.address as supplier_address,
 	             engineer_selected.supplier_name as engineer_supplier_name
@@ -342,7 +369,19 @@ router.get('/', authenticate, async (req, res) => {
       rejection_remarks: itemRemarks.filter(r => r.purchase_request_item_id === item.id)
     }));
 
-    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks, payment_schedules: paymentSchedules, payment_review_note: paymentReviewNote } });
+    // Get review records for this PR
+    const [reviews] = await db.query(`
+      SELECT prr.*, 
+             e.first_name as reviewer_first_name, 
+             e.last_name as reviewer_last_name,
+             e.role as reviewer_role
+      FROM purchase_request_reviews prr
+      JOIN employees e ON prr.reviewer_id = e.id
+      WHERE prr.purchase_request_id = ?
+      ORDER BY prr.created_at ASC
+    `, [req.params.id]);
+
+    res.json({ purchaseRequest: { ...pr, items: itemsWithRemarks, payment_schedules: paymentSchedules, payment_review_note: paymentReviewNote, reviews } });
   } catch (error) {
     console.error('Fetch purchase request error:', error);
     res.status(500).json({ message: 'Failed to fetch purchase request: ' + error.message });
@@ -353,7 +392,7 @@ router.get('/', authenticate, async (req, res) => {
 router.post('/', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules } = req.body;
     await assertProjectIsActive(project, { providedOrderNumber: order_number });
     const isDraft = save_as_draft === true;
 
@@ -372,34 +411,45 @@ router.post('/', authenticate, async (req, res) => {
     await conn.beginTransaction();
     // 147-148
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const firstInitial = String(req.user.first_name || '').charAt(0).toUpperCase();
-    const middleInitial = String(req.user.middle_initial || '').charAt(0).toUpperCase();
-    const lastInitial = String(req.user.last_name || '').charAt(0).toUpperCase();
-    const initials = `${firstInitial}${middleInitial}${lastInitial}`;
+const now = new Date();
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
 
-    // Get the last PR number for this engineer in this year/month
-    const [lastPrs] = await conn.query(
-      "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
-      [`${initials}-${year}-${month}-%`]
-    );
+// Get the last PR number for this year/month (without initials)
+const [lastPrs] = await conn.query(
+  "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
+  [`${year}-%`]  // This looks for year only
+);
 
-    let counter = 1;
-    if (lastPrs.length > 0) {
-      const lastNumber = lastPrs[0].pr_number;
-      const match = lastNumber.match(/-(\d{3})$/);
-      if (match) {
-        counter = parseInt(match[1], 10) + 1;
-      }
+let counter = 1;
+if (lastPrs.length > 0) {
+  const lastNumber = lastPrs[0].pr_number;
+  const match = lastNumber.match(/-(\d{3})$/);
+  if (match) {
+    counter = parseInt(match[1], 10) + 1;
+  }
+}
+
+const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
+    
+    // Determine status based on requester role
+    let status;
+    if (isDraft) {
+      status = 'Draft';
+    } else if (req.user.role === 'engineer') {
+      status = 'For Engineer Review';
+    } else if (req.user.role === 'admin') {
+      status = 'For Admin Review';
+    } else if (req.user.role === 'procurement') {
+      status = 'For Procurement Review';
+    } else {
+      status = 'For Super Admin Final Approval';
     }
-
-    const prNumber = `${initials}-${year}-${month}-${String(counter).padStart(3, '0')}`;
-    const status = isDraft ? 'Draft' : 'For Procurement Review';
+    
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
     const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
     const paymentTermsCode = paymentTermsNote ? 'CUSTOM' : null;
+    const freeTextSupplierName = normalizeSupplierName(supplier_name);
     const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
 
     if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
@@ -434,26 +484,36 @@ router.post('/', authenticate, async (req, res) => {
       totalAmount
     });
 
-    let supplierAddress = null;
+let supplierAddress = null;
 
-    if (supplier_id) {
-      const [supRows] = await conn.query(
-        'SELECT address from suppliers WHERE id = ? LIMIT 1',
-        [supplier_id]
-      );
+// First, check if supplier_address was provided directly in the request
+if (req.body.supplier_address && String(req.body.supplier_address).trim()) {
+  supplierAddress = String(req.body.supplier_address).trim();
+  console.log('✅ Using supplier_address from request:', supplierAddress);
+}
 
-      if (supRows.length === 0) {
-        throw new Error('Invalid supplier_id; supplier not found');
-      }
+// If no direct address but supplier_id exists, get address from suppliers table
+if (!supplierAddress && supplier_id) {
+  const [supRows] = await conn.query(
+    'SELECT address from suppliers WHERE id = ? LIMIT 1',
+    [supplier_id]
+  );
 
-      supplierAddress = supRows[0].address ?? null;
-    }
+  if (supRows.length === 0) {
+    throw new Error('Invalid supplier_id; supplier not found');
+  }
+
+  supplierAddress = supRows[0].address ?? null;
+  console.log('✅ Using address from suppliers table:', supplierAddress);
+}
+
+console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);  
     
     // 200-218
     const [result] = await conn.query(
       `INSERT INTO purchase_requests
-      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, payment_terms_code, payment_terms_note, payment_terms_set_by, payment_terms_set_at, supplier_id, supplier_address, total_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, payment_terms_code, payment_terms_note, payment_terms_set_by, payment_terms_set_at, supplier_id, supplier_name, supplier_address, total_amount)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         prNumber,
         req.user.id,
@@ -470,6 +530,7 @@ router.post('/', authenticate, async (req, res) => {
         paymentTermsNote ? req.user.id : null,
         paymentTermsNote ? new Date() : null,
         supplier_id || null,
+        freeTextSupplierName,
         supplierAddress,
         totalAmount
       ]
@@ -488,14 +549,30 @@ router.post('/', authenticate, async (req, res) => {
 
     await replacePaymentSchedules(conn, prId, normalizedPaymentSchedules, req.user.id);
 
-    await conn.commit();
-
-    // Notify procurement officers only if NOT a draft
+    // Create review records for all required reviewers if NOT a draft
     if (!isDraft) {
-      const procurementOfficers = await getProcurementOfficers();
-      for (const officerId of procurementOfficers) {
+      const reviewers = await getReviewersForPR(req.user.role);
+      console.log('🔍 Reviewers for PR (before filtering):', reviewers);
+      console.log('🔍 Requester ID:', req.user.id);
+      
+      // Filter out the requester themselves
+      const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== req.user.id);
+      console.log('🔍 Reviewers for PR (after filtering):', filteredReviewers);
+      
+      // Create review records
+      for (const reviewerId of filteredReviewers) {
+        await conn.query(
+          'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
+          [prId, reviewerId, 'pending']
+        );
+      }
+      
+      console.log('✅ Created review records for PR:', prId, 'with reviewers:', filteredReviewers);
+      
+      // Send notifications to all reviewers (excluding requester)
+      for (const reviewerId of filteredReviewers) {
         await createNotification(
-          officerId,
+          reviewerId,
           'New PR Created',
           `Purchase Request ${prNumber} has been created and is ready for your review`,
           'PR Created',
@@ -505,6 +582,8 @@ router.post('/', authenticate, async (req, res) => {
       }
     }
 
+    await conn.commit();
+
     res.status(201).json({
       message: isDraft ? 'Draft saved successfully' : 'Purchase request created successfully',
       prId,
@@ -513,6 +592,7 @@ router.post('/', authenticate, async (req, res) => {
       payment_basis: paymentBasis,
       payment_terms_code: paymentTermsCode,
       payment_terms_note: paymentTermsNote,
+      supplier_name: freeTextSupplierName,
       payment_schedules: normalizedPaymentSchedules
     });
   } catch (error) {
@@ -535,7 +615,7 @@ router.post('/', authenticate, async (req, res) => {
 router.put('/:id/draft', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules } = req.body;
     await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if PR exists and is draft
@@ -601,6 +681,9 @@ router.put('/:id/draft', authenticate, async (req, res) => {
     const nextPaymentBasis = payment_basis ?? pr.payment_basis;
     const nextPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note);
     const nextPaymentTermsCode = nextPaymentTermsNote ? 'CUSTOM' : null;
+    const nextSupplierName = hasOwn(req.body, 'supplier_name')
+      ? normalizeSupplierName(supplier_name)
+      : pr.supplier_name;
     const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
     const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
     const schedulesForValidation = hasPaymentSchedulesField
@@ -617,7 +700,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, payment_basis = ?,
            payment_terms_code = ?, payment_terms_note = ?, payment_terms_set_by = ?, payment_terms_set_at = ?,
-           supplier_id = ?, supplier_address = ?, total_amount = ?, updated_at = NOW()
+           supplier_id = ?, supplier_name = ?, supplier_address = ?, total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
       [
         purpose ?? pr.purpose,
@@ -632,6 +715,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
         nextPaymentTermsNote ? req.user.id : null,
         nextPaymentTermsNote ? new Date() : null,
         supplier_id ?? pr.supplier_id,
+        nextSupplierName,
         supplierAddress,
         totalAmount,
         req.params.id
@@ -719,19 +803,43 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     conn = await db.getConnection();
     await conn.beginTransaction();
 
-    // Update status to For Procurement Review
+    // Determine new status based on requester role
+    let newStatus;
+    if (req.user.role === 'engineer') {
+      newStatus = 'For Engineer Review';
+    } else if (req.user.role === 'admin') {
+      newStatus = 'For Admin Review';
+    } else if (req.user.role === 'procurement') {
+      newStatus = 'For Procurement Review';
+    } else {
+      newStatus = 'For Super Admin Final Approval';
+    }
+
+    // Update status
     await conn.query(
-      "UPDATE purchase_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
-      [req.params.id]
+      "UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?",
+      [newStatus, req.params.id]
     );
+
+    // Create review records for all required reviewers
+    const reviewers = await getReviewersForPR(req.user.role);
+    
+    // Filter out the requester themselves
+    const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== req.user.id);
+    
+    for (const reviewerId of filteredReviewers) {
+      await conn.query(
+        'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
+        [req.params.id, reviewerId, 'pending']
+      );
+    }
 
     await conn.commit();
 
-    // Notify procurement officers
-    const procurementOfficers = await getProcurementOfficers();
-    for (const officerId of procurementOfficers) {
+    // Send notifications to all reviewers (excluding requester)
+    for (const reviewerId of filteredReviewers) {
       await createNotification(
-        officerId,
+        reviewerId,
         'New PR Created',
         `Purchase Request ${pr.pr_number} has been created and is ready for your review`,
         'PR Created',
@@ -740,15 +848,15 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
       );
     }
 
-    // Emit real-time PR update to all procurement officers
+    // Emit real-time PR update
     req.io.to('role_procurement').emit('pr_updated', {
       id: pr.id,
       pr_number: pr.pr_number,
-      status: 'For Procurement Review',
+      status: newStatus,
       type: 'new_pr'
     });
 
-    res.json({ message: 'Draft submitted successfully', status: 'For Procurement Review' });
+    res.json({ message: 'Draft submitted successfully', status: newStatus });
   } catch (error) {
     if (conn) {
       try {
@@ -759,6 +867,352 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     }
     console.error('Submit draft error:', error);
     res.status(500).json({ message: 'Failed to submit draft: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Review PR (for Engineers, Admins, Procurement)
+router.post('/:id/review', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { review_status, review_comment } = req.body;
+    
+    if (!review_status || !['approved', 'rejected'].includes(review_status)) {
+      return res.status(400).json({ message: 'Invalid review status. Must be approved or rejected.' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    
+    // Get PR and check if user is a reviewer
+    const [prs] = await conn.query(
+      'SELECT pr.*, e.role as requester_role FROM purchase_requests pr JOIN employees e ON pr.requested_by = e.id WHERE pr.id = ?',
+      [req.params.id]
+    );
+    
+    if (prs.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+    
+    const pr = prs[0];
+    
+    // Check if user is a reviewer for this PR
+    const [reviewCheck] = await conn.query(
+      'SELECT * FROM purchase_request_reviews WHERE purchase_request_id = ? AND reviewer_id = ?',
+      [req.params.id, req.user.id]
+    );
+    
+    if (reviewCheck.length === 0) {
+      await conn.rollback();
+      return res.status(403).json({ message: 'You are not authorized to review this PR' });
+    }
+    
+    // Check if already reviewed
+    if (reviewCheck[0].review_status !== 'pending') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'You have already reviewed this PR' });
+    }
+
+    // Validate that user's role matches the current status
+    const currentStatus = pr.status;
+    const userRole = req.user.role;
+
+    if (currentStatus === 'For Engineer Review' && userRole !== 'engineer') {
+      await conn.rollback();
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Engineer review. You do not have permission to review at this stage.' });
+    }
+
+    if (currentStatus === 'For Admin Review' && userRole !== 'admin') {
+      await conn.rollback();
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to review at this stage.' });
+    }
+
+    if (currentStatus === 'For Procurement Review' && userRole !== 'procurement') {
+      await conn.rollback();
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Procurement review. You do not have permission to review at this stage.' });
+    }
+
+    if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
+      await conn.rollback();
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin final approval. You do not have permission to review at this stage.' });
+    }
+
+    // Update review record
+    await conn.query(
+      'UPDATE purchase_request_reviews SET review_status = ?, review_comment = ?, reviewed_at = NOW() WHERE purchase_request_id = ? AND reviewer_id = ?',
+      [review_status, review_comment || null, req.params.id, req.user.id]
+    );
+    
+    // If rejected, set PR status to Rejected
+    if (review_status === 'rejected') {
+      await conn.query(
+        'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+        ['Rejected', review_comment || 'Rejected by reviewer', req.params.id]
+      );
+      
+      await conn.commit();
+      
+      // Notify requester
+      await createNotification(
+        pr.requested_by,
+        'PR Rejected',
+        `Your Purchase Request ${pr.pr_number} has been rejected`,
+        'PR Rejected',
+        pr.id,
+        'purchase_request'
+      );
+      
+      res.json({ message: 'PR rejected successfully', status: 'Rejected' });
+      return;
+    }
+    
+    // Determine next status based on which reviewer group has completed
+    let newStatus;
+    let notificationRecipients = [];
+    let notificationTitle;
+    let notificationMessage;
+    
+    console.log('🔍 Review workflow: PR ID:', req.params.id, 'Requester role:', pr.requester_role);
+    
+    if (pr.requester_role === 'engineer') {
+      // Engineer requester: Engineers → Admins → Procurement → Super Admin
+      // Check if all engineers have approved
+      const [engineerReviews] = await conn.query(
+        `SELECT prr.review_status 
+         FROM purchase_request_reviews prr
+         JOIN employees e ON prr.reviewer_id = e.id
+         WHERE prr.purchase_request_id = ? AND e.role = 'engineer'`,
+        [req.params.id]
+      );
+      
+      console.log('🔍 Engineer reviews:', engineerReviews);
+      
+      const engineersApproved = engineerReviews.length > 0 && engineerReviews.every(r => r.review_status === 'approved');
+      const engineersPending = engineerReviews.some(r => r.review_status === 'pending');
+      const engineersRejected = engineerReviews.some(r => r.review_status === 'rejected');
+      
+      console.log('🔍 Engineers approved:', engineersApproved, 'pending:', engineersPending, 'rejected:', engineersRejected);
+      
+      if (engineersRejected) {
+        // Engineers rejected, PR is rejected
+        await conn.query(
+          'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+          ['Rejected', 'Rejected by engineer reviewer', req.params.id]
+        );
+        await conn.commit();
+        res.json({ message: 'PR rejected by engineer reviewer', status: 'Rejected' });
+        return;
+      }
+      
+      if (engineersPending) {
+        // Still waiting for engineers
+        await conn.commit();
+        res.json({ message: 'Review submitted successfully. Waiting for other engineers.' });
+        return;
+      }
+      
+      if (engineersApproved) {
+        // Check if all admins have approved
+        const [adminReviews] = await conn.query(
+          `SELECT prr.review_status 
+           FROM purchase_request_reviews prr
+           JOIN employees e ON prr.reviewer_id = e.id
+           WHERE prr.purchase_request_id = ? AND e.role = 'admin'`,
+          [req.params.id]
+        );
+        
+        console.log('🔍 Admin reviews:', adminReviews);
+        
+        const adminsApproved = adminReviews.length > 0 && adminReviews.every(r => r.review_status === 'approved');
+        const adminsPending = adminReviews.some(r => r.review_status === 'pending');
+        const adminsRejected = adminReviews.some(r => r.review_status === 'rejected');
+        
+        console.log('🔍 Admins approved:', adminsApproved, 'pending:', adminsPending, 'rejected:', adminsRejected);
+        
+        if (adminsRejected) {
+          // Admins rejected, PR is rejected
+          await conn.query(
+            'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+            ['Rejected', 'Rejected by admin reviewer', req.params.id]
+          );
+          await conn.commit();
+          res.json({ message: 'PR rejected by admin reviewer', status: 'Rejected' });
+          return;
+        }
+        
+        if (adminsPending) {
+          // Engineers done, move to Admin Review
+          newStatus = 'For Admin Review';
+          notificationRecipients = await getAdmins();
+          notificationTitle = 'PR Ready for Admin Review';
+          notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by engineers and is ready for admin review`;
+        } else if (adminsApproved || adminReviews.length === 0) {
+          // Admins done or no admins, check procurement
+          const [procurementReviews] = await conn.query(
+            `SELECT prr.review_status 
+             FROM purchase_request_reviews prr
+             JOIN employees e ON prr.reviewer_id = e.id
+             WHERE prr.purchase_request_id = ? AND e.role = 'procurement'`,
+            [req.params.id]
+          );
+          
+          console.log('🔍 Procurement reviews:', procurementReviews);
+          
+          const procurementApproved = procurementReviews.length > 0 && procurementReviews.every(r => r.review_status === 'approved');
+          const procurementPending = procurementReviews.some(r => r.review_status === 'pending');
+          const procurementRejected = procurementReviews.some(r => r.review_status === 'rejected');
+          
+          console.log('🔍 Procurement approved:', procurementApproved, 'pending:', procurementPending, 'rejected:', procurementRejected);
+          
+          if (procurementRejected) {
+            // Procurement rejected, PR is rejected
+            await conn.query(
+              'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+              ['Rejected', 'Rejected by procurement reviewer', req.params.id]
+            );
+            await conn.commit();
+            res.json({ message: 'PR rejected by procurement reviewer', status: 'Rejected' });
+            return;
+          }
+          
+          if (procurementPending) {
+            // Admins done, move to Procurement Review
+            newStatus = 'For Procurement Review';
+            notificationRecipients = await getProcurementOfficers();
+            notificationTitle = 'PR Ready for Procurement Review';
+            notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by admins and is ready for procurement review`;
+          } else if (procurementApproved || procurementReviews.length === 0) {
+            // All done or no procurement, move to Super Admin Final Approval
+            newStatus = 'For Super Admin Final Approval';
+            notificationRecipients = await getSuperAdmins();
+            notificationTitle = 'PR Ready for Final Approval';
+            notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by all required reviewers and is ready for your final approval`;
+          }
+        }
+      }
+    } else if (pr.requester_role === 'admin') {
+      // Admin requester: Admins → Super Admin
+      const [adminReviews] = await conn.query(
+        `SELECT prr.review_status 
+         FROM purchase_request_reviews prr
+         JOIN employees e ON prr.reviewer_id = e.id
+         WHERE prr.purchase_request_id = ? AND e.role = 'admin'`,
+        [req.params.id]
+      );
+      
+      console.log('🔍 Admin reviews (admin requester):', adminReviews);
+      
+      const adminsApproved = adminReviews.length > 0 && adminReviews.every(r => r.review_status === 'approved');
+      const adminsPending = adminReviews.some(r => r.review_status === 'pending');
+      const adminsRejected = adminReviews.some(r => r.review_status === 'rejected');
+      
+      if (adminsRejected) {
+        await conn.query(
+          'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+          ['Rejected', 'Rejected by admin reviewer', req.params.id]
+        );
+        await conn.commit();
+        res.json({ message: 'PR rejected by admin reviewer', status: 'Rejected' });
+        return;
+      }
+      
+      if (adminsPending) {
+        await conn.commit();
+        res.json({ message: 'Review submitted successfully. Waiting for other admins.' });
+        return;
+      }
+      
+      if (adminsApproved || adminReviews.length === 0) {
+        newStatus = 'For Super Admin Final Approval';
+        notificationRecipients = await getSuperAdmins();
+        notificationTitle = 'PR Ready for Final Approval';
+        notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by all required reviewers and is ready for your final approval`;
+      }
+    } else if (pr.requester_role === 'procurement') {
+      // Procurement requester: Procurement → Super Admin
+      const [procurementReviews] = await conn.query(
+        `SELECT prr.review_status 
+         FROM purchase_request_reviews prr
+         JOIN employees e ON prr.reviewer_id = e.id
+         WHERE prr.purchase_request_id = ? AND e.role = 'procurement'`,
+        [req.params.id]
+      );
+      
+      console.log('🔍 Procurement reviews (procurement requester):', procurementReviews);
+      
+      const procurementApproved = procurementReviews.length > 0 && procurementReviews.every(r => r.review_status === 'approved');
+      const procurementPending = procurementReviews.some(r => r.review_status === 'pending');
+      const procurementRejected = procurementReviews.some(r => r.review_status === 'rejected');
+      
+      if (procurementRejected) {
+        await conn.query(
+          'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
+          ['Rejected', 'Rejected by procurement reviewer', req.params.id]
+        );
+        await conn.commit();
+        res.json({ message: 'PR rejected by procurement reviewer', status: 'Rejected' });
+        return;
+      }
+      
+      if (procurementPending) {
+        await conn.commit();
+        res.json({ message: 'Review submitted successfully. Waiting for other procurement officers.' });
+        return;
+      }
+      
+      if (procurementApproved || procurementReviews.length === 0) {
+        newStatus = 'For Super Admin Final Approval';
+        notificationRecipients = await getSuperAdmins();
+        notificationTitle = 'PR Ready for Final Approval';
+        notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by all required reviewers and is ready for your final approval`;
+      }
+    } else {
+      // Super Admin requester: No review needed
+      await conn.commit();
+      res.json({ message: 'Review submitted successfully.' });
+      return;
+    }
+    
+    console.log('🔍 New status:', newStatus);
+    
+    if (newStatus) {
+      await conn.query(
+        `UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?`,
+        [newStatus, req.params.id]
+      );
+      
+      await conn.commit();
+      
+      // Notify next reviewers
+      for (const recipientId of notificationRecipients) {
+        await createNotification(
+          recipientId,
+          notificationTitle,
+          notificationMessage,
+          'PR Review',
+          pr.id,
+          'purchase_request'
+        );
+      }
+      
+      res.json({ message: `Review submitted successfully. PR moved to ${newStatus}.`, status: newStatus });
+    } else {
+      await conn.commit();
+      res.json({ message: 'Review submitted successfully. Waiting for other reviewers.' });
+    }
+    
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {
+        // ignore
+      }
+    }
+    console.error('Review PR error:', error);
+    res.status(500).json({ message: 'Failed to review PR: ' + error.message });
   } finally {
     if (conn) conn.release();
   }
@@ -782,9 +1236,34 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     
     const currentStatus = prs[0].status;
     
+    // Check if status is For Engineer Review - Super Admin cannot approve yet
+    if (currentStatus === 'For Engineer Review') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'This purchase request is currently awaiting Engineer review. Super Admin approval is not available at this stage.' });
+    }
+    
     if (currentStatus !== 'For Super Admin Final Approval' && currentStatus !== 'On Hold') {
       await conn.rollback();
       return res.status(400).json({ message: 'Invalid status for this approval step' });
+    }
+    
+    // Check if all required reviewers have approved
+    const [reviews] = await conn.query(
+      'SELECT review_status FROM purchase_request_reviews WHERE purchase_request_id = ?',
+      [req.params.id]
+    );
+    
+    if (reviews.length > 0) {
+      const allApproved = reviews.every(r => r.review_status === 'approved');
+      const anyRejected = reviews.some(r => r.review_status === 'rejected');
+      
+      if (!allApproved || anyRejected) {
+        await conn.rollback();
+        return res.status(400).json({ 
+          message: 'Cannot approve: Not all required reviewers have approved this PR yet',
+          reviews_status: reviews.map(r => r.review_status)
+        });
+      }
     }
     
     let newStatus;
@@ -1000,7 +1479,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       
       // Update PR status, total_amount, supplier_id and supplier_address
       await conn.query(
-        'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_address = ? WHERE id = ?',
+        'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_name = NULL, supplier_address = ? WHERE id = ?',
         [
           newStatus,
           totalAmount,
@@ -1113,7 +1592,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
       SELECT pr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
-             s.supplier_name,
+             COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
              s.contact_person as supplier_contact
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
@@ -1332,7 +1811,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 router.put('/:id/resubmit', authenticate, async (req, res) => {
   let conn;
   try {
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, payment_schedules } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules } = req.body;
     await assertProjectIsActive(project, { providedOrderNumber: order_number });
 
     // Check if PR exists and is rejected
@@ -1345,6 +1824,9 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
     const nextPaymentBasis = payment_basis ?? pr.payment_basis;
     const nextPaymentTermsNote = normalizePaymentTermsNote(payment_terms_note ?? pr.payment_terms_note);
     const nextPaymentTermsCode = nextPaymentTermsNote ? 'CUSTOM' : null;
+    const nextSupplierName = hasOwn(req.body, 'supplier_name')
+      ? normalizeSupplierName(supplier_name)
+      : pr.supplier_name;
     const hasPaymentSchedulesField = hasOwn(req.body, 'payment_schedules');
     const normalizedPaymentSchedules = hasPaymentSchedulesField ? normalizePaymentSchedules(payment_schedules) : null;
 
@@ -1412,7 +1894,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
            payment_basis = ?, payment_terms_code = ?, payment_terms_note = ?, payment_terms_set_by = ?, payment_terms_set_at = ?, supplier_id = ?,
-           status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
+           supplier_name = ?, status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
            supplier_address = ?, rejection_reason = NULL, 
            total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
@@ -1429,6 +1911,7 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
         nextPaymentTermsNote ? req.user.id : null,
         nextPaymentTermsNote ? new Date() : null,
         supplier_id ?? pr.supplier_id,
+        nextSupplierName,
         supplierAddress,
         totalAmount,
         req.params.id
@@ -1495,12 +1978,32 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 router.put('/:id/approve', authenticate, async (req, res) => {
   try {
     const { status, remarks } = req.body;
-    const [prs] = await db.query('SELECT order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const [prs] = await db.query('SELECT order_number, status FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
-    
+
+    const currentStatus = prs[0].status;
+    const userRole = req.user.role;
+
+    // Validate that user's role matches the current status
+    if (currentStatus === 'For Engineer Review' && userRole !== 'engineer') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Engineer review. You do not have permission to approve at this stage.' });
+    }
+
+    if (currentStatus === 'For Admin Review' && userRole !== 'admin') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to approve at this stage.' });
+    }
+
+    if (currentStatus === 'For Procurement Review' && userRole !== 'procurement') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Procurement review. You do not have permission to approve at this stage.' });
+    }
+
+    if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin final approval. You do not have permission to approve at this stage.' });
+    }
+
     await db.query(
       'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
       [status, req.user.id, remarks, req.params.id]
@@ -1552,12 +2055,32 @@ router.put('/:id/received', authenticate, async (req, res) => {
 router.put('/:id/status', authenticate, async (req, res) => {
   try {
     const { status } = req.body;
-    const [prs] = await db.query('SELECT order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const [prs] = await db.query('SELECT order_number, status FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     await assertOrderNumberUnlocked(prs[0].order_number, 'status update');
-    
+
+    const currentStatus = prs[0].status;
+    const userRole = req.user.role;
+
+    // Validate that user's role matches the current status
+    if (currentStatus === 'For Engineer Review' && userRole !== 'engineer') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Engineer review. You do not have permission to update the status at this stage.' });
+    }
+
+    if (currentStatus === 'For Admin Review' && userRole !== 'admin') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to update the status at this stage.' });
+    }
+
+    if (currentStatus === 'For Procurement Review' && userRole !== 'procurement') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Procurement review. You do not have permission to update the status at this stage.' });
+    }
+
+    if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin final approval. You do not have permission to update the status at this stage.' });
+    }
+
     await db.query(
       'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
       [status, req.params.id]
