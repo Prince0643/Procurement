@@ -54,13 +54,13 @@ const Input = ({ label, type = 'text', name, value, onChange, placeholder, requi
   </div>
 )
 
-const Modal = ({ isOpen, onClose, title, children }) => {
+const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
   if (!isOpen) return null
-  
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto m-4">
+      <div className={`relative bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto m-4 ${className}`}>
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
@@ -90,6 +90,8 @@ const Suppliers = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [showAccreditationModal, setShowAccreditationModal] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [showFilesModal, setShowFilesModal] = useState(false)
+  const [viewingFilesSupplier, setViewingFilesSupplier] = useState(null)
   const [editingSupplier, setEditingSupplier] = useState(null)
   const [deletingSupplier, setDeletingSupplier] = useState(null)
   const [accreditingSupplier, setAccreditingSupplier] = useState(null)
@@ -335,6 +337,16 @@ const Suppliers = () => {
     setShowDeleteModal(true)
   }
 
+  const openFilesModal = (supplier) => {
+    setViewingFilesSupplier(supplier)
+    setShowFilesModal(true)
+  }
+
+  const closeFilesModal = () => {
+    setViewingFilesSupplier(null)
+    setShowFilesModal(false)
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!formData.name.trim()) return
@@ -421,6 +433,7 @@ const Suppliers = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Files</th>
                 {isSuperAdmin && <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Accredited</th>}
                 {isAdmin && <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>}
               </tr>
@@ -434,7 +447,7 @@ const Suppliers = () => {
                 </tr>
               ) : filteredSuppliers.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isSuperAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
                     No suppliers found
                   </td>
                 </tr>
@@ -461,6 +474,15 @@ const Suppliers = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {supplier.items_count || 0}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <button
+                        onClick={() => openFilesModal(supplier)}
+                        className="p-1 text-gray-400 hover:text-blue-600"
+                        title="View Accreditation Files"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
                     </td>
                     {isSuperAdmin && (
                       <td className="px-4 py-3 text-center">
@@ -747,6 +769,7 @@ const Suppliers = () => {
         isOpen={showPreviewModal}
         onClose={closePreviewModal}
         title="File Preview"
+        className="z-[60]"
       >
         <div className="space-y-4">
           {previewFile && (
@@ -858,6 +881,81 @@ const Suppliers = () => {
               </div>
             </>
           )}
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={showFilesModal}
+        onClose={closeFilesModal}
+        title="Supplier Accreditation Files"
+      >
+        <div className="space-y-4">
+          {viewingFilesSupplier && (
+            <>
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm font-medium text-gray-700">
+                  Supplier: {viewingFilesSupplier.supplier_name}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Accreditation Status: {viewingFilesSupplier.accredited === 1 ? '✓ Accredited' : '✗ Not Accredited'}
+                </p>
+              </div>
+
+              {viewingFilesSupplier.accreditation_files && (() => {
+                try {
+                  const files = JSON.parse(viewingFilesSupplier.accreditation_files)
+                  if (!Array.isArray(files) || files.length === 0) {
+                    return (
+                      <div className="bg-gray-50 p-4 rounded-lg text-center text-gray-500">
+                        No accreditation files attached
+                      </div>
+                    )
+                  }
+                  return (
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Accreditation Documents ({files.length})
+                      </label>
+                      <div className="space-y-2">
+                        {files.map((file, index) => (
+                          <div key={index} className="flex items-center justify-between bg-white px-3 py-2 rounded">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-gray-700 truncate">{file.originalname}</p>
+                              <p className="text-xs text-gray-500">
+                                {new Date(file.uploaded_at).toLocaleString()} • {(file.size / 1024).toFixed(2)} KB
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 ml-2">
+                              <button
+                                onClick={() => handleViewFile(viewingFilesSupplier.supplier_name, file.filename)}
+                                className="text-blue-500 hover:text-blue-700"
+                                title="View/Download"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                } catch (e) {
+                  console.error('Failed to parse accreditation_files:', e)
+                  return (
+                    <div className="bg-red-50 p-4 rounded-lg text-center text-red-500">
+                      Error loading accreditation files
+                    </div>
+                  )
+                }
+              })()}
+            </>
+          )}
+
+          <div className="flex gap-3 justify-end pt-4 border-t">
+            <Button variant="secondary" onClick={closeFilesModal}>
+              Close
+            </Button>
+          </div>
         </div>
       </Modal>
     </div>

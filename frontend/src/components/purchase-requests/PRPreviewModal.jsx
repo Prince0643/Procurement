@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, X, XCircle } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
+import { purchaseRequestService } from '../../services/purchaseRequests';
 
 const formatAmount = (amount) => {
   return new Intl.NumberFormat('en-PH', {
@@ -91,7 +93,9 @@ const PRPreviewModal = ({
 }) => {
   if (!pr) return null;
 
+  const { user } = useAuth();
   const [reviewers, setReviewers] = useState([]);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   useEffect(() => {
     const fetchReviewers = async () => {
@@ -124,6 +128,48 @@ const PRPreviewModal = ({
 
     fetchReviewers();
   }, [pr.requester_role]);
+
+  // Determine if current user is assigned a pending review for this PR
+  const userPendingReview = (() => {
+    if (!user || !pr?.reviews) return false;
+    try {
+      return pr.reviews.some(r => r.reviewer_id === user.id && r.review_status === 'pending');
+    } catch (e) {
+      return false;
+    }
+  })();
+
+  const handleLocalApprove = async () => {
+    if (!pr?.id) return;
+    try {
+      setSubmittingReview(true);
+      await purchaseRequestService.review(pr.id, 'approved', null);
+      alert('PR approved');
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to approve PR');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  const handleLocalReject = async () => {
+    if (!pr?.id) return;
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    try {
+      setSubmittingReview(true);
+      await purchaseRequestService.review(pr.id, 'rejected', reason);
+      alert('PR rejected');
+      onClose?.();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to reject PR');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const items = Array.isArray(pr.items) ? pr.items : [];
   const total = pr.total_amount || pr.amount || items.reduce((sum, item) => {
@@ -164,7 +210,7 @@ const PRPreviewModal = ({
       onClick={handleClose}
     >
       <div
-        className="flex max-h-[94vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+        className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-200 bg-gray-50 px-4 py-3">
@@ -332,23 +378,27 @@ const PRPreviewModal = ({
           <Button variant="secondary" className="w-full sm:w-auto" onClick={handleClose}>
             Close
           </Button>
-          {onReject && canAct && (
+
+          {/* Render reject button if parent provided handler and action allowed, or if current user is a pending reviewer */}
+          {( (onReject && canAct) || userPendingReview ) && (
             <Button
               variant="danger"
               className="w-full sm:w-auto"
-              onClick={handleReject}
-              disabled={processingId === pr.id}
+              onClick={onReject && canAct ? handleReject : handleLocalReject}
+              disabled={processingId === pr.id || submittingReview}
             >
               <XCircle className="mr-2 h-4 w-4" />
               Reject
             </Button>
           )}
-          {onApprove && canAct && (
+
+          {/* Render approve button similarly */}
+          {( (onApprove && canAct) || userPendingReview ) && (
             <Button
               variant="success"
               className="w-full sm:w-auto"
-              onClick={handleApprove}
-              disabled={processingId === pr.id}
+              onClick={onApprove && canAct ? handleApprove : handleLocalApprove}
+              disabled={processingId === pr.id || submittingReview}
             >
               <CheckCircle className="mr-2 h-4 w-4" />
               Approve

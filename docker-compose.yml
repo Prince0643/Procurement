@@ -10,8 +10,7 @@ services:
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set in /opt/procurement/.env.prod}
     volumes:
       - db_data:/var/lib/mysql
-      - ./backend/database/00_init_db.sql:/docker-entrypoint-initdb.d/00_init_db.sql:ro
-      - ./dbschema/procurement_db.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+      - ./backend/database/procurement_db (3).sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     # Do not expose DB publicly; keep internal-only.
     expose:
       - "3306"

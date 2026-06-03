@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { authenticate, requireAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
+import { getReviewersForPR } from '../utils/notifications.js';
 
 const router = express.Router();
 
@@ -65,6 +66,57 @@ router.get('/', authenticate, async (req, res) => {
       GROUP BY s.id
       ORDER BY s.supplier_name
     `);
+
+    // For each supplier, also fetch accreditation files from purchase_requests
+    for (const supplier of suppliers) {
+      // Fetch accreditation files from purchase_requests table
+      const [prFiles] = await db.query(`
+        SELECT accreditation_files
+        FROM purchase_requests
+        WHERE supplier_name = ?
+          AND accreditation_files IS NOT NULL
+          AND accreditation_files != ''
+      `, [supplier.supplier_name]);
+
+      // Parse and merge files from purchase_requests
+      let prFilesList = [];
+      for (const pr of prFiles) {
+        try {
+          const files = JSON.parse(pr.accreditation_files);
+          if (Array.isArray(files)) {
+            prFilesList.push(...files);
+          }
+        } catch (e) {
+          console.error('Failed to parse accreditation_files from PR:', e);
+        }
+      }
+
+      // Parse files from suppliers table
+      let supplierFilesList = [];
+      if (supplier.accreditation_files) {
+        try {
+          supplierFilesList = JSON.parse(supplier.accreditation_files);
+          if (!Array.isArray(supplierFilesList)) {
+            supplierFilesList = [];
+          }
+        } catch (e) {
+          console.error('Failed to parse accreditation_files from supplier:', e);
+          supplierFilesList = [];
+        }
+      }
+
+      // Merge files, deduplicating by filename
+      const allFilesMap = new Map();
+      supplierFilesList.forEach(file => {
+        allFilesMap.set(file.filename, file);
+      });
+      prFilesList.forEach(file => {
+        allFilesMap.set(file.filename, file);
+      });
+
+      // Update supplier with merged files
+      supplier.accreditation_files = JSON.stringify(Array.from(allFilesMap.values()));
+    }
 
     // Apply pagination
     const total = suppliers.length;
@@ -274,6 +326,61 @@ router.put('/:supplierName/accredit', authenticate, async (req, res) => {
       }
     }
 
+    // If supplier is now accredited, auto-update all pending accreditation review PRs
+    if (accredited) {
+      console.log(`🔍 Updating PRs for supplier: ${supplierName}`);
+      
+      const [pendingPRs] = await db.query(
+        `SELECT pr.id, pr.status, pr.requested_by, e.role as requester_role
+         FROM purchase_requests pr
+         JOIN employees e ON pr.requested_by = e.id
+         WHERE pr.supplier_name = ? AND pr.status = 'Pending Accreditation Review'`,
+        [supplierName]
+      );
+
+      console.log(`✅ Found ${pendingPRs.length} pending accreditation review PRs for ${supplierName}`);
+
+      // Update each PR to the next appropriate status based on requester role and create review records
+      for (const pr of pendingPRs) {
+        let newStatus;
+        if (pr.requester_role === 'engineer') {
+          newStatus = 'For Engineer Review';
+        } else if (pr.requester_role === 'admin') {
+          newStatus = 'For Admin Review';
+        } else if (pr.requester_role === 'procurement') {
+          newStatus = 'For Procurement Review';
+        } else {
+          newStatus = 'For Super Admin Final Approval';
+        }
+
+        // Update PR status
+        await db.query(
+          'UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?',
+          [newStatus, pr.id]
+        );
+
+        // Create review records for required reviewers
+        const reviewers = await getReviewersForPR(pr.requester_role);
+        const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== pr.requested_by);
+
+        for (const reviewerId of filteredReviewers) {
+          try {
+            await db.query(
+              'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
+              [pr.id, reviewerId, 'pending']
+            );
+          } catch (err) {
+            // Ignore duplicate key errors (review record already exists)
+            if (err.code !== 'ER_DUP_ENTRY') {
+              throw err;
+            }
+          }
+        }
+
+        console.log(`✅ Updated PR ${pr.id} status to ${newStatus} with ${filteredReviewers.length} reviewers`);
+      }
+    }
+
     res.json({ message: 'Supplier accreditation status updated successfully' });
   } catch (error) {
     console.error('Failed to update supplier accreditation:', error);
@@ -431,28 +538,45 @@ router.get('/:supplierName/accreditation-files/:filename', authenticate, async (
 
     console.log('Serve file request:', { supplierName, filename });
 
-    // Get supplier with files
+    // First, try to find the file in suppliers table
     const [existingSupplier] = await db.query(
       'SELECT accreditation_files FROM suppliers WHERE supplier_name = ?',
       [supplierName]
     );
 
-    if (existingSupplier.length === 0) {
-      return res.status(404).json({ message: 'Supplier not found' });
-    }
+    let file = null;
 
-    // Parse existing files
-    let existingFiles = [];
-    if (existingSupplier[0].accreditation_files) {
+    // Check suppliers table
+    if (existingSupplier.length > 0 && existingSupplier[0].accreditation_files) {
       try {
-        existingFiles = JSON.parse(existingSupplier[0].accreditation_files);
+        const supplierFiles = JSON.parse(existingSupplier[0].accreditation_files);
+        file = supplierFiles.find(f => f.filename === filename);
       } catch (e) {
-        existingFiles = [];
+        console.error('Failed to parse supplier accreditation_files:', e);
       }
     }
 
-    // Find the file
-    const file = existingFiles.find(f => f.filename === filename);
+    // If not found in suppliers table, check purchase_requests table
+    if (!file) {
+      const [prFiles] = await db.query(
+        'SELECT accreditation_files FROM purchase_requests WHERE supplier_name = ? AND accreditation_files IS NOT NULL AND accreditation_files != ""',
+        [supplierName]
+      );
+
+      for (const pr of prFiles) {
+        try {
+          const prFileList = JSON.parse(pr.accreditation_files);
+          const foundFile = prFileList.find(f => f.filename === filename);
+          if (foundFile) {
+            file = foundFile;
+            break;
+          }
+        } catch (e) {
+          console.error('Failed to parse PR accreditation_files:', e);
+        }
+      }
+    }
+
     if (!file) {
       console.log('File not found in accreditation_files:', filename);
       return res.status(404).json({ message: 'File not found' });

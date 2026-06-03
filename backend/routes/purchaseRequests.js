@@ -1,4 +1,7 @@
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
 import { createNotification, getProcurementOfficers, getSuperAdmins, getEngineers, getReviewersForPR } from '../utils/notifications.js';
@@ -8,6 +11,26 @@ import { assertProjectIsActive } from '../utils/branchProjects.js';
 import { assertOrderNumberUnlocked } from '../utils/orderNumberLocks.js';
 
 const router = express.Router();
+
+// Configure multer for PR accreditation file uploads
+const prAccreditationStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = 'uploads/pr-accreditation';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const prAccreditationUpload = multer({
+  storage: prAccreditationStorage,
+  limits: { fileSize: Infinity } // No file size limit as requested
+});
 const normalizePaymentTermsNote = (note) => {
   const normalized = note == null ? '' : String(note).trim();
   return normalized || null;
@@ -128,6 +151,65 @@ const assertPaymentScheduleTotalsMatch = ({ paymentBasis, schedules, totalAmount
     throw createInputError(`Payment schedule total (${schedulesTotal.toFixed(2)}) must match PR total (${prTotal.toFixed(2)}).`);
   }
 };
+
+// Check supplier accreditation status with fuzzy matching
+router.get('/check-supplier-accreditation/:supplierName', authenticate, async (req, res) => {
+  try {
+    const supplierName = decodeURIComponent(req.params.supplierName);
+    const normalizedInput = supplierName.trim().toLowerCase();
+
+    // Fuzzy match against suppliers table
+    const [suppliers] = await db.query(`
+      SELECT id, supplier_name, accredited, accreditation_files, address
+      FROM suppliers
+      WHERE LOWER(supplier_name) LIKE ?
+      ORDER BY
+        CASE
+          WHEN LOWER(supplier_name) = ? THEN 1
+          WHEN LOWER(supplier_name) LIKE ? THEN 2
+          WHEN LOWER(supplier_name) LIKE ? THEN 3
+          ELSE 4
+        END,
+        LENGTH(supplier_name) ASC
+      LIMIT 5
+    `, [`%${normalizedInput}%`, normalizedInput, `${normalizedInput}%`, `%${normalizedInput}%`]);
+
+    if (suppliers.length === 0) {
+      return res.json({
+        found: false,
+        accredited: false,
+        supplierId: null,
+        supplierName: null,
+        accreditationFiles: [],
+        message: 'Supplier not found in database'
+      });
+    }
+
+    // Use the best match (first result due to ORDER BY)
+    const bestMatch = suppliers[0];
+    let accreditationFiles = [];
+    if (bestMatch.accreditation_files) {
+      try {
+        accreditationFiles = JSON.parse(bestMatch.accreditation_files);
+      } catch (e) {
+        accreditationFiles = [];
+      }
+    }
+
+    res.json({
+      found: true,
+      accredited: bestMatch.accredited === 1,
+      supplierId: bestMatch.id,
+      supplierName: bestMatch.supplier_name,
+      suggestedName: bestMatch.supplier_name !== supplierName ? bestMatch.supplier_name : null,
+      accreditationFiles,
+      address: bestMatch.address
+    });
+  } catch (error) {
+    console.error('Check supplier accreditation error:', error);
+    res.status(500).json({ message: 'Failed to check supplier accreditation: ' + error.message });
+  }
+});
 
 // Get all PRs (filtered by user role)
 router.get('/', authenticate, async (req, res) => {
@@ -389,10 +471,39 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Create PR (engineer)
-router.post('/', authenticate, async (req, res) => {
+router.post('/', authenticate, prAccreditationUpload.array('accreditation_files', 5), async (req, res) => {
   let conn;
   try {
+    console.log('📥 Received PR creation request');
+    console.log('📦 Request body keys:', Object.keys(req.body));
+    console.log('📦 Files received:', req.files?.length || 0);
+
     const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules } = req.body;
+
+    // Parse JSON strings from FormData
+    let parsedItems = items;
+    let parsedPaymentSchedules = payment_schedules;
+
+    if (typeof items === 'string') {
+      try {
+        parsedItems = JSON.parse(items);
+        console.log('✅ Parsed items:', parsedItems);
+      } catch (e) {
+        console.error('Failed to parse items:', e);
+        parsedItems = [];
+      }
+    }
+
+    if (typeof payment_schedules === 'string') {
+      try {
+        parsedPaymentSchedules = JSON.parse(payment_schedules);
+        console.log('✅ Parsed payment_schedules:', parsedPaymentSchedules);
+      } catch (e) {
+        console.error('Failed to parse payment_schedules:', e);
+        parsedPaymentSchedules = [];
+      }
+    }
+
     await assertProjectIsActive(project, { providedOrderNumber: order_number });
     const isDraft = save_as_draft === true;
 
@@ -402,7 +513,7 @@ router.post('/', authenticate, async (req, res) => {
         return res.status(400).json({ message: 'Purpose is required' });
       }
 
-      if (!Array.isArray(items) || items.length === 0) {
+      if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
         return res.status(400).json({ message: 'At least one item is required' });
       }
     }
@@ -445,19 +556,85 @@ const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
     } else {
       status = 'For Super Admin Final Approval';
     }
-    
+
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
     const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
     const paymentTermsCode = paymentTermsNote ? 'CUSTOM' : null;
     const freeTextSupplierName = normalizeSupplierName(supplier_name);
-    const normalizedPaymentSchedules = normalizePaymentSchedules(payment_schedules);
+    const normalizedPaymentSchedules = normalizePaymentSchedules(parsedPaymentSchedules);
+
+    // Handle accreditation files and check supplier accreditation status
+    const accreditationFiles = req.files || [];
+    let supplierAccredited = null;
+    let matchedSupplierId = supplier_id || null;
+
+    // Check supplier accreditation status if supplier name is provided
+    if (freeTextSupplierName && !isDraft) {
+      const normalizedSupplierName = freeTextSupplierName.trim().toLowerCase();
+      const [supplierCheck] = await conn.query(`
+        SELECT id, accredited
+        FROM suppliers
+        WHERE LOWER(supplier_name) = ?
+        LIMIT 1
+      `, [normalizedSupplierName]);
+
+      if (supplierCheck.length > 0) {
+        supplierAccredited = supplierCheck[0].accredited === 1 ? 1 : 0;
+        matchedSupplierId = supplierCheck[0].id;
+
+        // If supplier is not accredited, set status to Pending Accreditation Review
+        if (supplierAccredited === 0) {
+          status = 'Pending Accreditation Review';
+        }
+      } else {
+        supplierAccredited = 0; // Supplier not in database = not accredited
+        status = 'Pending Accreditation Review';
+      }
+    }
+
+    // Process accreditation files
+    let accreditationFilesJson = null;
+    if (accreditationFiles.length > 0) {
+      const processedFiles = accreditationFiles.map(file => ({
+        filename: file.filename,
+        originalname: file.originalname,
+        path: file.path,
+        size: file.size,
+        mimetype: file.mimetype,
+        uploaded_at: new Date().toISOString()
+      }));
+      accreditationFilesJson = JSON.stringify(processedFiles);
+
+      // If supplier exists in database, also link files to supplier record
+      if (matchedSupplierId) {
+        const [existingSupplierFiles] = await conn.query(
+          'SELECT accreditation_files FROM suppliers WHERE id = ?',
+          [matchedSupplierId]
+        );
+
+        let supplierFiles = [];
+        if (existingSupplierFiles[0]?.accreditation_files) {
+          try {
+            supplierFiles = JSON.parse(existingSupplierFiles[0].accreditation_files);
+          } catch (e) {
+            supplierFiles = [];
+          }
+        }
+
+        const updatedSupplierFiles = [...supplierFiles, ...processedFiles];
+        await conn.query(
+          'UPDATE suppliers SET accreditation_files = ? WHERE id = ?',
+          [JSON.stringify(updatedSupplierFiles), matchedSupplierId]
+        );
+      }
+    }
 
     if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
       return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
     }
 
-    const normalizedItems = Array.isArray(items)
-      ? items.map((item) => {
+    const normalizedItems = Array.isArray(parsedItems)
+      ? parsedItems.map((item) => {
         const itemId = item.item_id ?? item.id;
         const quantity = Number(item.quantity);
         const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
@@ -512,8 +689,8 @@ console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
     // 200-218
     const [result] = await conn.query(
       `INSERT INTO purchase_requests
-      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, payment_terms_code, payment_terms_note, payment_terms_set_by, payment_terms_set_at, supplier_id, supplier_name, supplier_address, total_amount)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (pr_number, requested_by, purpose, remarks, status, date_needed, project, project_address, order_number, payment_basis, payment_terms_code, payment_terms_note, payment_terms_set_by, payment_terms_set_at, supplier_id, supplier_name, supplier_address, total_amount, accreditation_files, supplier_accredited)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         prNumber,
         req.user.id,
@@ -532,7 +709,9 @@ console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
         supplier_id || null,
         freeTextSupplierName,
         supplierAddress,
-        totalAmount
+        totalAmount,
+        accreditationFilesJson,
+        supplierAccredited
       ]
     );
 

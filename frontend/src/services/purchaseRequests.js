@@ -88,21 +88,31 @@ export const purchaseRequestService = {
     });
   },
 
-create: async (prData) => {
-  const response = await api.post('/purchase-requests', {
-    purpose: prData.purpose,
-    project: prData.project,
-    project_address: prData.project_address,
-    date_needed: prData.date_needed,
-    order_number: prData.order_number,
-    supplier_id: prData.supplier_id,
-    supplier_name: prData.supplier_name,
-    supplier_address: prData.supplier_address, // ← ADD THIS LINE
-    payment_basis: prData.payment_basis,
-    payment_terms_note: prData.payment_terms_note,
-    payment_schedules: prData.payment_schedules,
-    remarks: prData.remarks,
-    items: prData.items
+create: async (prData, accreditationFiles = []) => {
+  const formData = new FormData();
+  formData.append('purpose', prData.purpose);
+  formData.append('project', prData.project || '');
+  formData.append('project_address', prData.project_address || '');
+  formData.append('date_needed', prData.date_needed || '');
+  formData.append('order_number', prData.order_number || '');
+  formData.append('supplier_id', prData.supplier_id || '');
+  formData.append('supplier_name', prData.supplier_name || '');
+  formData.append('supplier_address', prData.supplier_address || '');
+  formData.append('payment_basis', prData.payment_basis);
+  formData.append('payment_terms_note', prData.payment_terms_note || '');
+  formData.append('remarks', prData.remarks || '');
+  formData.append('items', JSON.stringify(prData.items));
+  formData.append('payment_schedules', JSON.stringify(prData.payment_schedules));
+
+  // Add accreditation files
+  accreditationFiles.forEach(file => {
+    formData.append('accreditation_files', file);
+  });
+
+  const response = await api.post('/purchase-requests', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
   });
   return response.data;
 },
@@ -199,6 +209,11 @@ saveDraft: async (prData) => {
       review_status: reviewStatus,
       review_comment: reviewComment
     });
+    return response.data;
+  },
+
+  checkSupplierAccreditation: async (supplierName) => {
+    const response = await api.get(`/purchase-requests/check-supplier-accreditation/${encodeURIComponent(supplierName)}`);
     return response.data;
   }
 };

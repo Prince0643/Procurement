@@ -156,6 +156,9 @@ const Items = () => {
   const [orderNumber, setOrderNumber] = useState('')
 const [supplierInput, setSupplierInput] = useState('')
 const [supplierAddress, setSupplierAddress] = useState('') // New state for supplier address
+const [accreditationFiles, setAccreditationFiles] = useState([]) // Accreditation files for supplier
+const [supplierAccreditationStatus, setSupplierAccreditationStatus] = useState(null) // Accreditation status check result
+const [suggestedSupplierName, setSuggestedSupplierName] = useState('') // Auto-detected supplier name
 const [paymentBasis, setPaymentBasis] = useState('debt')
   const [paymentTermsNote, setPaymentTermsNote] = useState('')
   const [paymentSchedules, setPaymentSchedules] = useState([{ payment_date: '', amount: '', note: '' }])
@@ -195,6 +198,32 @@ const [paymentBasis, setPaymentBasis] = useState('debt')
   useEffect(() => {
     setCurrentPage(1)
   }, [debouncedSearchQuery, selectedCategory])
+
+  // Debounced supplier accreditation check
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (supplierInput.trim().length > 2) {
+        try {
+          const result = await purchaseRequestService.checkSupplierAccreditation(supplierInput.trim())
+          setSupplierAccreditationStatus(result)
+          if (result.suggestedName && result.suggestedName !== supplierInput.trim()) {
+            setSuggestedSupplierName(result.suggestedName)
+          } else {
+            setSuggestedSupplierName('')
+          }
+        } catch (error) {
+          console.error('Failed to check supplier accreditation:', error)
+          setSupplierAccreditationStatus(null)
+          setSuggestedSupplierName('')
+        }
+      } else {
+        setSupplierAccreditationStatus(null)
+        setSuggestedSupplierName('')
+      }
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+  }, [supplierInput])
 
   useEffect(() => {
     fetchItems()
@@ -268,6 +297,62 @@ const [paymentBasis, setPaymentBasis] = useState('debt')
     } finally {
       setInitialLoading(false)
       setItemsLoading(false)
+    }
+  }
+
+  const getCategoryAbbreviation = (categoryName) => {
+    if (!categoryName) return 'GEN'
+    // Take first 3 letters, uppercase
+    return categoryName.substring(0, 3).toUpperCase()
+  }
+
+  const generateNextSKU = async (categoryId) => {
+    try {
+      // Fetch all items to find the highest SKU number for this category
+      let allItems = []
+      let page = 1
+      let hasMore = true
+      
+      while (hasMore) {
+        const data = await itemService.getPage({ page, pageSize: 100 })
+        allItems = [...allItems, ...(data.items || [])]
+        hasMore = data.items && data.items.length === 100
+        page++
+      }
+      
+      // Get category abbreviation
+      const category = dbCategories.find(cat => cat.id === parseInt(categoryId, 10))
+      const categoryAbbr = getCategoryAbbreviation(category?.category_name)
+      
+      // Find highest SKU with this category prefix
+      let maxNumber = 0
+      allItems.forEach(item => {
+        const match = item.item_code.match(new RegExp(`^${categoryAbbr}-(\\d+)$`))
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (num > maxNumber) {
+            maxNumber = num
+          }
+        }
+      })
+      const nextNumber = maxNumber + 1
+      return `${categoryAbbr}-${String(nextNumber).padStart(3, '0')}`
+    } catch (error) {
+      console.error('Failed to generate SKU:', error)
+      return 'GEN-001'
+    }
+  }
+
+  const openAddItemModal = async () => {
+    setNewItemForm(DEFAULT_ITEM_FORM)
+    setShowAddItemModal(true)
+  }
+
+  const handleCategoryChange = async (categoryId) => {
+    setNewItemForm({ ...newItemForm, category_id: categoryId })
+    if (categoryId) {
+      const nextSKU = await generateNextSKU(categoryId)
+      setNewItemForm(prev => ({ ...prev, item_code: nextSKU }))
     }
   }
 
@@ -368,6 +453,22 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
       setSubmitting(false)
     }
   }
+
+  const handleFileUpload = (e) => {
+    const files = Array.from(e.target.files)
+    setAccreditationFiles(prev => [...prev, ...files])
+  }
+
+  const handleRemoveFile = (index) => {
+    setAccreditationFiles(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleAcceptSuggestedName = () => {
+    if (suggestedSupplierName) {
+      setSupplierInput(suggestedSupplierName)
+      setSuggestedSupplierName('')
+    }
+  }
   const openPRModal = async () => {
     setShowPRModal(true)
     try {
@@ -388,6 +489,11 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
     e.preventDefault()
     if (!newItemForm.item_code || !newItemForm.item_name) {
       alert('SKU and Item Name are required')
+      return
+    }
+
+    if (!newItemForm.description || !newItemForm.description.trim()) {
+      alert('Description is required')
       return
     }
 
@@ -673,16 +779,17 @@ setPaymentBasis('debt')
         return
       }
       setSubmitting(true)
+
       const prData = {
         purpose,
         project: project || null,
         project_address: projectAddress || null,
         date_needed: dateNeeded || null,
         order_number: orderNumber || null,
-supplier_id: null,
-supplier_name: supplierInput.trim() || null,
-supplier_address: supplierAddress.trim() || null, // Add supplier address to data
-...paymentDetails,
+        supplier_id: null,
+        supplier_name: supplierInput.trim() || null,
+        supplier_address: supplierAddress.trim() || null,
+        ...paymentDetails,
         remarks: remarks || null,
         items: cart.map(item => ({
           item_id: item.item_id,
@@ -690,11 +797,13 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
           unit_price: item.unit_price
         }))
       }
-      await purchaseRequestService.create(prData)
+
+      await purchaseRequestService.create(prData, accreditationFiles)
       setCart([])
       closePRModal()
       alert('Purchase Request created successfully!')
     } catch (err) {
+      console.error('PR creation error:', err)
       alert('Failed to create PR: ' + (err.response?.data?.message || err.message))
     } finally {
       setSubmitting(false)
@@ -746,7 +855,7 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-gray-900 break-words">{item.item_name}</p>
-                    <p className="mt-1 text-xs text-gray-500 break-words">SKU: {item.item_code} • {item.unit}</p>
+                    <p className="mt-1 text-xs text-gray-500 break-words">ITEM CODE: {item.item_code} • {item.unit}</p>
                   </div>
                   <button
                     onClick={() => removeFromCart(item.item_id)}
@@ -814,7 +923,7 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
             </Button>
           )}
           {canManageCatalog && (
-            <Button onClick={() => setShowAddItemModal(true)} className="px-3 py-2">
+            <Button onClick={openAddItemModal} className="px-3 py-2">
               <Plus className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">Add New Item</span>
               <span className="sm:hidden">Add</span>
@@ -923,7 +1032,7 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
                               {item.item_name}
                             </p>
                             <p className="mt-1 text-xs text-gray-500 break-words">
-                              SKU: {item.item_code} • {item.unit || 'pcs'}
+                              ITEM CODE: {item.item_code} • {item.unit || 'pcs'}
                             </p>
                           </div>
                           {canManageCatalog && (
@@ -1022,7 +1131,7 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500">SKU: {item.item_code} • Unit: {item.unit || 'pcs'}</p>
+                      <p className="text-sm text-gray-500">ITEM CODE: {item.item_code} | Unit: {item.unit || 'pcs'}</p>
                       {item.last_unit_price && (
                         <p className="text-sm text-green-600 font-medium">
                           Last Price: {formatCurrency(item.last_unit_price)}
@@ -1207,18 +1316,82 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
               </div>
 
 <div className="space-y-4 mb-4">
-  <Input
-    label="Supplier"
-    value={supplierInput}
-    onChange={(e) => setSupplierInput(e.target.value)}
-    placeholder="Type supplier name"
-  />
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+    <input
+      type="text"
+      value={supplierInput}
+      onChange={(e) => setSupplierInput(e.target.value)}
+      placeholder="Type supplier name"
+      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+    />
+    {suggestedSupplierName && (
+      <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded-md">
+        <p className="text-sm text-yellow-800">
+          Did you mean: <span className="font-semibold">{suggestedSupplierName}</span>?
+          <button
+            type="button"
+            onClick={handleAcceptSuggestedName}
+            className="ml-2 text-yellow-700 underline hover:text-yellow-900"
+          >
+            Yes, use this
+          </button>
+        </p>
+      </div>
+    )}
+    {supplierAccreditationStatus && supplierAccreditationStatus.found && !supplierAccreditationStatus.accredited && (
+      <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+        <p className="text-sm text-orange-800">
+          ⚠️ Supplier is not accredited. This PR will be flagged for accreditation review.
+        </p>
+      </div>
+    )}
+    {supplierAccreditationStatus && supplierAccreditationStatus.found && supplierAccreditationStatus.accredited && (
+      <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-md">
+        <p className="text-sm text-green-800">
+          ✅ Supplier is accredited.
+        </p>
+      </div>
+    )}
+  </div>
   <Input
     label="Supplier Address"
     value={supplierAddress}
     onChange={(e) => setSupplierAddress(e.target.value)}
     placeholder="Type supplier address"
   />
+</div>
+
+<div className="mb-4">
+  <label className="block text-sm font-medium text-gray-700 mb-1">
+    Supplier Accreditation Documents (Optional)
+  </label>
+  <p className="text-xs text-gray-500 mb-2">
+    Upload PDF, images, or other documents to prove supplier accreditation
+  </p>
+  <input
+    type="file"
+    multiple
+    accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
+    onChange={handleFileUpload}
+    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+  />
+  {accreditationFiles.length > 0 && (
+    <div className="mt-2 space-y-1">
+      {accreditationFiles.map((file, index) => (
+        <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded border">
+          <span className="text-sm text-gray-700 truncate">{file.name}</span>
+          <button
+            type="button"
+            onClick={() => handleRemoveFile(index)}
+            className="text-red-500 hover:text-red-700"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )}
 </div>
 
               <Select 
@@ -1443,26 +1616,31 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
                   label="Item Code"
                   value={newItemForm.item_code}
                   onChange={(e) => setNewItemForm({ ...newItemForm, item_code: e.target.value })}
-                  placeholder="e.g., CEM-001"
+                  placeholder="e.g., SKU-001"
                   required
+                  readOnly
+                  className="bg-gray-100"
                 />
                 <Input
                   label="Item Name"
                   value={newItemForm.item_name}
                   onChange={(e) => setNewItemForm({ ...newItemForm, item_name: e.target.value })}
-                  placeholder="e.g., Cement"
+                  placeholder="e.g., Hammer Claw 16oz"
                   required
                 />
               </div>
 
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Description <span className="text-red-500">*</span>
+                </label>
                 <textarea
                   value={newItemForm.description}
                   onChange={(e) => setNewItemForm({ ...newItemForm, description: e.target.value })}
-                  placeholder="Description..."
+                  placeholder="Provide a detailed description of the item."
                   rows={3}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                  required
                 />
               </div>
 
@@ -1470,7 +1648,7 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
                 <Select
                   label="Category"
                   value={newItemForm.category_id || ''}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, category_id: e.target.value })}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
                   options={categoryOptions}
                   placeholder="Select category..."
                   required

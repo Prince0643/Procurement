@@ -12,7 +12,7 @@ When your colleague says "Code is updated on GitHub," run this sequence on the s
 
 ```bash
 # 1. Enter the project directory
-cd /var/www/procurement_system
+cd /var/www/Procurement
 
 # 2. Pull the latest changes from GitHub
 git fetch origin main
@@ -38,7 +38,7 @@ Then hard-refresh the browser on `https://procurement.xandree.com` (Ctrl+F5).
 Use this when **only** frontend files changed (for example search-bar fixes in `Items.jsx` or `ServiceRequestsManagement.jsx`). Faster than rebuilding everything.
 
 ```bash
-cd /var/www/procurement_system
+cd /var/www/Procurement
 git fetch origin main
 git reset --hard origin/main
 docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
@@ -60,7 +60,7 @@ docker compose --env-file /opt/procurement/.env.prod ps
 Use when **only** backend files changed (routes, middleware, `server.js`, etc.):
 
 ```bash
-cd /var/www/procurement_system
+cd /var/www/Procurement
 git fetch origin main
 git reset --hard origin/main
 docker compose --env-file /opt/procurement/.env.prod up -d --build backend
@@ -88,15 +88,14 @@ mysql -u root -p -e "USE procurement_db; SHOW TABLES;"
 
 On first Docker start, MariaDB loads:
 
-- `backend/database/00_init_db.sql`
-- `dbschema/procurement_db.sql`
+- `backend/database/procurement_db (3).sql`
 
 Do **not** recreate the `db` volume on a live server unless you intend to wipe data.
 
 **Option C: Local setup script (development / one-off seeding)**
 
 ```bash
-cd /var/www/procurement_system/backend
+cd /var/www/Procurement/backend
 npm install
 npm run setup-db
 ```
@@ -117,7 +116,7 @@ This file is **not** overwritten by `git pull` or `git reset`. Create it once fr
 
 ```bash
 mkdir -p /opt/procurement
-cp /var/www/procurement_system/deploy/.env.prod.example /opt/procurement/.env.prod
+cp /var/www/Procurement/deploy/.env.prod.example /opt/procurement/.env.prod
 nano /opt/procurement/.env.prod
 ```
 
@@ -134,7 +133,7 @@ nano /opt/procurement/.env.prod
 After changing `.env.prod`, rebuild affected services:
 
 ```bash
-cd /var/www/procurement_system
+cd /var/www/Procurement
 docker compose --env-file /opt/procurement/.env.prod up -d --build
 ```
 
@@ -162,7 +161,7 @@ If only `VITE_API_URL` changed, rebuild **frontend** only.
 ## 7. Summary "One-Liner" (Full deploy)
 
 ```bash
-cd /var/www/procurement_system && \
+cd /var/www/Procurement && \
 git fetch origin main && \
 git reset --hard origin/main && \
 docker compose --env-file /opt/procurement/.env.prod up -d --build && \
@@ -173,7 +172,7 @@ curl -i https://procurement-api.xandree.com/api/health
 **Frontend-only one-liner:**
 
 ```bash
-cd /var/www/procurement_system && \
+cd /var/www/Procurement && \
 git fetch origin main && \
 git reset --hard origin/main && \
 docker compose --env-file /opt/procurement/.env.prod up -d --build frontend && \
@@ -254,10 +253,10 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 ## 9. Project Structure on Server
 
 ```
-/var/www/procurement_system/
+/var/www/Procurement/
 ├── backend/              # Node.js Express API
 ├── frontend/             # React + Vite (built inside Docker)
-├── dbschema/             # SQL schema for first-time DB init
+├── backend/database/     # SQL schema for first-time DB init
 ├── deploy/
 │   ├── DEPLOYMENT-MANUAL.md
 │   ├── DOCKER_VPS.md
@@ -282,7 +281,7 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 | Service | Container | Host bind | Public URL |
 |---------|-----------|-----------|------------|
 | Frontend (Nginx static) | `procurement_frontend` | `127.0.0.1:8081` | `https://procurement.xandree.com` |
-| Backend API | `procurement_backend` | `127.0.0.1:5001` | `https://procurement-api.xandree.com/api` |
+| Backend API | `procurement_backend` | `127.0.0.1:5001:5000` | `https://procurement-api.xandree.com/api` |
 | MariaDB | `procurement_db` | internal only | — |
 | Adminer (optional profile) | `procurement_adminer` | `127.0.0.1:8082` | local/admin use only |
 
@@ -293,7 +292,7 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 If a deployment breaks, revert Git and rebuild:
 
 ```bash
-cd /var/www/procurement_system
+cd /var/www/Procurement
 git log --oneline -10
 git reset --hard <commit-hash>
 docker compose --env-file /opt/procurement/.env.prod up -d --build
@@ -328,7 +327,7 @@ git commit -m "Fix search input losing focus on items and service requests pages
 git push origin main
 ```
 
-Paths are relative to the repository root (often `/var/www/procurement_system` on the server).
+Paths are relative to the repository root (often `/var/www/Procurement` on the server).
 
 ---
 

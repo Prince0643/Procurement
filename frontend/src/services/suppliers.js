@@ -19,7 +19,7 @@ const dedupeRequest = async (key, requestFn) => {
 export const supplierService = {
   getAll: async (params = {}) => {
     return dedupeRequest('suppliers-getAll', async () => {
-      const response = await api.get('/suppliers', { params });
+      const response = await api.get('/suppliers', { params, cache: false });
       return response.data;
     });
   },

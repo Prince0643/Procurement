@@ -134,7 +134,8 @@ const StatusBadge = ({ status }) => {
       'For Procurement Review': 'bg-orange-100 text-orange-800',
       'For Super Admin Final Approval': 'bg-purple-100 text-purple-800',
       'PO Created': 'bg-indigo-100 text-indigo-800',
-      'Paid': 'bg-green-100 text-green-800'
+      'Paid': 'bg-green-100 text-green-800',
+      'Pending Accreditation Review': 'bg-amber-100 text-amber-800'
     }
     return colors[status] || 'bg-gray-100 text-gray-800'
   }
