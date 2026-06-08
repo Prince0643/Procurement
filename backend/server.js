@@ -55,7 +55,11 @@ const envAllowedOrigins = String(process.env.CORS_ALLOWED_ORIGINS || '')
 const defaultAllowedOrigins = [
   'https://procurement.xandree.com',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://localhost:5174',
+  'http://localhost:5175',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+  'http://127.0.0.1:5175'
 ];
 
 const allowedOrigins = envAllowedOrigins.length ? envAllowedOrigins : defaultAllowedOrigins;
@@ -124,7 +128,7 @@ const apiLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5, // 5 login attempts per 15 minutes
+  max: 50, // 50 login attempts per 15 minutes (increased for development)
   skipSuccessfulRequests: true,
 });
 

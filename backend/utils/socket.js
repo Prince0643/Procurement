@@ -5,7 +5,15 @@ let io;
 export const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: ['https://procurement.xandree.com', 'http://localhost:5173'],
+      origin: [
+        'https://procurement.xandree.com',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:5175',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174',
+        'http://127.0.0.1:5175'
+      ],
       methods: ['GET', 'POST'],
       credentials: true
     }

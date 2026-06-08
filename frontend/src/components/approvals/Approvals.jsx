@@ -135,11 +135,20 @@ const LockedBadge = () => (
   </span>
 );
 
+const REVIEW_STATUSES = new Set([
+  'For Engineer Review',
+  'For Admin Review',
+  'For Procurement Review'
+]);
+
+const normalizeRole = (role) => String(role || '').trim().toLowerCase();
+
 const canApproveByStatus = (status, userRole) => {
-  if (status === 'For Engineer Review') return userRole === 'engineer';
-  if (status === 'For Admin Review') return userRole === 'admin';
-  if (status === 'For Procurement Review') return userRole === 'procurement';
-  if (status === 'For Super Admin Final Approval') return userRole === 'super_admin';
+  const role = normalizeRole(userRole);
+  if (status === 'For Engineer Review') return role === 'engineer';
+  if (status === 'For Admin Review') return role === 'admin';
+  if (status === 'For Procurement Review') return role === 'procurement';
+  if (status === 'For Super Admin Final Approval') return role === 'super_admin';
   return true;
 };
 
@@ -448,17 +457,21 @@ const Approvals = () => {
   const handleApprovePR = async (id) => {
     const prRow = purchaseRequests.find((row) => row.id === id);
     if (blockIfLockedOrder(prRow?.order_number)) return;
-    // Optimistic UI update - immediately move to approved
-    setPurchaseRequests(prev => prev.map(pr => 
-      pr.id === id ? { ...pr, status: 'For Purchase' } : pr
-    ));
     
     try {
       setProcessingId(id);
-      await purchaseRequestService.approve(id, 'For Purchase');
+      if (REVIEW_STATUSES.has(prRow?.status)) {
+        await purchaseRequestService.review(id, 'approved', null);
+      } else {
+        // Optimistic UI update - immediately move to approved
+        setPurchaseRequests(prev => prev.map(pr =>
+          pr.id === id ? { ...pr, status: 'For Purchase' } : pr
+        ));
+        await purchaseRequestService.approve(id, 'For Purchase');
+      }
       await fetchData(); // Refresh to get accurate data
     } catch (err) {
-      alert('Failed to approve purchase request: ' + err.message);
+      alert('Failed to approve purchase request: ' + (err.response?.data?.message || err.message));
       await fetchData(); // Revert on error
     } finally {
       setProcessingId(null);
@@ -497,10 +510,14 @@ const Approvals = () => {
     
     try {
       setProcessingId(rejectPR.id);
-      await purchaseRequestService.approve(rejectPR.id, 'rejected', rejectRemarks);
+      if (REVIEW_STATUSES.has(rejectPR?.status)) {
+        await purchaseRequestService.review(rejectPR.id, 'rejected', rejectRemarks);
+      } else {
+        await purchaseRequestService.approve(rejectPR.id, 'rejected', rejectRemarks);
+      }
       await fetchData(); // Refresh to get accurate data
     } catch (err) {
-      alert('Failed to reject purchase request: ' + err.message);
+      alert('Failed to reject purchase request: ' + (err.response?.data?.message || err.message));
       await fetchData(); // Revert on error
     } finally {
       setProcessingId(null);

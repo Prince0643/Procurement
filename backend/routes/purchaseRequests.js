@@ -456,10 +456,12 @@ router.get('/', authenticate, async (req, res) => {
       SELECT prr.*, 
              e.first_name as reviewer_first_name, 
              e.last_name as reviewer_last_name,
-             e.role as reviewer_role
+             e.role as reviewer_role,
+             e.is_active as reviewer_is_active
       FROM purchase_request_reviews prr
       JOIN employees e ON prr.reviewer_id = e.id
       WHERE prr.purchase_request_id = ?
+        AND e.is_active = 1
       ORDER BY prr.created_at ASC
     `, [req.params.id]);
 
@@ -1162,7 +1164,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
         `SELECT prr.review_status 
          FROM purchase_request_reviews prr
          JOIN employees e ON prr.reviewer_id = e.id
-         WHERE prr.purchase_request_id = ? AND e.role = 'engineer'`,
+         WHERE prr.purchase_request_id = ? AND e.role = 'engineer' AND e.is_active = 1`,
         [req.params.id]
       );
       
@@ -1198,7 +1200,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
           `SELECT prr.review_status 
            FROM purchase_request_reviews prr
            JOIN employees e ON prr.reviewer_id = e.id
-           WHERE prr.purchase_request_id = ? AND e.role = 'admin'`,
+           WHERE prr.purchase_request_id = ? AND e.role = 'admin' AND e.is_active = 1`,
           [req.params.id]
         );
         
@@ -1233,7 +1235,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
             `SELECT prr.review_status 
              FROM purchase_request_reviews prr
              JOIN employees e ON prr.reviewer_id = e.id
-             WHERE prr.purchase_request_id = ? AND e.role = 'procurement'`,
+             WHERE prr.purchase_request_id = ? AND e.role = 'procurement' AND e.is_active = 1`,
             [req.params.id]
           );
           
@@ -1277,7 +1279,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
         `SELECT prr.review_status 
          FROM purchase_request_reviews prr
          JOIN employees e ON prr.reviewer_id = e.id
-         WHERE prr.purchase_request_id = ? AND e.role = 'admin'`,
+         WHERE prr.purchase_request_id = ? AND e.role = 'admin' AND e.is_active = 1`,
         [req.params.id]
       );
       
@@ -1315,7 +1317,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
         `SELECT prr.review_status 
          FROM purchase_request_reviews prr
          JOIN employees e ON prr.reviewer_id = e.id
-         WHERE prr.purchase_request_id = ? AND e.role = 'procurement'`,
+         WHERE prr.purchase_request_id = ? AND e.role = 'procurement' AND e.is_active = 1`,
         [req.params.id]
       );
       
@@ -1428,7 +1430,11 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     
     // Check if all required reviewers have approved
     const [reviews] = await conn.query(
-      'SELECT review_status FROM purchase_request_reviews WHERE purchase_request_id = ?',
+      `SELECT prr.review_status
+       FROM purchase_request_reviews prr
+       JOIN employees e ON prr.reviewer_id = e.id
+       WHERE prr.purchase_request_id = ?
+         AND e.is_active = 1`,
       [req.params.id]
     );
     

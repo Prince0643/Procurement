@@ -398,8 +398,8 @@ const Dashboard = () => {
         </div>
         
         {monthlySpending.length > 0 ? (
-          <div className="h-48">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-48 w-full">
+            <ResponsiveContainer width="100%" height={192} minWidth={200} minHeight={180}>
               <BarChart data={monthlySpending} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
                 <XAxis 
@@ -484,8 +484,8 @@ const Dashboard = () => {
         </div>
         
         {pricingTrends.length > 0 ? (
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%" minWidth={200} minHeight={200}>
+          <div className="h-64 w-full">
+            <ResponsiveContainer width="100%" height={256} minWidth={200} minHeight={200}>
               <LineChart data={pricingTrends} margin={isMobile ? { top: 8, right: 8, left: 0, bottom: 8 } : undefined}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                 <XAxis 

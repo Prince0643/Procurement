@@ -51,6 +51,19 @@ export const itemService = {
     return response.data.item;
   },
 
+  getNextSku: async (params = {}) => {
+    const response = await api.get('/items/next-sku', { params, cache: false });
+    return response.data.item_code;
+  },
+
+  generateSkuFromName: async (itemName) => {
+    const response = await api.get('/items/generate-sku-from-name', { 
+      params: { item_name: itemName },
+      cache: false 
+    });
+    return response.data.item_code;
+  },
+
   create: async (itemData) => {
     const response = await api.post('/items', itemData);
     return response.data;

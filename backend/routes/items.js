@@ -4,6 +4,140 @@ import db from '../config/database.js';
 
 const router = express.Router();
 
+const SKU_PREFIX = 'SKU-';
+const SKU_NUMBER_LENGTH = 3;
+const STRUCTURED_SKU_FIELDS = ['brand', 'product_type', 'material', 'color', 'size'];
+const SKU_CODE_MAP = new Map([
+  ['classic clothing', 'CLS'],
+  ['crewneck sweater', 'CRW'],
+  ['cotton', 'CTN'],
+  ['blue', 'BLU'],
+  ['medium', 'MED'],
+  ['small', 'SML'],
+  ['large', 'LRG'],
+  ['extra small', 'XS'],
+  ['extra large', 'XL']
+]);
+
+const formatSku = (number) => `${SKU_PREFIX}${String(number).padStart(SKU_NUMBER_LENGTH, '0')}`;
+
+const normalizeSkuPart = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+const getSkuSegment = (value) => {
+  const normalized = normalizeSkuPart(value);
+  if (!normalized) return '';
+  if (SKU_CODE_MAP.has(normalized)) return SKU_CODE_MAP.get(normalized);
+
+  const compact = normalized.replace(/[^a-z0-9]/g, '').toUpperCase();
+  return compact.slice(0, 3).padEnd(3, 'X');
+};
+
+const getStructuredSkuBase = (parts = {}) => {
+  const segments = STRUCTURED_SKU_FIELDS.map((field) => getSkuSegment(parts[field]));
+  return segments.every(Boolean) ? segments.join('-') : null;
+};
+
+const getNextNumericSku = async () => {
+  const [rows] = await db.query(`
+    SELECT
+      MAX(
+        CASE
+          WHEN item_code REGEXP ? THEN CAST(SUBSTRING(item_code, ?) AS UNSIGNED)
+          ELSE NULL
+        END
+      ) AS max_sku_number,
+      MAX(id) AS max_item_id
+    FROM items
+  `, [`^${SKU_PREFIX}[0-9]+$`, SKU_PREFIX.length + 1]);
+
+  const maxSkuNumber = Number(rows?.[0]?.max_sku_number) || 0;
+  const maxItemId = Number(rows?.[0]?.max_item_id) || 0;
+
+  return formatSku(Math.max(maxSkuNumber, maxItemId) + 1);
+};
+
+const escapeLike = (value) => String(value).replace(/[\\%_]/g, (char) => `\\${char}`);
+
+const getNextStructuredSku = async (baseSku) => {
+  const [rows] = await db.query(
+    `
+      SELECT item_code
+      FROM items
+      WHERE item_code = ? OR item_code LIKE ? ESCAPE '\\\\'
+    `,
+    [baseSku, `${escapeLike(baseSku)}-%`]
+  );
+
+  if (rows.length === 0) return baseSku;
+
+  let maxSuffix = 1;
+  for (const row of rows) {
+    const code = String(row?.item_code || '');
+    if (code === baseSku) {
+      maxSuffix = Math.max(maxSuffix, 1);
+      continue;
+    }
+
+    const suffix = code.slice(baseSku.length + 1);
+    if (/^\d+$/.test(suffix)) {
+      maxSuffix = Math.max(maxSuffix, Number(suffix));
+    }
+  }
+
+  return `${baseSku}-${String(maxSuffix + 1).padStart(3, '0')}`;
+};
+
+const getNextSku = async (parts = {}) => {
+  const baseSku = getStructuredSkuBase(parts);
+  return baseSku ? getNextStructuredSku(baseSku) : getNextNumericSku();
+};
+
+// Generate SKU code from item name (e.g., "Hollow block" -> "HLBK")
+const generateSkuCodeFromName = (itemName) => {
+  if (!itemName || typeof itemName !== 'string') return '';
+  
+  const words = itemName.trim().split(/\s+/).filter(word => word.length > 0);
+  if (words.length === 0) return '';
+  
+  // Take first 2 letters of each word, uppercase them
+  const codeParts = words.map(word => {
+    const cleanWord = word.replace(/[^a-zA-Z]/g, '').toUpperCase();
+    return cleanWord.slice(0, 2);
+  }).filter(part => part.length > 0);
+  
+  if (codeParts.length === 0) return '';
+  
+  return codeParts.join('');
+};
+
+// Get next sequential SKU based on item name
+const getNextSkuFromName = async (itemName) => {
+  const baseCode = generateSkuCodeFromName(itemName);
+  if (!baseCode) return getNextNumericSku();
+  
+  const [rows] = await db.query(
+    `
+      SELECT item_code
+      FROM items
+      WHERE item_code LIKE ? ESCAPE '\\\\'
+    `,
+    [`${escapeLike(baseCode)}-%`]
+  );
+  
+  if (rows.length === 0) return `${baseCode}-001`;
+  
+  let maxSuffix = 0;
+  for (const row of rows) {
+    const code = String(row?.item_code || '');
+    const suffix = code.slice(baseCode.length + 1);
+    if (/^\d+$/.test(suffix)) {
+      maxSuffix = Math.max(maxSuffix, Number(suffix));
+    }
+  }
+  
+  return `${baseCode}-${String(maxSuffix + 1).padStart(3, '0')}`;
+};
+
 // Get all items with category info
 router.get('/', authenticate, async (req, res) => {
   try {
@@ -55,6 +189,33 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Get next generated SKU for add item form
+router.get('/next-sku', authenticate, requireItemManagement, async (req, res) => {
+  try {
+    const item_code = await getNextSku(req.query);
+    res.json({ item_code });
+  } catch (error) {
+    console.error('Generate SKU error:', error);
+    res.status(500).json({ message: 'Failed to generate SKU: ' + error.message });
+  }
+});
+
+// Generate SKU from item name
+router.get('/generate-sku-from-name', authenticate, requireItemManagement, async (req, res) => {
+  try {
+    const { item_name } = req.query;
+    if (!item_name || !String(item_name).trim()) {
+      return res.status(400).json({ message: 'Item name is required' });
+    }
+    
+    const item_code = await getNextSkuFromName(item_name);
+    res.json({ item_code });
+  } catch (error) {
+    console.error('Generate SKU from name error:', error);
+    res.status(500).json({ message: 'Failed to generate SKU from name: ' + error.message });
+  }
+});
+
 // Get single item
 router.get('/:id', authenticate, async (req, res) => {
   try {
@@ -79,12 +240,8 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create item (procurement, admin, super_admin, engineer can create)
 router.post('/', authenticate, requireItemManagement, async (req, res) => {
   try {
-    const { item_code, item_name, description, category_id, unit } = req.body;
+    const { item_name, description, category_id, unit, brand, product_type, material, color, size } = req.body;
     const created_by = req.user.id;
-
-    if (!item_code || !String(item_code).trim()) {
-      return res.status(400).json({ message: 'SKU is required' });
-    }
 
     if (!item_name || !String(item_name).trim()) {
       return res.status(400).json({ message: 'Item name is required' });
@@ -104,14 +261,27 @@ router.post('/', authenticate, requireItemManagement, async (req, res) => {
       return res.status(400).json({ message: 'Selected category does not exist' });
     }
 
-    const [result] = await db.query(
-      'INSERT INTO items (item_code, item_name, description, category_id, unit, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-      [item_code, item_name, description, normalizedCategoryId, unit, created_by]
-    );
+    let result;
+    let item_code;
+    const skuParts = { brand, product_type, material, color, size };
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      item_code = await getNextSku(skuParts);
+      try {
+        [result] = await db.query(
+          'INSERT INTO items (item_code, item_name, description, category_id, unit, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+          [item_code, item_name, description, normalizedCategoryId, unit, created_by]
+        );
+        break;
+      } catch (error) {
+        const isSkuDuplicate = error?.code === 'ER_DUP_ENTRY' && String(error?.message || '').includes('item_code');
+        if (!isSkuDuplicate || attempt === 4) throw error;
+      }
+    }
 
     res.status(201).json({ 
       message: 'Item created successfully', 
-      itemId: result.insertId 
+      itemId: result.insertId,
+      item_code
     });
   } catch (error) {
     console.error('Create item error:', error);

@@ -39,7 +39,7 @@ export const navigationItems = [
     path: '/dashboard/purchase-requests?tab=reviews',
     label: 'For Reviews',
     icon: CheckCircle,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin']
   },
 
   // Service Requests - TEMPORARILY COMMENTED OUT

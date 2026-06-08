@@ -40,7 +40,19 @@ const Button = ({ children, variant = 'primary', size = 'md', type = 'button', o
   )
 }
 
-const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, multiline = false, rows = 4 }) => (
+const Input = ({
+  label,
+  type = 'text',
+  value,
+  onChange,
+  placeholder,
+  required = false,
+  multiline = false,
+  rows = 4,
+  readOnly = false,
+  disabled = false,
+  className = ''
+}) => (
   <div className="mb-4">
     <label className="block text-sm font-medium text-gray-700 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
@@ -60,7 +72,9 @@ const Input = ({ label, type = 'text', value, onChange, placeholder, required = 
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+        readOnly={readOnly}
+        disabled={disabled}
+        className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:bg-gray-100 disabled:text-gray-500 read-only:bg-gray-100 ${className}`}
         required={required}
       />
     )}
@@ -110,7 +124,12 @@ const DEFAULT_ITEM_FORM = {
   item_name: '',
   description: '',
   category_id: '',
-  unit: 'pcs'
+  unit: 'pcs',
+  brand: '',
+  product_type: '',
+  material: '',
+  color: '',
+  size: ''
 }
 
 const PAYMENT_DETAILS_ENABLED = false
@@ -170,6 +189,8 @@ const [paymentBasis, setPaymentBasis] = useState('debt')
   const [editItemForm, setEditItemForm] = useState(DEFAULT_ITEM_FORM)
   const [editingItem, setEditingItem] = useState(null)
   const [addingItem, setAddingItem] = useState(false)
+  const [loadingNextSku, setLoadingNextSku] = useState(false)
+  const [generatingSkuFromName, setGeneratingSkuFromName] = useState(false)
   const [updatingItem, setUpdatingItem] = useState(false)
   const [categoryForm, setCategoryForm] = useState({
     name: '',
@@ -198,6 +219,25 @@ const [paymentBasis, setPaymentBasis] = useState('debt')
   useEffect(() => {
     setCurrentPage(1)
   }, [debouncedSearchQuery, selectedCategory])
+
+  // Auto-generate SKU from item name
+  useEffect(() => {
+    const timeoutId = setTimeout(async () => {
+      if (newItemForm.item_name && newItemForm.item_name.trim().length > 0 && showAddItemModal) {
+        try {
+          setGeneratingSkuFromName(true)
+          const generatedSku = await itemService.generateSkuFromName(newItemForm.item_name.trim())
+          setNewItemForm(prev => ({ ...prev, item_code: generatedSku || '' }))
+        } catch (error) {
+          console.error('Failed to generate SKU from name:', error)
+        } finally {
+          setGeneratingSkuFromName(false)
+        }
+      }
+    }, 500)
+
+    return () => clearTimeout(timeoutId)
+  }, [newItemForm.item_name, showAddItemModal])
 
   // Debounced supplier accreditation check
   useEffect(() => {
@@ -300,65 +340,20 @@ const [paymentBasis, setPaymentBasis] = useState('debt')
     }
   }
 
-  const getCategoryAbbreviation = (categoryName) => {
-    if (!categoryName) return 'GEN'
-    // Take first 3 letters, uppercase
-    return categoryName.substring(0, 3).toUpperCase()
-  }
-
-  const generateNextSKU = async (categoryId) => {
-    try {
-      // Fetch all items to find the highest SKU number for this category
-      let allItems = []
-      let page = 1
-      let hasMore = true
-      
-      while (hasMore) {
-        const data = await itemService.getPage({ page, pageSize: 100 })
-        allItems = [...allItems, ...(data.items || [])]
-        hasMore = data.items && data.items.length === 100
-        page++
-      }
-      
-      // Get category abbreviation
-      const category = dbCategories.find(cat => cat.id === parseInt(categoryId, 10))
-      const categoryAbbr = getCategoryAbbreviation(category?.category_name)
-      
-      // Find highest SKU with this category prefix
-      let maxNumber = 0
-      allItems.forEach(item => {
-        const match = item.item_code.match(new RegExp(`^${categoryAbbr}-(\\d+)$`))
-        if (match) {
-          const num = parseInt(match[1], 10)
-          if (num > maxNumber) {
-            maxNumber = num
-          }
-        }
-      })
-      const nextNumber = maxNumber + 1
-      return `${categoryAbbr}-${String(nextNumber).padStart(3, '0')}`
-    } catch (error) {
-      console.error('Failed to generate SKU:', error)
-      return 'GEN-001'
-    }
-  }
-
   const openAddItemModal = async () => {
     setNewItemForm(DEFAULT_ITEM_FORM)
+    setGeneratingSkuFromName(false)
     setShowAddItemModal(true)
   }
 
-  const handleCategoryChange = async (categoryId) => {
+  const handleCategoryChange = (categoryId) => {
     setNewItemForm({ ...newItemForm, category_id: categoryId })
-    if (categoryId) {
-      const nextSKU = await generateNextSKU(categoryId)
-      setNewItemForm(prev => ({ ...prev, item_code: nextSKU }))
-    }
   }
 
   const closeAddItemModal = () => {
     setShowAddItemModal(false)
     setNewItemForm(DEFAULT_ITEM_FORM)
+    setLoadingNextSku(false)
   }
 
   const openEditItemModal = (item) => {
@@ -487,8 +482,8 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
 
   const handleAddItemSubmit = async (e) => {
     e.preventDefault()
-    if (!newItemForm.item_code || !newItemForm.item_name) {
-      alert('SKU and Item Name are required')
+    if (!newItemForm.item_name) {
+      alert('Item Name is required')
       return
     }
 
@@ -505,10 +500,15 @@ supplier_address: supplierAddress.trim() || null, // Add supplier address to dat
     try {
       setAddingItem(true)
       const dataToSubmit = {
-        ...newItemForm,
+        item_name: newItemForm.item_name,
+        description: newItemForm.description,
         category_id: parseInt(newItemForm.category_id, 10),
-        unit_price: newItemForm.unit_price ? parseFloat(newItemForm.unit_price) : null,
-        reorder_level: newItemForm.reorder_level ? parseInt(newItemForm.reorder_level) : null
+        unit: newItemForm.unit,
+        brand: newItemForm.brand || null,
+        product_type: newItemForm.product_type || null,
+        material: newItemForm.material || null,
+        color: newItemForm.color || null,
+        size: newItemForm.size || null
       }
       await itemService.create(dataToSubmit)
       closeAddItemModal()
@@ -1614,12 +1614,13 @@ setPaymentBasis('debt')
               <div className="grid grid-cols-2 gap-4">
                 <Input
                   label="Item Code"
-                  value={newItemForm.item_code}
-                  onChange={(e) => setNewItemForm({ ...newItemForm, item_code: e.target.value })}
-                  placeholder="e.g., SKU-001"
+                  value={generatingSkuFromName ? 'Generating...' : newItemForm.item_code}
+                  onChange={() => {}}
+                  placeholder="e.g., HLBK-001"
                   required
                   readOnly
-                  className="bg-gray-100"
+                  disabled={generatingSkuFromName}
+                  className="font-mono"
                 />
                 <Input
                   label="Item Name"
@@ -1660,6 +1661,8 @@ setPaymentBasis('debt')
                   options={unitOptions.map(u => ({ value: u, label: u }))}
                 />
               </div>
+
+              
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button type="button" variant="secondary" onClick={closeAddItemModal} disabled={addingItem}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { CheckCircle, X, XCircle } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { purchaseRequestService } from '../../services/purchaseRequests';
@@ -82,6 +82,62 @@ const getApproverName = (pr) => {
   return name || 'MARC JUSTIN E. ARZADON';
 };
 
+const getReviewerName = (review) => {
+  const name = `${review.reviewer_first_name || ''} ${review.reviewer_last_name || ''}`.trim();
+  return name || review.reviewer_name || 'Reviewer';
+};
+
+const getReviewerRoleLabel = (role) => {
+  const labels = {
+    engineer: 'Engineer',
+    admin: 'Admin',
+    procurement: 'Procurement',
+    super_admin: 'Super Admin'
+  };
+  return labels[role] || 'Reviewer';
+};
+
+const getPendingReviewerRole = (requesterRole) => {
+  if (['engineer', 'admin', 'procurement'].includes(requesterRole)) {
+    return requesterRole;
+  }
+
+  return null;
+};
+
+const getCurrentReviewStage = (status, requesterRole) => {
+  const stages = {
+    'For Engineer Review': { role: 'engineer', label: 'Engineer review' },
+    'For Admin Review': { role: 'admin', label: 'Admin review' },
+    'For Procurement Review': { role: 'procurement', label: 'Procurement review' }
+  };
+
+  if (stages[status]) return stages[status];
+
+  const requesterStageRole = getPendingReviewerRole(requesterRole);
+  return requesterStageRole
+    ? { role: requesterStageRole, label: `${getReviewerRoleLabel(requesterStageRole)} review` }
+    : { role: null, label: 'Review status' };
+};
+
+const SignatureBox = ({
+  label,
+  name,
+  caption,
+  borderRight = true,
+  borderTop = false,
+  nameClassName = '',
+  captionClassName = ''
+}) => (
+  <div className={`${borderRight ? 'border-r ' : ''}${borderTop ? 'border-t ' : ''}border-black`}>
+    <div className="border-b border-black px-1">{label}</div>
+    <div className={`flex min-h-8 items-end justify-center px-2 py-1 text-center font-semibold leading-tight ${nameClassName}`}>
+      {name}
+    </div>
+    <div className={`border-t border-black text-center italic ${captionClassName}`}>{caption}</div>
+  </div>
+);
+
 const PRPreviewModal = ({
   pr,
   loading,
@@ -91,50 +147,48 @@ const PRPreviewModal = ({
   processingId,
   readOnly
 }) => {
-  if (!pr) return null;
-
   const { user } = useAuth();
-  const [reviewers, setReviewers] = useState([]);
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  useEffect(() => {
-    const fetchReviewers = async () => {
-      if (!pr.requester_role) return;
+  if (!pr) return null;
 
-      let roleToFetch = null;
-      if (pr.requester_role === 'engineer') {
-        roleToFetch = 'engineer';
-      } else if (pr.requester_role === 'admin') {
-        roleToFetch = 'admin';
-      }
-
-      if (roleToFetch) {
-        try {
-          const token = localStorage.getItem('token');
-          const response = await fetch(`http://localhost:5000/api/employees/by-role/${roleToFetch}`, {
-            headers: {
-              'Authorization': `Bearer ${token}`
-            }
-          });
-          const data = await response.json();
-          if (data.employees) {
-            setReviewers(data.employees);
-          }
-        } catch (error) {
-          console.error('Error fetching reviewers:', error);
-        }
-      }
-    };
-
-    fetchReviewers();
-  }, [pr.requester_role]);
+  const reviewRecords = Array.isArray(pr.reviews)
+    ? pr.reviews.filter(review => review.reviewer_is_active === undefined || Boolean(review.reviewer_is_active))
+    : [];
+  const approvedReviewers = reviewRecords.filter(review => review.review_status === 'approved');
+  const rejectedReviewers = reviewRecords.filter(review => review.review_status === 'rejected');
+  const currentReviewStage = getCurrentReviewStage(pr.status, pr.requester_role);
+  const stageReviewers = currentReviewStage.role
+    ? reviewRecords.filter(review => review.reviewer_role === currentReviewStage.role)
+    : reviewRecords.filter(review => review.reviewer_role !== 'super_admin');
+  const stageApprovedReviewers = stageReviewers.filter(review => review.review_status === 'approved');
+  const pendingReviewers = stageReviewers.filter(review =>
+    review.review_status !== 'approved' &&
+    review.review_status !== 'rejected' &&
+    review.reviewer_role !== 'super_admin'
+  );
+  const formatReviewerList = (reviews) => reviews.map(getReviewerName).join(', ');
+  const reviewedByText = approvedReviewers.length > 0
+    ? getReviewerName(approvedReviewers[0])
+    : rejectedReviewers.length > 0
+      ? `${getReviewerName(rejectedReviewers[0])} (declined)`
+      : (pr.reviewed_by_name || 'Pending review');
+  const reviewedByRoleText = approvedReviewers.length > 0
+    ? getReviewerRoleLabel(approvedReviewers[0].reviewer_role)
+    : rejectedReviewers.length > 0
+      ? getReviewerRoleLabel(rejectedReviewers[0].reviewer_role)
+      : 'Reviewer';
+  const additionalReviewedRows = [];
+  for (let index = 1; index < approvedReviewers.length; index += 3) {
+    additionalReviewedRows.push(approvedReviewers.slice(index, index + 3));
+  }
 
   // Determine if current user is assigned a pending review for this PR
   const userPendingReview = (() => {
-    if (!user || !pr?.reviews) return false;
+    if (!user || !reviewRecords.length) return false;
     try {
-      return pr.reviews.some(r => r.reviewer_id === user.id && r.review_status === 'pending');
-    } catch (e) {
+      return reviewRecords.some(r => r.reviewer_id === user.id && r.review_status === 'pending');
+    } catch {
       return false;
     }
   })();
@@ -331,35 +385,46 @@ const PRPreviewModal = ({
               </div>
 
               <div className="grid grid-cols-3 text-[11px]">
-                <div className="border-r border-black">
-                  <div className="border-b border-black px-1">Prepared by:</div>
-                  <div className="flex h-8 items-end justify-center px-2 text-center font-semibold">
-                    {getRequesterName(pr)}
-                  </div>
-                  <div className="border-t border-black text-center italic">Name and Signature</div>
-                </div>
-                <div className="border-r border-black">
-                  <div className="border-b border-black px-1">Reviewed by:</div>
-                  <div className="flex min-h-8 flex-col justify-center px-2 py-1 text-center font-semibold text-[10px] leading-tight">
-                    {reviewers.length > 0
-                      ? reviewers.map(r => `${r.first_name} ${r.last_name}`).join(', ')
-                      : (pr.reviewed_by_name || 'JUNELL B. TADINA')
-                    }
-                  </div>
-                  <div className="border-t border-black text-center italic text-[10px]">
-                    {reviewers.length > 0
-                      ? (pr.requester_role === 'engineer' ? 'Engineers' : 'Admins')
-                      : 'Procurement Officer'
-                    }
-                  </div>
-                </div>
-                <div>
-                  <div className="border-b border-black px-1">Received by:</div>
-                  <div className="flex h-8 items-end justify-center px-2 text-center font-semibold">
-                    {getApproverName(pr)}
-                  </div>
-                  <div className="border-t border-black text-center italic">General Manager</div>
-                </div>
+                <SignatureBox
+                  label="Prepared by:"
+                  name={getRequesterName(pr)}
+                  caption="Name and Signature"
+                />
+                <SignatureBox
+                  label="Reviewed by:"
+                  name={reviewedByText}
+                  caption={reviewedByRoleText}
+                  nameClassName="text-[10px]"
+                  captionClassName="text-[10px]"
+                />
+                <SignatureBox
+                  label="Received by:"
+                  name={getApproverName(pr)}
+                  caption="General Manager"
+                  borderRight={false}
+                />
+
+                {additionalReviewedRows.map((row, rowIndex) => (
+                  row.map((review, cellIndex) => (
+                    <SignatureBox
+                      key={review.id || review.reviewer_id}
+                      label="Reviewed by:"
+                      name={getReviewerName(review)}
+                      caption={getReviewerRoleLabel(review.reviewer_role)}
+                      borderRight={cellIndex < 2}
+                      borderTop
+                      nameClassName="text-[10px]"
+                      captionClassName="text-[10px]"
+                    />
+                  )).concat(
+                    Array.from({ length: 3 - row.length }).map((_, emptyIndex) => (
+                      <div
+                        key={`review-empty-${rowIndex}-${emptyIndex}`}
+                        className={`${row.length + emptyIndex < 2 ? 'border-r ' : ''}border-t border-black`}
+                      />
+                    ))
+                  )
+                ))}
               </div>
 
               <div
@@ -374,36 +439,67 @@ const PRPreviewModal = ({
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-2 border-t border-gray-200 bg-gray-50 p-3 sm:flex-row sm:justify-end">
-          <Button variant="secondary" className="w-full sm:w-auto" onClick={handleClose}>
-            Close
-          </Button>
+        <div className="flex flex-col gap-3 border-t border-gray-200 bg-gray-50 p-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0 flex-1 rounded-md border border-gray-200 bg-white px-3 py-2">
+            <div className="mb-1 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{currentReviewStage.label}</p>
+              {stageReviewers.length > 0 && (
+                <span className="shrink-0 text-[11px] font-medium text-gray-500">
+                  {stageApprovedReviewers.length}/{stageReviewers.length} reviewed
+                </span>
+              )}
+            </div>
 
-          {/* Render reject button if parent provided handler and action allowed, or if current user is a pending reviewer */}
-          {( (onReject && canAct) || userPendingReview ) && (
-            <Button
-              variant="danger"
-              className="w-full sm:w-auto"
-              onClick={onReject && canAct ? handleReject : handleLocalReject}
-              disabled={processingId === pr.id || submittingReview}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              Reject
-            </Button>
-          )}
+            {stageReviewers.length > 0 ? (
+              <div className="space-y-1 text-xs leading-relaxed">
+                <p className="truncate text-green-700">
+                  <span className="font-semibold">Reviewed:</span> {stageApprovedReviewers.length ? formatReviewerList(stageApprovedReviewers) : 'None yet'}
+                </p>
+                <p className="truncate text-amber-700">
+                  <span className="font-semibold">Pending:</span> {pendingReviewers.length ? formatReviewerList(pendingReviewers) : 'None'}
+                </p>
+                {rejectedReviewers.some(review => !currentReviewStage.role || review.reviewer_role === currentReviewStage.role) && (
+                  <p className="truncate text-red-700">
+                    <span className="font-semibold">Declined:</span> {formatReviewerList(rejectedReviewers.filter(review => !currentReviewStage.role || review.reviewer_role === currentReviewStage.role))}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">No active {currentReviewStage.role ? getReviewerRoleLabel(currentReviewStage.role).toLowerCase() : ''} reviewer records found.</p>
+            )}
+          </div>
 
-          {/* Render approve button similarly */}
-          {( (onApprove && canAct) || userPendingReview ) && (
-            <Button
-              variant="success"
-              className="w-full sm:w-auto"
-              onClick={onApprove && canAct ? handleApprove : handleLocalApprove}
-              disabled={processingId === pr.id || submittingReview}
-            >
-              <CheckCircle className="mr-2 h-4 w-4" />
-              Approve
+          <div className="flex shrink-0 flex-col-reverse gap-2 sm:flex-row lg:justify-end">
+            <Button variant="secondary" className="w-full sm:w-auto" onClick={handleClose}>
+              Close
             </Button>
-          )}
+
+            {/* Render reject button if parent provided handler and action allowed, or if current user is a pending reviewer */}
+            {( (onReject && canAct) || userPendingReview ) && (
+              <Button
+                variant="danger"
+                className="w-full sm:w-auto"
+                onClick={onReject && canAct ? handleReject : handleLocalReject}
+                disabled={processingId === pr.id || submittingReview}
+              >
+                <XCircle className="mr-2 h-4 w-4" />
+                Reject
+              </Button>
+            )}
+
+            {/* Render approve button similarly */}
+            {( (onApprove && canAct) || userPendingReview ) && (
+              <Button
+                variant="success"
+                className="w-full sm:w-auto"
+                onClick={onApprove && canAct ? handleApprove : handleLocalApprove}
+                disabled={processingId === pr.id || submittingReview}
+              >
+                <CheckCircle className="mr-2 h-4 w-4" />
+                Approve
+              </Button>
+            )}
+          </div>
         </div>
       </div>
     </div>
