@@ -15,8 +15,8 @@ When your colleague says "Code is updated on GitHub," run this sequence on the s
 cd /var/www/Procurement
 
 # 2. Pull the latest changes from GitHub
-git fetch origin main
-git reset --hard origin/main
+git fetch origin master
+git reset --hard origin/master
 
 # 3. Rebuild and restart containers (uses /opt/procurement/.env.prod)
 docker compose --env-file /opt/procurement/.env.prod up -d --build

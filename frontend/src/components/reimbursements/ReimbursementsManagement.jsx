@@ -944,7 +944,7 @@ const ReimbursementsManagement = () => {
             <div className="p-4 flex items-center justify-center bg-gray-50">
               {previewAttachment.mime_type?.startsWith('image/') ? (
                 <img
-                  src={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '')}${previewAttachment.file_path}`}
+                  src={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001').replace('/api', '')}${previewAttachment.file_path}`}
                   alt={previewAttachment.file_name}
                   className="max-w-full max-h-[70vh] object-contain"
                   crossOrigin="anonymous"
@@ -953,7 +953,7 @@ const ReimbursementsManagement = () => {
                 <div className="text-center py-12">
                   <p className="text-gray-500 mb-4">Preview not available for this file type</p>
                   <a
-                    href={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5000').replace('/api', '')}${previewAttachment.file_path}`}
+                    href={previewAttachment.file_path?.startsWith('http') ? previewAttachment.file_path : `${(import.meta.env.VITE_API_URL || 'http://localhost:5001').replace('/api', '')}${previewAttachment.file_path}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-blue-600 hover:underline"

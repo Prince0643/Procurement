@@ -1,12 +1,13 @@
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
-
-dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -16,7 +17,8 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'procurement_db',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  multipleStatements: true
 });
 
 async function runMigration() {
@@ -24,11 +26,12 @@ async function runMigration() {
     const connection = await pool.getConnection();
     console.log('Connected to database');
     
-    const sql = `ALTER TABLE payment_requests 
-MODIFY COLUMN status enum('Draft','Pending','For Approval','On Hold','Approved','Rejected','Cancelled','DV Created','Paid') DEFAULT 'Draft'`;
+    const sqlPath = path.join(__dirname, 'migrations', 'phase2_debt_service_req.sql');
+    const sql = fs.readFileSync(sqlPath, 'utf8');
     
-    await connection.execute(sql);
-    console.log('Migration completed successfully: Added "For Approval" status to payment_requests table');
+    console.log('Running migration from:', sqlPath);
+    await connection.query(sql);
+    console.log('Migration completed successfully.');
     
     connection.release();
     process.exit(0);

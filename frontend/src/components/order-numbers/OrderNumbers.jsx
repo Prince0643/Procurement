@@ -16,7 +16,7 @@ import PRPreviewModal from '../purchase-requests/PRPreviewModal';
 import SRPreviewModal from '../service-requests/SRPreviewModal';
 import CRPreviewModal from '../cash-requests/CRPreviewModal';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5001/api';
 
 const COLORS = {
   'Purchase Requests': '#3B82F6', // blue-500

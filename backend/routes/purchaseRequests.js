@@ -1777,10 +1777,13 @@ router.get('/:id/export', authenticate, async (req, res) => {
       SELECT pr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
+             approver.first_name as approver_first_name,
+             approver.last_name as approver_last_name,
              COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
              s.contact_person as supplier_contact
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
+      LEFT JOIN employees approver ON pr.approved_by = approver.id
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
       WHERE pr.id = ?
     `, [req.params.id]);
@@ -1974,6 +1977,98 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Fill requester name (A33) - "Prepared by"
     const requesterName = `${pr.requester_first_name || ''} ${pr.requester_last_name || ''}`.trim();
     worksheet.getCell('A33').value = requesterName || '';
+
+    // Calculate reviewer and approver names
+    const getReviewerName = (review) => {
+      const name = `${review.reviewer_first_name || ''} ${review.reviewer_last_name || ''}`.trim();
+      return name || review.reviewer_name || 'Reviewer';
+    };
+
+    const getReviewerRoleLabel = (role) => {
+      const labels = {
+        engineer: 'Engineer',
+        admin: 'Admin',
+        procurement: 'Procurement',
+        super_admin: 'Super Admin'
+      };
+      return labels[role] || 'Reviewer';
+    };
+
+    const approvedReviewers = reviews.filter(review => review.review_status === 'approved');
+    const rejectedReviewers = reviews.filter(review => review.review_status === 'rejected');
+    const reviewedByText = approvedReviewers.length > 0
+      ? getReviewerName(approvedReviewers[0])
+      : rejectedReviewers.length > 0
+        ? `${getReviewerName(rejectedReviewers[0])} (declined)`
+        : (pr.reviewed_by_name || 'Pending review');
+    const reviewedByRoleText = approvedReviewers.length > 0
+      ? getReviewerRoleLabel(approvedReviewers[0].reviewer_role)
+      : rejectedReviewers.length > 0
+        ? getReviewerRoleLabel(rejectedReviewers[0].reviewer_role)
+        : 'Reviewer';
+
+    // Populate Primary Reviewed By
+    worksheet.getCell('D33').value = reviewedByText;
+    worksheet.getCell('D34').value = reviewedByText;
+    worksheet.getCell('D35').value = reviewedByRoleText;
+
+    // Populate Received By (Approver)
+    const approverName = pr.approver_first_name || pr.approver_last_name 
+      ? `${pr.approver_first_name || ''} ${pr.approver_last_name || ''}`.trim()
+      : 'MARC JUSTIN E. ARZADON';
+    worksheet.getCell('E33').value = approverName;
+    worksheet.getCell('E34').value = approverName;
+    worksheet.getCell('E35').value = 'General Manager';
+
+    // Additional Reviewers Logic
+    if (approvedReviewers.length > 1) {
+      const additionalReviewedRows = [];
+      for (let index = 1; index < approvedReviewers.length; index += 3) {
+        additionalReviewedRows.push(approvedReviewers.slice(index, index + 3));
+      }
+
+      let currentRow = 37; // Start below the primary signature block
+      for (const row of additionalReviewedRows) {
+        const headerRow = worksheet.getRow(currentRow);
+        const nameRow = worksheet.getRow(currentRow + 1);
+        const roleRow = worksheet.getRow(currentRow + 2);
+
+        for (let i = 0; i < 3; i++) {
+          if (row[i]) {
+             const startCol = (i * 2) + 1; // 1 (A), 3 (C), 5 (E)
+             const endCol = startCol + 1;  // 2 (B), 4 (D), 6 (F)
+             const colLetter1 = String.fromCharCode(64 + startCol);
+             const colLetter2 = String.fromCharCode(64 + endCol);
+             
+             try {
+               worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
+               worksheet.mergeCells(`${colLetter1}${currentRow+1}:${colLetter2}${currentRow+1}`);
+               worksheet.mergeCells(`${colLetter1}${currentRow+2}:${colLetter2}${currentRow+2}`);
+             } catch (e) {
+               console.warn('Failed to merge additional reviewer cells:', e.message);
+             }
+
+             const headerCell = headerRow.getCell(startCol);
+             headerCell.value = 'Reviewed by:';
+             headerCell.font = { name: 'Times New Roman', size: 10 };
+             headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
+             // The template has borders for signatures, so add a bottom border to match "Prepared by:"
+             headerCell.border = { bottom: { style: 'thin' } };
+
+             const nameCell = nameRow.getCell(startCol);
+             nameCell.value = getReviewerName(row[i]);
+             nameCell.font = { name: 'Times New Roman', size: 10, bold: true };
+             nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+             const roleCell = roleRow.getCell(startCol);
+             roleCell.value = getReviewerRoleLabel(row[i].reviewer_role);
+             roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
+             roleCell.alignment = { horizontal: 'center', vertical: 'top' };
+          }
+        }
+        currentRow += 4; // leave a blank row between groups
+      }
+    }
     
     // Generate filename
     const filename = `PR-${pr.pr_number}-${Date.now()}.xlsx`;

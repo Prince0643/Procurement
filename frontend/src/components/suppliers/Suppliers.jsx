@@ -55,15 +55,16 @@ const Input = ({ label, type = 'text', name, value, onChange, placeholder, requi
 )
 
 const Modal = ({ isOpen, onClose, title, children, className = '' }) => {
+  console.log('Modal called with:', { isOpen, title })
   if (!isOpen) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50" onClick={() => { console.log('Backdrop clicked'); onClose() }} />
       <div className={`relative bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto m-4 ${className}`}>
         <div className="flex items-center justify-between p-4 border-b">
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
+          <button onClick={() => { console.log('Close button clicked'); onClose() }} className="text-gray-400 hover:text-gray-500">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -132,11 +133,22 @@ const Suppliers = () => {
 
   const handleAccreditationToggle = async (supplierName, currentAccredited) => {
     try {
-      await supplierService.updateAccreditation(supplierName, !currentAccredited)
+      const newAccreditedValue = !currentAccredited
+      setSuppliers(prevSuppliers =>
+        prevSuppliers.map(supplier =>
+          supplier.supplier_name === supplierName
+            ? { ...supplier, accredited: newAccreditedValue ? 1 : 0 }
+            : supplier
+        )
+      )
+      await supplierService.updateAccreditation(supplierName, newAccreditedValue)
+      // Reload to ensure server state is reflected
       await loadSuppliers()
     } catch (err) {
       console.error('Failed to update accreditation:', err)
       setError('Failed to update accreditation status')
+      // Revert the optimistic update on error
+      await loadSuppliers()
     }
   }
 
@@ -170,6 +182,7 @@ const Suppliers = () => {
       if (updatedSupplier) {
         setAccreditingSupplier(updatedSupplier)
       }
+      // Reload to ensure server state is reflected
       await loadSuppliers()
     } catch (err) {
       console.error('Failed to upload files:', err)
@@ -279,6 +292,7 @@ const Suppliers = () => {
         accreditationNotes
       )
       setShowAccreditationModal(false)
+      // Reload to ensure server state is reflected
       await loadSuppliers()
     } catch (err) {
       console.error('Failed to save accreditation:', err)
@@ -333,8 +347,16 @@ const Suppliers = () => {
   }
 
   const openDeleteModal = (supplier) => {
+    console.log('DEBUG: openDeleteModal called')
+    console.log('openDeleteModal called with supplier:', supplier)
+    // Safety check: ensure supplier exists and has an id
+    if (!supplier || !supplier.id) {
+      console.error('Invalid supplier object:', supplier)
+      return
+    }
     setDeletingSupplier(supplier)
     setShowDeleteModal(true)
+    console.log('showDeleteModal set to TRUE in openDeleteModal')
   }
 
   const openFilesModal = (supplier) => {
@@ -370,10 +392,12 @@ const Suppliers = () => {
 
   const handleDelete = async () => {
     if (!deletingSupplier) return
+    console.log('handleDelete called, deleting supplier ID:', deletingSupplier.id)
     
     try {
       setSaving(true)
       await supplierService.delete(deletingSupplier.id)
+      console.log('showDeleteModal set to FALSE in handleDelete')
       setShowDeleteModal(false)
       setDeletingSupplier(null)
       loadSuppliers()
@@ -514,7 +538,7 @@ const Suppliers = () => {
                             <Pencil className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => openDeleteModal(supplier)}
+                            onClick={(e) => { e.stopPropagation(); openDeleteModal(supplier) }}
                             className="p-1 text-gray-400 hover:text-red-600"
                             title="Delete"
                           >
@@ -619,7 +643,7 @@ const Suppliers = () => {
 
       <Modal
         isOpen={showDeleteModal}
-        onClose={() => setShowDeleteModal(false)}
+        onClose={() => { console.log('showDeleteModal set to FALSE in Modal onClose'); setShowDeleteModal(false) }}
         title="Delete Supplier"
       >
         <p className="text-gray-600 mb-6">
@@ -627,10 +651,10 @@ const Suppliers = () => {
           This action cannot be undone.
         </p>
         <div className="flex gap-3 justify-end">
-          <Button variant="secondary" onClick={() => setShowDeleteModal(false)}>
+          <Button variant="secondary" onClick={(e) => { console.log('CANCEL BUTTON CLICKED'); e.stopPropagation(); setShowDeleteModal(false) }}>
             Cancel
           </Button>
-          <Button variant="danger" onClick={handleDelete} disabled={saving}>
+          <Button variant="danger" onClick={(e) => { console.log('DELETE BUTTON CLICKED'); e.stopPropagation(); handleDelete() }} disabled={saving}>
             {saving ? 'Deleting...' : 'Delete'}
           </Button>
         </div>
@@ -963,3 +987,6 @@ const Suppliers = () => {
 }
 
 export default Suppliers
+
+
+

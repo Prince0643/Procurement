@@ -37,7 +37,7 @@ dotenv.config();
 
 const app = express();
 const httpServer = createServer(app);
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5005;
 const paymentReminderEnabled = String(process.env.PAYMENT_REMINDER_ENABLED || 'true').toLowerCase() !== 'false';
 
 // Trust proxy for accurate rate limiting behind Nginx
