@@ -1851,7 +1851,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
     worksheet.getCell('C8').value = pr.supplier_name || '';
     
     // Fill supplier address (C9)
-    worksheet.getCell('C9').value = pr.supplier_address || '';
+    const supplierAddressCell = worksheet.getCell('C9');
+    supplierAddressCell.value = pr.supplier_address || '';
+    supplierAddressCell.font = { name: 'Times New Roman', size: 12, bold: true };
     
     // Fill project (C10)
     worksheet.getCell('C10').value = pr.project || '';
@@ -1860,9 +1862,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
     worksheet.getCell('F10').value = pr.order_number || '';
     
     // Fill project address (C11)
-    const projectAddressCell = worksheet.getCell('C11');
-    projectAddressCell.value = pr.project_address || '';
-    projectAddressCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    worksheet.getCell('C11').value = pr.project_address || '';
     
     // Fill date prepared (F8) - created_at
     worksheet.getCell('F8').value = formatDate(pr.created_at);
@@ -1989,9 +1989,12 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Fill total (F31)
     worksheet.getCell('F31').value = pr.total_amount || 0;
     
-    // Fill requester name (A33) - "Prepared by"
+    // Fill requester name (A34) - "Prepared by"
     const requesterName = `${pr.requester_first_name || ''} ${pr.requester_last_name || ''}`.trim();
-    worksheet.getCell('A33').value = requesterName || '';
+    const requesterNameCell = worksheet.getCell('A34');
+    requesterNameCell.value = requesterName || '';
+    requesterNameCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    requesterNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
     // Calculate reviewer and approver names
     const getReviewerName = (review) => {
@@ -2016,27 +2019,28 @@ router.get('/:id/export', authenticate, async (req, res) => {
       : rejectedReviewers.length > 0
         ? `${getReviewerName(rejectedReviewers[0])} (declined)`
         : (pr.reviewed_by_name || 'Pending review');
-    const reviewedByRoleText = approvedReviewers.length > 0
-      ? getReviewerRoleLabel(approvedReviewers[0].reviewer_role)
-      : rejectedReviewers.length > 0
-        ? getReviewerRoleLabel(rejectedReviewers[0].reviewer_role)
-        : 'Reviewer';
 
     // Populate Primary Reviewed By
-    const reviewedByCell = worksheet.getCell('D33');
+    const reviewedByCell = worksheet.getCell('C34');
     reviewedByCell.value = reviewedByText;
-    reviewedByCell.font = { name: 'Times New Roman', size: 12 };
-    reviewedByCell.alignment = { horizontal: 'center', vertical: 'bottom' };
+    reviewedByCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    reviewedByCell.alignment = { horizontal: 'center', vertical: 'middle' };
     
-    worksheet.getCell('D34').value = reviewedByText;
-    worksheet.getCell('D35').value = reviewedByRoleText;
+    const reviewedByRoleCell = worksheet.getCell('C35');
+    reviewedByRoleCell.value = 'Name and Signature';
+    reviewedByRoleCell.font = { name: 'Times New Roman', size: 10, italic: true };
+    reviewedByRoleCell.alignment = { horizontal: 'center', vertical: 'top' };
 
     // Populate Received By (Approver)
     const approverName = pr.approver_first_name || pr.approver_last_name 
       ? `${pr.approver_first_name || ''} ${pr.approver_last_name || ''}`.trim()
       : 'MARC JUSTIN E. ARZADON';
-    worksheet.getCell('E33').value = approverName;
-    worksheet.getCell('E34').value = approverName;
+    
+    const approverNameCell = worksheet.getCell('E34');
+    approverNameCell.value = approverName;
+    approverNameCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    approverNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    
     worksheet.getCell('E35').value = 'General Manager';
 
     // Additional Reviewers Logic
@@ -2076,11 +2080,11 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
              const nameCell = nameRow.getCell(startCol);
              nameCell.value = getReviewerName(row[i]);
-             nameCell.font = { name: 'Times New Roman', size: 10, bold: true };
+             nameCell.font = { name: 'Times New Roman', size: 12, bold: true };
              nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
              const roleCell = roleRow.getCell(startCol);
-             roleCell.value = getReviewerRoleLabel(row[i].reviewer_role);
+             roleCell.value = 'Name and Signature';
              roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
              roleCell.alignment = { horizontal: 'center', vertical: 'top' };
           }
