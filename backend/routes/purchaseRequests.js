@@ -1816,6 +1816,19 @@ router.get('/:id/export', authenticate, async (req, res) => {
       FROM disbursement_vouchers
       WHERE purchase_request_id = ? AND status = 'Paid'
     `, [req.params.id]);
+
+    // Fetch review records for this PR
+    const [reviews] = await db.query(`
+      SELECT prr.*, 
+             e.first_name as reviewer_first_name, 
+             e.last_name as reviewer_last_name,
+             e.role as reviewer_role
+      FROM purchase_request_reviews prr
+      JOIN employees e ON prr.reviewer_id = e.id
+      WHERE prr.purchase_request_id = ?
+        AND e.is_active = 1
+      ORDER BY prr.created_at ASC
+    `, [req.params.id]);
     
     // Load template workbook
     const templatePath = resolveExcelTemplatePath('PURCHASE REQUEST- FINAL-2026.xlsx');
