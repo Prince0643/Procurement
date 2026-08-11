@@ -1860,7 +1860,9 @@ router.get('/:id/export', authenticate, async (req, res) => {
     worksheet.getCell('F10').value = pr.order_number || '';
     
     // Fill project address (C11)
-    worksheet.getCell('C11').value = pr.project_address || '';
+    const projectAddressCell = worksheet.getCell('C11');
+    projectAddressCell.value = pr.project_address || '';
+    projectAddressCell.font = { name: 'Times New Roman', size: 12, bold: true };
     
     // Fill date prepared (F8) - created_at
     worksheet.getCell('F8').value = formatDate(pr.created_at);
@@ -2021,7 +2023,11 @@ router.get('/:id/export', authenticate, async (req, res) => {
         : 'Reviewer';
 
     // Populate Primary Reviewed By
-    worksheet.getCell('D33').value = reviewedByText;
+    const reviewedByCell = worksheet.getCell('D33');
+    reviewedByCell.value = reviewedByText;
+    reviewedByCell.font = { name: 'Times New Roman', size: 12 };
+    reviewedByCell.alignment = { horizontal: 'center', vertical: 'bottom' };
+    
     worksheet.getCell('D34').value = reviewedByText;
     worksheet.getCell('D35').value = reviewedByRoleText;
 
@@ -2063,7 +2069,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
              const headerCell = headerRow.getCell(startCol);
              headerCell.value = 'Reviewed by:';
-             headerCell.font = { name: 'Times New Roman', size: 10 };
+             headerCell.font = { name: 'Times New Roman', size: 12 };
              headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
              // The template has borders for signatures, so add a bottom border to match "Prepared by:"
              headerCell.border = { bottom: { style: 'thin' } };
