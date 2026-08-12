@@ -2058,7 +2058,8 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
         for (let i = 0; i < 3; i++) {
           if (row[i]) {
-            const startCol = (i * 2) + 1; // 1 (A), 3 (C), 5 (E)
+            const columns = [1, 4, 5]; // Column A (1), Column D (4), Column E (5)
+            const startCol = columns[i];
             const endCol = startCol + 1;  // 2 (B), 4 (D), 6 (F)
             const colLetter1 = String.fromCharCode(64 + startCol);
             const colLetter2 = String.fromCharCode(64 + endCol);
