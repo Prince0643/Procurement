@@ -332,7 +332,7 @@ const PurchaseRequests = () => {
     } finally {
       setLoading(false)
     }
-  }, [user?.role, urlView, page, pageSize, urlStatus, urlQ])
+  }, [user?.role, urlView, urlTab, page, pageSize, urlStatus, urlQ])
 
   const fetchRef = useRef(null)
   useEffect(() => {
