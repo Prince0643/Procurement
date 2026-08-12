@@ -17,20 +17,20 @@ const Card = ({ children, className = '' }) => (
 
 const Button = ({ children, variant = 'primary', size = 'md', type = 'button', onClick, disabled = false, className = '' }) => {
   const baseStyles = 'inline-flex items-center justify-center font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2'
-  
+
   const variants = {
     primary: 'bg-yellow-500 text-white hover:bg-yellow-600 focus:ring-yellow-500 disabled:bg-yellow-300',
     secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:ring-gray-500 disabled:bg-gray-50',
     danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 disabled:bg-red-300',
     ghost: 'text-gray-600 hover:bg-gray-100 focus:ring-gray-500'
   }
-  
+
   const sizes = {
     sm: 'px-3 py-1.5 text-sm',
     md: 'px-4 py-2 text-sm',
     lg: 'px-6 py-3 text-base'
   }
-  
+
   return (
     <button
       type={type}
@@ -248,7 +248,7 @@ const PurchaseRequests = () => {
   const [loadingBranches, setLoadingBranches] = useState(false)
   const [loadingForm, setLoadingForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-  
+
   // Form state
   const [purpose, setPurpose] = useState('')
   const [project, setProject] = useState('')
@@ -286,14 +286,14 @@ const PurchaseRequests = () => {
   // Listen for real-time updates
   useEffect(() => {
     console.log('Setting up PR status change listener');
-    
+
     const handleStatusChange = (data) => {
       console.log('PR status changed (real-time):', data)
       fetchRef.current?.()
     }
 
     socketService.on('pr_status_changed', handleStatusChange)
-    
+
     // Also listen to general pr_updated event
     const handlePRUpdate = (data) => {
       console.log('PR updated (real-time):', data)
@@ -368,7 +368,12 @@ const PurchaseRequests = () => {
         purchaseRequestService.getById(prRow.id)
       ])
 
-      if (!suppliers.length) setSuppliers(suppliersData)
+      if (!suppliers.length) {
+        const supplierList = Array.isArray(suppliersData)
+          ? suppliersData
+          : (suppliersData && (Array.isArray(suppliersData.suppliers) ? suppliersData.suppliers : (Array.isArray(suppliersData.data) ? suppliersData.data : [])))
+        setSuppliers(supplierList)
+      }
 
       setSelectedPRForApproval(fullPr)
       setApprovalSupplierId(String(fullPr.supplier_id || ''))
@@ -566,7 +571,7 @@ const PurchaseRequests = () => {
       setSuperAdminRemarks('')
       setSuperAdminItemRemarks({})
       setShowSuperAdminModal(true)
-      
+
       // Load full PR details with items
       const fullPr = await purchaseRequestService.getById(pr.id)
       setSelectedPRForSuperAdmin(fullPr)
@@ -590,7 +595,7 @@ const PurchaseRequests = () => {
 
     try {
       setSuperAdminSubmitting(true)
-      
+
       // Convert item remarks object to array format expected by backend
       const itemRemarksArray = Object.entries(superAdminItemRemarks)
         .filter(([_, remark]) => remark.trim())
@@ -602,12 +607,12 @@ const PurchaseRequests = () => {
         superAdminRemarks || null,
         itemRemarksArray
       )
-      
+
       closeSuperAdminModal()
       await fetchPurchaseRequests()
-      
-      const actionText = superAdminAction === 'approved' ? 'approved' : 
-                        superAdminAction === 'hold' ? 'put on hold' : 'rejected'
+
+      const actionText = superAdminAction === 'approved' ? 'approved' :
+        superAdminAction === 'hold' ? 'put on hold' : 'rejected'
       alert(`Purchase Request ${actionText} successfully`)
     } catch (err) {
       alert(err.response?.data?.message || `Failed to ${superAdminAction} purchase request`)
@@ -645,12 +650,15 @@ const PurchaseRequests = () => {
         supplierService.getAll(),
         projectService.getActive()
       ])
-      setSuppliers(suppliersData)
+      const supplierList = Array.isArray(suppliersData)
+        ? suppliersData
+        : (suppliersData && (Array.isArray(suppliersData.suppliers) ? suppliersData.suppliers : (Array.isArray(suppliersData.data) ? suppliersData.data : [])))
+      setSuppliers(supplierList)
       setBranches(branchList)
-      
+
       // Load PR details
       const fullPr = await purchaseRequestService.getById(pr.id)
-      
+
       // Populate form with PR data
       setPurpose(fullPr.purpose || '')
       setProject(fullPr.project || '')
@@ -662,10 +670,10 @@ const PurchaseRequests = () => {
       setPaymentTermsNote(fullPr.payment_terms_note || '')
       setPaymentSchedules((fullPr.payment_schedules || []).length > 0
         ? fullPr.payment_schedules.map((schedule) => ({
-            payment_date: schedule.payment_date ? String(schedule.payment_date).slice(0, 10) : '',
-            amount: schedule.amount ?? '',
-            note: schedule.note || ''
-          }))
+          payment_date: schedule.payment_date ? String(schedule.payment_date).slice(0, 10) : '',
+          amount: schedule.amount ?? '',
+          note: schedule.note || ''
+        }))
         : [{ payment_date: '', amount: '', note: '' }]
       )
       setRemarks(fullPr.remarks || '')
@@ -844,7 +852,7 @@ const PurchaseRequests = () => {
 
   const handleMarkAsReceived = async (pr) => {
     if (!confirm('Mark this purchase request as received?')) return
-    
+
     try {
       await purchaseRequestService.markAsReceived(pr.id)
       await fetchPurchaseRequests()
@@ -927,70 +935,70 @@ const PurchaseRequests = () => {
       </div>
 
       <Card className="p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-            <div className="flex-1 min-w-0">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search PR number, project, requester, supplier..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') commitSearchToUrl({ replace: false })
-                  }}
-                  className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search PR number, project, requester, supplier..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitSearchToUrl({ replace: false })
+                }}
+                className="w-full pl-10 pr-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2
   focus:ring-yellow-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
-              <select
-                value={statusFilter}
-                onChange={(e) => handleStatusFilterChange(e.target.value)}
-                className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
-  focus:ring-2 focus:ring-yellow-500"
-              >
-                <option value="ALL">All statuses</option>
-                {STATUS_FILTER_OPTIONS.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-
-              {(searchQuery.trim() || statusFilter !== 'ALL') && (
-                <Button variant="secondary" size="sm" onClick={clearFilters}>
-                  <X className="w-4 h-4 mr-2" />
-                  Clear
-                </Button>
-              )}
-
-              <select
-                value={pageSize}
-                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
-                className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
-  focus:ring-2 focus:ring-yellow-500"
-                title="Page size"
-              >
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-
-              {user?.role === 'engineer' && (
-                <label className="inline-flex items-center gap-2 text-sm text-gray-600 select-none">
-                  <input
-                    type="checkbox"
-                    checked={urlView === 'all'}
-                    onChange={(e) => handleViewAllChange(e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
-                  />
-                  View all
-                </label>
-              )}
+              />
             </div>
           </div>
-        </Card>
+
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 sm:items-center">
+            <select
+              value={statusFilter}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
+              className="w-full sm:w-64 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
+  focus:ring-2 focus:ring-yellow-500"
+            >
+              <option value="ALL">All statuses</option>
+              {STATUS_FILTER_OPTIONS.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+
+            {(searchQuery.trim() || statusFilter !== 'ALL') && (
+              <Button variant="secondary" size="sm" onClick={clearFilters}>
+                <X className="w-4 h-4 mr-2" />
+                Clear
+              </Button>
+            )}
+
+            <select
+              value={pageSize}
+              onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+              className="w-full sm:w-28 px-3 py-2 border border-gray-200 rounded-lg bg-white focus:outline-none
+  focus:ring-2 focus:ring-yellow-500"
+              title="Page size"
+            >
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            {user?.role === 'engineer' && (
+              <label className="inline-flex items-center gap-2 text-sm text-gray-600 select-none">
+                <input
+                  type="checkbox"
+                  checked={urlView === 'all'}
+                  onChange={(e) => handleViewAllChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                />
+                View all
+              </label>
+            )}
+          </div>
+        </div>
+      </Card>
 
       <Card>
         {/* Desktop Table View */}
@@ -1013,7 +1021,7 @@ const PurchaseRequests = () => {
                   <tr className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer" onClick={async () => {
                     const isExpanding = expandedId !== pr.id
                     setExpandedId(isExpanding ? pr.id : null)
-                    
+
                     // Load full details once when expanding so schedules/remarks are complete.
                     if (isExpanding && !expandedPRDetails[pr.id]) {
                       setLoadingExpanded(pr.id)
@@ -1074,10 +1082,10 @@ const PurchaseRequests = () => {
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={(e) => { 
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
                             e.stopPropagation()
                             handleExport(pr.id, pr.pr_number)
                           }}
@@ -1145,83 +1153,83 @@ const PurchaseRequests = () => {
                           const fullPr = expandedPRDetails[pr.id] || pr
                           const paymentScheduleRows = fullPr.payment_schedules || []
                           return (
-                        <div className="space-y-4">
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Category</p>
-                              <p className="text-sm text-gray-900">{fullPr.category || '-'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Purpose</p>
-                              <p className="text-sm text-gray-900">{fullPr.purpose || '-'}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Payment Type</p>
-                              <p className="text-sm text-gray-900">
-                                {fullPr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
-                                 fullPr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
-                              </p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Payment Terms</p>
-                              <p className="text-sm text-gray-900">{formatPaymentTerms(fullPr.payment_terms_code, fullPr.payment_terms_note)}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Payment Schedule</p>
-                              <p className="text-sm text-gray-900">
-                                {Number(fullPr.payment_schedule_count || paymentScheduleRows.length || 0) > 0
-                                  ? `${fullPr.payment_schedule_count || paymentScheduleRows.length} date(s), next: ${formatDate(fullPr.next_payment_date || paymentScheduleRows[0]?.payment_date)}`
-                                  : '-'}
-                              </p>
-                            </div>
-                          </div>
-                          {paymentScheduleRows.length > 0 && (
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Payment Date Details</p>
-                              <div className="mt-1 space-y-1">
-                                {paymentScheduleRows.map((schedule) => (
-                                  <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="text-sm text-gray-900">
-                                    {formatDate(schedule.payment_date)} | {schedule.amount == null ? '-' : formatCurrency(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Category</p>
+                                  <p className="text-sm text-gray-900">{fullPr.category || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Purpose</p>
+                                  <p className="text-sm text-gray-900">{fullPr.purpose || '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Payment Type</p>
+                                  <p className="text-sm text-gray-900">
+                                    {fullPr.payment_basis === 'debt' ? 'w/ account (Debt)' :
+                                      fullPr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
                                   </p>
-                                ))}
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Payment Terms</p>
+                                  <p className="text-sm text-gray-900">{formatPaymentTerms(fullPr.payment_terms_code, fullPr.payment_terms_note)}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Payment Schedule</p>
+                                  <p className="text-sm text-gray-900">
+                                    {Number(fullPr.payment_schedule_count || paymentScheduleRows.length || 0) > 0
+                                      ? `${fullPr.payment_schedule_count || paymentScheduleRows.length} date(s), next: ${formatDate(fullPr.next_payment_date || paymentScheduleRows[0]?.payment_date)}`
+                                      : '-'}
+                                  </p>
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {fullPr.remarks && (
-                            <div>
-                              <p className="text-xs text-gray-500 uppercase">Remarks</p>
-                              <p className="text-sm text-gray-900">{fullPr.remarks}</p>
-                            </div>
-                          )}
-                          {fullPr.rejection_reason && (
-                            <div>
-                              <p className="text-xs text-red-500 uppercase">Rejection Reason</p>
-                              <p className="text-sm text-red-700">{fullPr.rejection_reason}</p>
-                            </div>
-                          )}
-                          {/* Per-item rejection remarks */}
-                          {(fullPr.items)?.some(item => item.rejection_remarks?.length > 0) && (
-                            <div className="col-span-2">
-                              <p className="text-xs text-red-500 uppercase mb-2">Item Rejection Remarks</p>
-                              <div className="space-y-1">
-                                {(fullPr.items || []).filter(item => item.rejection_remarks?.length > 0).map(item => (
-                                  <div key={item.id} className="bg-red-50 p-2 rounded border border-red-100">
-                                    <p className="text-sm font-medium text-red-800">{item.item_name || item.item_code}</p>
-                                    {item.rejection_remarks.map((remark, idx) => (
-                                      <p key={idx} className="text-sm text-red-600">• {remark.remark}</p>
+                              {paymentScheduleRows.length > 0 && (
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Payment Date Details</p>
+                                  <div className="mt-1 space-y-1">
+                                    {paymentScheduleRows.map((schedule) => (
+                                      <p key={schedule.id || `${schedule.payment_date}-${schedule.amount || ''}`} className="text-sm text-gray-900">
+                                        {formatDate(schedule.payment_date)} | {schedule.amount == null ? '-' : formatCurrency(schedule.amount)}{schedule.note ? ` | ${schedule.note}` : ''}
+                                      </p>
                                     ))}
                                   </div>
-                                ))}
-                              </div>
+                                </div>
+                              )}
+                              {fullPr.remarks && (
+                                <div>
+                                  <p className="text-xs text-gray-500 uppercase">Remarks</p>
+                                  <p className="text-sm text-gray-900">{fullPr.remarks}</p>
+                                </div>
+                              )}
+                              {fullPr.rejection_reason && (
+                                <div>
+                                  <p className="text-xs text-red-500 uppercase">Rejection Reason</p>
+                                  <p className="text-sm text-red-700">{fullPr.rejection_reason}</p>
+                                </div>
+                              )}
+                              {/* Per-item rejection remarks */}
+                              {(fullPr.items)?.some(item => item.rejection_remarks?.length > 0) && (
+                                <div className="col-span-2">
+                                  <p className="text-xs text-red-500 uppercase mb-2">Item Rejection Remarks</p>
+                                  <div className="space-y-1">
+                                    {(fullPr.items || []).filter(item => item.rejection_remarks?.length > 0).map(item => (
+                                      <div key={item.id} className="bg-red-50 p-2 rounded border border-red-100">
+                                        <p className="text-sm font-medium text-red-800">{item.item_name || item.item_code}</p>
+                                        {item.rejection_remarks.map((remark, idx) => (
+                                          <p key={idx} className="text-sm text-red-600">• {remark.remark}</p>
+                                        ))}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              {loadingExpanded === pr.id && (
+                                <div className="col-span-2 text-center py-2">
+                                  <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin inline-block"></div>
+                                  <span className="text-xs text-gray-500 ml-2">Loading details...</span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                          {loadingExpanded === pr.id && (
-                            <div className="col-span-2 text-center py-2">
-                              <div className="w-4 h-4 border-2 border-yellow-500 border-t-transparent rounded-full animate-spin inline-block"></div>
-                              <span className="text-xs text-gray-500 ml-2">Loading details...</span>
-                            </div>
-                          )}
-                        </div>
                           )
                         })()}
                       </td>
@@ -1247,11 +1255,10 @@ const PurchaseRequests = () => {
               <div
                 key={pr.id}
                 onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
-                className={`border rounded-lg p-3 cursor-pointer transition-all ${
-                  expandedId === pr.id 
-                    ? 'border-yellow-500 bg-yellow-50' 
+                className={`border rounded-lg p-3 cursor-pointer transition-all ${expandedId === pr.id
+                    ? 'border-yellow-500 bg-yellow-50'
                     : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
+                  }`}
               >
                 <div className="flex items-start justify-between mb-2">
                   <div>
@@ -1285,9 +1292,9 @@ const PurchaseRequests = () => {
                         </Button>
                       </>
                     )}
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         openPreview(pr.id)
@@ -1333,8 +1340,8 @@ const PurchaseRequests = () => {
                     <p className="text-xs text-gray-500">Category: {pr.category || '-'}</p>
                     <p className="text-xs text-gray-500">Purpose: {pr.purpose || '-'}</p>
                     <p className="text-xs text-gray-500">
-                      Payment Type: {pr.payment_basis === 'debt' ? 'w/ account (Debt)' : 
-                                    pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
+                      Payment Type: {pr.payment_basis === 'debt' ? 'w/ account (Debt)' :
+                        pr.payment_basis === 'non_debt' ? 'w/o account (Non-debt)' : '-'}
                     </p>
                     <p className="text-xs text-gray-500">
                       Payment Terms: {formatPaymentTerms(pr.payment_terms_code, pr.payment_terms_note)}
@@ -1416,7 +1423,7 @@ const PurchaseRequests = () => {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {loadingForm ? (
               <div className="p-8 text-center">
                 <div className="w-8 h-8 border-4 border-yellow-500 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -1425,7 +1432,7 @@ const PurchaseRequests = () => {
             ) : (
               <form onSubmit={handleUpdate} className="p-6">
                 <Input label="Purpose *" value={purpose} onChange={(e) => setPurpose(e.target.value)} required />
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <Select
                     label="Project *"
@@ -1436,30 +1443,30 @@ const PurchaseRequests = () => {
                     required
                     disabled={loadingBranches || branches.length === 0}
                   />
-                  <Input label="Project Address" value={projectAddress} onChange={() => {}} readOnly />
+                  <Input label="Project Address" value={projectAddress} onChange={() => { }} readOnly />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
-                  <Input label="Order Number" value={orderNumber} onChange={() => {}} readOnly />
+                  <Input label="Order Number" value={orderNumber} onChange={() => { }} readOnly />
                 </div>
 
-                <Select 
-                  label="Supplier (Optional)" 
-                  value={selectedSupplier} 
-                  onChange={(e) => setSelectedSupplier(e.target.value)} 
-                  options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))} 
+                <Select
+                  label="Supplier (Optional)"
+                  value={selectedSupplier}
+                  onChange={(e) => setSelectedSupplier(e.target.value)}
+                  options={suppliers.map(s => ({ value: s.id, label: s.supplier_name }))}
                 />
 
-                <Select 
-                  label="Payment Basis *" 
-                  value={paymentBasis} 
-                  onChange={(e) => setPaymentBasis(e.target.value)} 
+                <Select
+                  label="Payment Basis *"
+                  value={paymentBasis}
+                  onChange={(e) => setPaymentBasis(e.target.value)}
                   options={[
                     { value: 'debt', label: 'Debt (with supplier account)' },
                     { value: 'non_debt', label: 'Cash/Non-debt (immediate payment)' }
-                  ]} 
-                  required 
+                  ]}
+                  required
                 />
                 <Input
                   label={paymentBasis === 'debt' ? 'Payment Terms and Conditions *' : 'Payment Terms and Conditions'}
@@ -1722,7 +1729,7 @@ const PurchaseRequests = () => {
                           <input
                             type="text"
                             value={procurementRejectItemRemarks[item.id] || ''}
-                            onChange={(e) => setProcurementRejectItemRemarks({...procurementRejectItemRemarks, [item.id]: e.target.value})}
+                            onChange={(e) => setProcurementRejectItemRemarks({ ...procurementRejectItemRemarks, [item.id]: e.target.value })}
                             placeholder="Reason for rejecting this item (optional)"
                             className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
                           />
@@ -1737,8 +1744,8 @@ const PurchaseRequests = () => {
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button variant="secondary" onClick={closeProcurementReject} disabled={procurementSubmitting}>Cancel</Button>
-                  <Button 
-                    onClick={submitProcurementReject} 
+                  <Button
+                    onClick={submitProcurementReject}
                     disabled={procurementSubmitting}
                     variant="danger"
                   >
@@ -1756,8 +1763,8 @@ const PurchaseRequests = () => {
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">
-                {superAdminAction === 'approved' ? 'Final Approval' : 
-                 superAdminAction === 'hold' ? 'Put on Hold' : 'Reject Purchase Request'}
+                {superAdminAction === 'approved' ? 'Final Approval' :
+                  superAdminAction === 'hold' ? 'Put on Hold' : 'Reject Purchase Request'}
               </h3>
               <button onClick={closeSuperAdminModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
@@ -1798,7 +1805,7 @@ const PurchaseRequests = () => {
                         <input
                           type="text"
                           value={superAdminItemRemarks[item.id] || ''}
-                          onChange={(e) => setSuperAdminItemRemarks({...superAdminItemRemarks, [item.id]: e.target.value})}
+                          onChange={(e) => setSuperAdminItemRemarks({ ...superAdminItemRemarks, [item.id]: e.target.value })}
                           placeholder={superAdminAction === 'rejected' ? 'Reason for rejecting this item (optional)' : 'Remark for this item'}
                           className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded"
                         />
@@ -1815,14 +1822,14 @@ const PurchaseRequests = () => {
 
               <div className="flex justify-end gap-3 pt-4 border-t">
                 <Button variant="secondary" onClick={closeSuperAdminModal} disabled={superAdminSubmitting}>Cancel</Button>
-                <Button 
-                  onClick={handleSuperAdminAction} 
+                <Button
+                  onClick={handleSuperAdminAction}
                   disabled={superAdminSubmitting}
                   variant={superAdminAction === 'rejected' ? 'danger' : 'primary'}
                 >
-                  {superAdminSubmitting ? 'Processing...' : 
-                   superAdminAction === 'approved' ? 'Approve' : 
-                   superAdminAction === 'hold' ? 'Put on Hold' : 'Reject'}
+                  {superAdminSubmitting ? 'Processing...' :
+                    superAdminAction === 'approved' ? 'Approve' :
+                      superAdminAction === 'hold' ? 'Put on Hold' : 'Reject'}
                 </Button>
               </div>
             </div>
