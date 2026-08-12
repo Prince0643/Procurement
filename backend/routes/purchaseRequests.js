@@ -311,7 +311,7 @@ router.get('/', authenticate, async (req, res) => {
       pageSize,
       total: countRows?.[0]?.total ?? 0
     });
-    
+
     if (pendingReview) {
       console.log('🔍 Pending review results:', prs.length, 'PRs found');
       console.log('🔍 PR IDs:', prs.map(r => ({ id: r.id, pr_number: r.pr_number, status: r.status })));
@@ -323,10 +323,10 @@ router.get('/', authenticate, async (req, res) => {
 });
 
 // Get single PR with items
-	router.get('/:id', authenticate, async (req, res) => {
-	  try {
-	    // 70-84
-	    const [prs] = await db.query(`
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    // 70-84
+    const [prs] = await db.query(`
 	      SELECT pr.*, 
 	             e.first_name as requester_first_name, 
 	             e.last_name as requester_last_name,
@@ -524,27 +524,27 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     await conn.beginTransaction();
     // 147-148
 
-const now = new Date();
-const year = now.getFullYear();
-const month = String(now.getMonth() + 1).padStart(2, '0');
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
 
-// Get the last PR number for this year/month (without initials)
-const [lastPrs] = await conn.query(
-  "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
-  [`${year}-%`]  // This looks for year only
-);
+    // Get the last PR number for this year/month (without initials)
+    const [lastPrs] = await conn.query(
+      "SELECT pr_number FROM purchase_requests WHERE pr_number LIKE ? ORDER BY pr_number DESC LIMIT 1",
+      [`${year}-%`]  // This looks for year only
+    );
 
-let counter = 1;
-if (lastPrs.length > 0) {
-  const lastNumber = lastPrs[0].pr_number;
-  const match = lastNumber.match(/-(\d{3})$/);
-  if (match) {
-    counter = parseInt(match[1], 10) + 1;
-  }
-}
+    let counter = 1;
+    if (lastPrs.length > 0) {
+      const lastNumber = lastPrs[0].pr_number;
+      const match = lastNumber.match(/-(\d{3})$/);
+      if (match) {
+        counter = parseInt(match[1], 10) + 1;
+      }
+    }
 
-const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
-    
+    const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
+
     // Determine status based on requester role
     let status;
     if (isDraft) {
@@ -654,7 +654,7 @@ const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
           remarks: item.remarks ?? item.notes ?? null
         }
       })
-    : [];
+      : [];
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
     assertPaymentScheduleTotalsMatch({
@@ -663,31 +663,31 @@ const prNumber = `${year}-${month}-${String(counter).padStart(3, '0')}`;
       totalAmount
     });
 
-let supplierAddress = null;
+    let supplierAddress = null;
 
-// First, check if supplier_address was provided directly in the request
-if (req.body.supplier_address && String(req.body.supplier_address).trim()) {
-  supplierAddress = String(req.body.supplier_address).trim();
-  console.log('✅ Using supplier_address from request:', supplierAddress);
-}
+    // First, check if supplier_address was provided directly in the request
+    if (req.body.supplier_address && String(req.body.supplier_address).trim()) {
+      supplierAddress = String(req.body.supplier_address).trim();
+      console.log('✅ Using supplier_address from request:', supplierAddress);
+    }
 
-// If no direct address but supplier_id exists, get address from suppliers table
-if (!supplierAddress && supplier_id) {
-  const [supRows] = await conn.query(
-    'SELECT address from suppliers WHERE id = ? LIMIT 1',
-    [supplier_id]
-  );
+    // If no direct address but supplier_id exists, get address from suppliers table
+    if (!supplierAddress && supplier_id) {
+      const [supRows] = await conn.query(
+        'SELECT address from suppliers WHERE id = ? LIMIT 1',
+        [supplier_id]
+      );
 
-  if (supRows.length === 0) {
-    throw new Error('Invalid supplier_id; supplier not found');
-  }
+      if (supRows.length === 0) {
+        throw new Error('Invalid supplier_id; supplier not found');
+      }
 
-  supplierAddress = supRows[0].address ?? null;
-  console.log('✅ Using address from suppliers table:', supplierAddress);
-}
+      supplierAddress = supRows[0].address ?? null;
+      console.log('✅ Using address from suppliers table:', supplierAddress);
+    }
 
-console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);  
-    
+    console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
+
     // 200-218
     const [result] = await conn.query(
       `INSERT INTO purchase_requests
@@ -724,7 +724,7 @@ console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
         await conn.query(
           'INSERT INTO purchase_request_items (purchase_request_id, item_id, quantity, unit_price, total_price, remarks) VALUES (?, ?, ?, ?, ?, ?)',
           [prId, item.itemId, item.quantity, item.unitPrice, item.totalPrice, item.remarks]
-        ); 
+        );
       }
     }
 
@@ -735,11 +735,11 @@ console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
       const reviewers = await getReviewersForPR(req.user.role);
       console.log('🔍 Reviewers for PR (before filtering):', reviewers);
       console.log('🔍 Requester ID:', req.user.id);
-      
+
       // Filter out the requester themselves
       const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== req.user.id);
       console.log('🔍 Reviewers for PR (after filtering):', filteredReviewers);
-      
+
       // Create review records
       for (const reviewerId of filteredReviewers) {
         await conn.query(
@@ -747,9 +747,9 @@ console.log('🎯 FINAL supplierAddress being saved:', supplierAddress);
           [prId, reviewerId, 'pending']
         );
       }
-      
+
       console.log('✅ Created review records for PR:', prId, 'with reviewers:', filteredReviewers);
-      
+
       // Send notifications to all reviewers (excluding requester)
       for (const reviewerId of filteredReviewers) {
         await createNotification(
@@ -822,23 +822,23 @@ router.put('/:id/draft', authenticate, async (req, res) => {
 
     const normalizedItems = Array.isArray(items)
       ? items.map((item) => {
-          const itemId = item.item_id ?? item.id;
-          const quantity = Number(item.quantity);
-          const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
-          const totalPrice = quantity * unitPrice;
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        const totalPrice = quantity * unitPrice;
 
-          if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-            throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
-          }
+        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        }
 
-          return {
-            itemId,
-            quantity,
-            unitPrice,
-            totalPrice,
-            remarks: item.remarks ?? item.notes ?? null
-          };
-        })
+        return {
+          itemId,
+          quantity,
+          unitPrice,
+          totalPrice,
+          remarks: item.remarks ?? item.notes ?? null
+        };
+      })
       : [];
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -1004,10 +1004,10 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
 
     // Create review records for all required reviewers
     const reviewers = await getReviewersForPR(req.user.role);
-    
+
     // Filter out the requester themselves
     const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== req.user.id);
-    
+
     for (const reviewerId of filteredReviewers) {
       await conn.query(
         'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
@@ -1058,38 +1058,38 @@ router.post('/:id/review', authenticate, async (req, res) => {
   let conn;
   try {
     const { review_status, review_comment } = req.body;
-    
+
     if (!review_status || !['approved', 'rejected'].includes(review_status)) {
       return res.status(400).json({ message: 'Invalid review status. Must be approved or rejected.' });
     }
 
     conn = await db.getConnection();
     await conn.beginTransaction();
-    
+
     // Get PR and check if user is a reviewer
     const [prs] = await conn.query(
       'SELECT pr.*, e.role as requester_role FROM purchase_requests pr JOIN employees e ON pr.requested_by = e.id WHERE pr.id = ?',
       [req.params.id]
     );
-    
+
     if (prs.length === 0) {
       await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
-    
+
     const pr = prs[0];
-    
+
     // Check if user is a reviewer for this PR
     const [reviewCheck] = await conn.query(
       'SELECT * FROM purchase_request_reviews WHERE purchase_request_id = ? AND reviewer_id = ?',
       [req.params.id, req.user.id]
     );
-    
+
     if (reviewCheck.length === 0) {
       await conn.rollback();
       return res.status(403).json({ message: 'You are not authorized to review this PR' });
     }
-    
+
     // Check if already reviewed
     if (reviewCheck[0].review_status !== 'pending') {
       await conn.rollback();
@@ -1125,16 +1125,16 @@ router.post('/:id/review', authenticate, async (req, res) => {
       'UPDATE purchase_request_reviews SET review_status = ?, review_comment = ?, reviewed_at = NOW() WHERE purchase_request_id = ? AND reviewer_id = ?',
       [review_status, review_comment || null, req.params.id, req.user.id]
     );
-    
+
     // If rejected, set PR status to Rejected
     if (review_status === 'rejected') {
       await conn.query(
         'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
         ['Rejected', review_comment || 'Rejected by reviewer', req.params.id]
       );
-      
+
       await conn.commit();
-      
+
       // Notify requester
       await createNotification(
         pr.requested_by,
@@ -1144,19 +1144,19 @@ router.post('/:id/review', authenticate, async (req, res) => {
         pr.id,
         'purchase_request'
       );
-      
+
       res.json({ message: 'PR rejected successfully', status: 'Rejected' });
       return;
     }
-    
+
     // Determine next status based on which reviewer group has completed
     let newStatus;
     let notificationRecipients = [];
     let notificationTitle;
     let notificationMessage;
-    
+
     console.log('🔍 Review workflow: PR ID:', req.params.id, 'Requester role:', pr.requester_role);
-    
+
     if (pr.requester_role === 'engineer') {
       // Engineer requester: Engineers → Admins → Procurement → Super Admin
       // Check if all engineers have approved
@@ -1167,15 +1167,15 @@ router.post('/:id/review', authenticate, async (req, res) => {
          WHERE prr.purchase_request_id = ? AND e.role = 'engineer' AND e.is_active = 1`,
         [req.params.id]
       );
-      
+
       console.log('🔍 Engineer reviews:', engineerReviews);
-      
+
       const engineersApproved = engineerReviews.length > 0 && engineerReviews.every(r => r.review_status === 'approved');
       const engineersPending = engineerReviews.some(r => r.review_status === 'pending');
       const engineersRejected = engineerReviews.some(r => r.review_status === 'rejected');
-      
+
       console.log('🔍 Engineers approved:', engineersApproved, 'pending:', engineersPending, 'rejected:', engineersRejected);
-      
+
       if (engineersRejected) {
         // Engineers rejected, PR is rejected
         await conn.query(
@@ -1186,14 +1186,14 @@ router.post('/:id/review', authenticate, async (req, res) => {
         res.json({ message: 'PR rejected by engineer reviewer', status: 'Rejected' });
         return;
       }
-      
+
       if (engineersPending) {
         // Still waiting for engineers
         await conn.commit();
         res.json({ message: 'Review submitted successfully. Waiting for other engineers.' });
         return;
       }
-      
+
       if (engineersApproved) {
         // Check if all admins have approved
         const [adminReviews] = await conn.query(
@@ -1203,15 +1203,15 @@ router.post('/:id/review', authenticate, async (req, res) => {
            WHERE prr.purchase_request_id = ? AND e.role = 'admin' AND e.is_active = 1`,
           [req.params.id]
         );
-        
+
         console.log('🔍 Admin reviews:', adminReviews);
-        
+
         const adminsApproved = adminReviews.length > 0 && adminReviews.every(r => r.review_status === 'approved');
         const adminsPending = adminReviews.some(r => r.review_status === 'pending');
         const adminsRejected = adminReviews.some(r => r.review_status === 'rejected');
-        
+
         console.log('🔍 Admins approved:', adminsApproved, 'pending:', adminsPending, 'rejected:', adminsRejected);
-        
+
         if (adminsRejected) {
           // Admins rejected, PR is rejected
           await conn.query(
@@ -1222,7 +1222,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
           res.json({ message: 'PR rejected by admin reviewer', status: 'Rejected' });
           return;
         }
-        
+
         if (adminsPending) {
           // Engineers done, move to Admin Review
           newStatus = 'For Admin Review';
@@ -1238,15 +1238,15 @@ router.post('/:id/review', authenticate, async (req, res) => {
              WHERE prr.purchase_request_id = ? AND e.role = 'procurement' AND e.is_active = 1`,
             [req.params.id]
           );
-          
+
           console.log('🔍 Procurement reviews:', procurementReviews);
-          
+
           const procurementApproved = procurementReviews.length > 0 && procurementReviews.every(r => r.review_status === 'approved');
           const procurementPending = procurementReviews.some(r => r.review_status === 'pending');
           const procurementRejected = procurementReviews.some(r => r.review_status === 'rejected');
-          
+
           console.log('🔍 Procurement approved:', procurementApproved, 'pending:', procurementPending, 'rejected:', procurementRejected);
-          
+
           if (procurementRejected) {
             // Procurement rejected, PR is rejected
             await conn.query(
@@ -1257,7 +1257,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
             res.json({ message: 'PR rejected by procurement reviewer', status: 'Rejected' });
             return;
           }
-          
+
           if (procurementPending) {
             // Admins done, move to Procurement Review
             newStatus = 'For Procurement Review';
@@ -1282,13 +1282,13 @@ router.post('/:id/review', authenticate, async (req, res) => {
          WHERE prr.purchase_request_id = ? AND e.role = 'admin' AND e.is_active = 1`,
         [req.params.id]
       );
-      
+
       console.log('🔍 Admin reviews (admin requester):', adminReviews);
-      
+
       const adminsApproved = adminReviews.length > 0 && adminReviews.every(r => r.review_status === 'approved');
       const adminsPending = adminReviews.some(r => r.review_status === 'pending');
       const adminsRejected = adminReviews.some(r => r.review_status === 'rejected');
-      
+
       if (adminsRejected) {
         await conn.query(
           'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
@@ -1298,13 +1298,13 @@ router.post('/:id/review', authenticate, async (req, res) => {
         res.json({ message: 'PR rejected by admin reviewer', status: 'Rejected' });
         return;
       }
-      
+
       if (adminsPending) {
         await conn.commit();
         res.json({ message: 'Review submitted successfully. Waiting for other admins.' });
         return;
       }
-      
+
       if (adminsApproved || adminReviews.length === 0) {
         newStatus = 'For Super Admin Final Approval';
         notificationRecipients = await getSuperAdmins();
@@ -1320,13 +1320,13 @@ router.post('/:id/review', authenticate, async (req, res) => {
          WHERE prr.purchase_request_id = ? AND e.role = 'procurement' AND e.is_active = 1`,
         [req.params.id]
       );
-      
+
       console.log('🔍 Procurement reviews (procurement requester):', procurementReviews);
-      
+
       const procurementApproved = procurementReviews.length > 0 && procurementReviews.every(r => r.review_status === 'approved');
       const procurementPending = procurementReviews.some(r => r.review_status === 'pending');
       const procurementRejected = procurementReviews.some(r => r.review_status === 'rejected');
-      
+
       if (procurementRejected) {
         await conn.query(
           'UPDATE purchase_requests SET status = ?, rejection_reason = ?, updated_at = NOW() WHERE id = ?',
@@ -1336,13 +1336,13 @@ router.post('/:id/review', authenticate, async (req, res) => {
         res.json({ message: 'PR rejected by procurement reviewer', status: 'Rejected' });
         return;
       }
-      
+
       if (procurementPending) {
         await conn.commit();
         res.json({ message: 'Review submitted successfully. Waiting for other procurement officers.' });
         return;
       }
-      
+
       if (procurementApproved || procurementReviews.length === 0) {
         newStatus = 'For Super Admin Final Approval';
         notificationRecipients = await getSuperAdmins();
@@ -1355,17 +1355,17 @@ router.post('/:id/review', authenticate, async (req, res) => {
       res.json({ message: 'Review submitted successfully.' });
       return;
     }
-    
+
     console.log('🔍 New status:', newStatus);
-    
+
     if (newStatus) {
       await conn.query(
         `UPDATE purchase_requests SET status = ?, updated_at = NOW() WHERE id = ?`,
         [newStatus, req.params.id]
       );
-      
+
       await conn.commit();
-      
+
       // Notify next reviewers
       for (const recipientId of notificationRecipients) {
         await createNotification(
@@ -1377,13 +1377,13 @@ router.post('/:id/review', authenticate, async (req, res) => {
           'purchase_request'
         );
       }
-      
+
       res.json({ message: `Review submitted successfully. PR moved to ${newStatus}.`, status: newStatus });
     } else {
       await conn.commit();
       res.json({ message: 'Review submitted successfully. Waiting for other reviewers.' });
     }
-    
+
   } catch (error) {
     if (conn) {
       try {
@@ -1404,30 +1404,30 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
   let conn;
   try {
     const { status, remarks, item_remarks } = req.body;
-    
+
     conn = await db.getConnection();
     await conn.beginTransaction();
-    
+
     const [prs] = await conn.query('SELECT status, order_number FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
       await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
-    
+
     const currentStatus = prs[0].status;
-    
+
     // Check if status is For Engineer Review - Super Admin cannot approve yet
     if (currentStatus === 'For Engineer Review') {
       await conn.rollback();
       return res.status(400).json({ message: 'This purchase request is currently awaiting Engineer review. Super Admin approval is not available at this stage.' });
     }
-    
+
     if (currentStatus !== 'For Super Admin Final Approval' && currentStatus !== 'On Hold') {
       await conn.rollback();
       return res.status(400).json({ message: 'Invalid status for this approval step' });
     }
-    
+
     // Check if all required reviewers have approved
     const [reviews] = await conn.query(
       `SELECT prr.review_status
@@ -1437,20 +1437,20 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
          AND e.is_active = 1`,
       [req.params.id]
     );
-    
+
     if (reviews.length > 0) {
       const allApproved = reviews.every(r => r.review_status === 'approved');
       const anyRejected = reviews.some(r => r.review_status === 'rejected');
-      
+
       if (!allApproved || anyRejected) {
         await conn.rollback();
-        return res.status(400).json({ 
+        return res.status(400).json({
           message: 'Cannot approve: Not all required reviewers have approved this PR yet',
           reviews_status: reviews.map(r => r.review_status)
         });
       }
     }
-    
+
     let newStatus;
     if (status === 'approved') {
       newStatus = 'For Purchase';
@@ -1461,7 +1461,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     } else {
       newStatus = 'Rejected';
     }
-    
+
     await conn.query(
       'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
       [newStatus, req.user.id, remarks, req.params.id]
@@ -1475,7 +1475,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
           'SELECT item_id FROM purchase_request_items WHERE id = ? AND purchase_request_id = ?',
           [itemRemark.item_id, req.params.id]
         );
-        
+
         if (priResult.length > 0) {
           const actualItemId = priResult[0].item_id;
           await conn.query(
@@ -1485,7 +1485,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
         }
       }
     }
-    
+
     await conn.commit();
 
     // Get PR details for notification
@@ -1502,7 +1502,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
         req.params.id,
         'purchase_request'
       );
-      
+
       // Also notify admins who can create POs
       const { getAdmins } = await import('../utils/notifications.js');
       const admins = await getAdmins();
@@ -1572,10 +1572,10 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       supplier_address,
       item_remarks
     } = req.body;
-    
+
     conn = await db.getConnection();
     await conn.beginTransaction();
-    
+
     const [prs] = await conn.query(
       'SELECT status, payment_basis, payment_terms_note, order_number FROM purchase_requests WHERE id = ?',
       [req.params.id]
@@ -1584,18 +1584,18 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
-    
+
     const currentStatus = prs[0].status;
     await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
-    
+
     if (currentStatus !== 'For Procurement Review') {
       await conn.rollback();
       return res.status(400).json({ message: 'Purchase request not ready for Procurement approval' });
     }
-    
+
     let newStatus;
     let totalAmount = null;
-    
+
     if (status === 'approved') {
       newStatus = 'For Super Admin Final Approval';
       if (prs[0].payment_basis === 'debt') {
@@ -1605,31 +1605,31 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
         }
       }
-      
+
       // Validate supplier_id is provided
       if (!supplier_id) {
         await conn.rollback();
         return res.status(400).json({ message: 'Supplier is required for approval' });
       }
-      
+
       // Fetch original items for comparison
       const [originalItems] = await conn.query(
         'SELECT id, quantity, unit, unit_price, item_id FROM purchase_request_items WHERE purchase_request_id = ?',
         [req.params.id]
       );
-      
+
       // Track changes made by procurement
       const changes = [];
-      
+
       // Update unit prices for items and calculate totals
       if (items && items.length > 0) {
         let calculatedTotal = 0;
-        
+
         for (const item of items) {
           const unitPrice = parseFloat(item.unit_price) || 0;
           const totalPrice = unitPrice * item.quantity;
           calculatedTotal += totalPrice;
-          
+
           // Find original item to compare
           const originalItem = originalItems.find(oi => oi.id === item.id);
           if (originalItem) {
@@ -1651,17 +1651,17 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
               });
             }
           }
-          
+
           // Update unit_price, total_price, and unit if provided
           await conn.query(
             'UPDATE purchase_request_items SET unit_price = ?, total_price = ?, unit = ? WHERE id = ?',
             [unitPrice, totalPrice, item.unit || null, item.id]
           );
         }
-        
+
         totalAmount = calculatedTotal;
       }
-      
+
       // Update PR status, total_amount, supplier_id and supplier_address
       await conn.query(
         'UPDATE purchase_requests SET status = ?, total_amount = ?, supplier_id = ?, supplier_name = NULL, supplier_address = ? WHERE id = ?',
@@ -1673,7 +1673,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           req.params.id
         ]
       );
-      
+
       // Store changes info for notification
       req.changes = changes;
     } else {
@@ -1682,7 +1682,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         'UPDATE purchase_requests SET status = ?, rejection_reason = ? WHERE id = ?',
         [newStatus, rejection_reason || null, req.params.id]
       );
-      
+
       // Save per-item rejection remarks
       if (item_remarks && item_remarks.length > 0) {
         for (const itemRemark of item_remarks) {
@@ -1691,7 +1691,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
             'SELECT item_id FROM purchase_request_items WHERE id = ? AND purchase_request_id = ?',
             [itemRemark.item_id, req.params.id]
           );
-          
+
           if (priResult.length > 0) {
             const actualItemId = priResult[0].item_id;
             await conn.query(
@@ -1702,7 +1702,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         }
       }
     }
-    
+
     await conn.commit();
 
     // Get PR details for notification
@@ -1722,7 +1722,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
           'purchase_request'
         );
       }
-      
+
       // Notify engineer about any changes made by procurement
       if (req.changes && req.changes.length > 0) {
         const changesSummary = req.changes.map(c => `${c.item_name}: ${c.changes.join(', ')}`).join('; ');
@@ -1787,13 +1787,13 @@ router.get('/:id/export', authenticate, async (req, res) => {
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
       WHERE pr.id = ?
     `, [req.params.id]);
-    
+
     if (prs.length === 0) {
       return res.status(404).json({ message: 'Purchase request not found' });
     }
-    
+
     const pr = prs[0];
-    
+
     // Get PR items
     const [items] = await db.query(`
       SELECT pri.*, i.item_name, i.item_code, i.unit
@@ -1829,47 +1829,47 @@ router.get('/:id/export', authenticate, async (req, res) => {
         AND e.is_active = 1
       ORDER BY prr.created_at ASC
     `, [req.params.id]);
-    
+
     // Load template workbook
     const templatePath = resolveExcelTemplatePath('PURCHASE REQUEST- FINAL-2026.xlsx');
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
-    
+
     const worksheet = workbook.getWorksheet(1);
-    
+
     // Format date helper
     const formatDate = (dateString) => {
       if (!dateString) return '';
       const date = new Date(dateString);
       return `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`;
     };
-    
+
     // Fill PR number (F6)
     worksheet.getCell('F6').value = pr.pr_number || '';
-    
+
     // Fill supplier name (C8)
     worksheet.getCell('C8').value = pr.supplier_name || '';
-    
+
     // Fill supplier address (C9)
     const supplierAddressCell = worksheet.getCell('C9');
     supplierAddressCell.value = pr.supplier_address || '';
     supplierAddressCell.font = { name: 'Times New Roman', size: 12, bold: true };
-    
+
     // Fill project (C10)
     worksheet.getCell('C10').value = pr.project || '';
 
     // Fill order number (F10)
     worksheet.getCell('F10').value = pr.order_number || '';
-    
+
     // Fill project address (C11)
     worksheet.getCell('C11').value = pr.project_address || '';
-    
+
     // Fill date prepared (F8) - created_at
     worksheet.getCell('F8').value = formatDate(pr.created_at);
-    
+
     // Fill date needed (F9)
     worksheet.getCell('F9').value = formatDate(pr.date_needed);
-    
+
     // Fill items starting from row 14
     let rowNum = 14;
     items.forEach((item, index) => {
@@ -1881,7 +1881,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
       row.getCell(6).value = parseFloat(item.total_price) || 0; // F - AMOUNT
       rowNum++;
     });
-    
+
     // Add "*** NOTHING FOLLOWS ***" after items
     const nothingFollowsRow = worksheet.getRow(rowNum);
     nothingFollowsRow.getCell(3).value = '*** NOTHING FOLLOWS ***';
@@ -1985,10 +1985,10 @@ router.get('/:id/export', authenticate, async (req, res) => {
       cell.font = { color: { argb: 'FF0000' } };
       noteRowNumber++;
     }
-    
+
     // Fill total (F31)
     worksheet.getCell('F31').value = pr.total_amount || 0;
-    
+
     // Fill requester name (A34) - "Prepared by"
     const requesterName = `${pr.requester_first_name || ''} ${pr.requester_last_name || ''}`.trim();
     const requesterNameCell = worksheet.getCell('A34');
@@ -2021,26 +2021,26 @@ router.get('/:id/export', authenticate, async (req, res) => {
         : (pr.reviewed_by_name || 'Pending review');
 
     // Populate Primary Reviewed By
-    const reviewedByCell = worksheet.getCell('C34');
+    const reviewedByCell = worksheet.getCell('D34');
     reviewedByCell.value = reviewedByText;
     reviewedByCell.font = { name: 'Times New Roman', size: 12, bold: true };
     reviewedByCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    
+
     const reviewedByRoleCell = worksheet.getCell('C35');
     reviewedByRoleCell.value = 'Name and Signature';
     reviewedByRoleCell.font = { name: 'Times New Roman', size: 10, italic: true };
     reviewedByRoleCell.alignment = { horizontal: 'center', vertical: 'top' };
 
     // Populate Received By (Approver)
-    const approverName = pr.approver_first_name || pr.approver_last_name 
+    const approverName = pr.approver_first_name || pr.approver_last_name
       ? `${pr.approver_first_name || ''} ${pr.approver_last_name || ''}`.trim()
       : 'MARC JUSTIN E. ARZADON';
-    
+
     const approverNameCell = worksheet.getCell('E34');
     approverNameCell.value = approverName;
     approverNameCell.font = { name: 'Times New Roman', size: 12, bold: true };
     approverNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
-    
+
     worksheet.getCell('E35').value = 'General Manager';
 
     // Additional Reviewers Logic
@@ -2058,52 +2058,52 @@ router.get('/:id/export', authenticate, async (req, res) => {
 
         for (let i = 0; i < 3; i++) {
           if (row[i]) {
-             const startCol = (i * 2) + 1; // 1 (A), 3 (C), 5 (E)
-             const endCol = startCol + 1;  // 2 (B), 4 (D), 6 (F)
-             const colLetter1 = String.fromCharCode(64 + startCol);
-             const colLetter2 = String.fromCharCode(64 + endCol);
-             
-             try {
-               worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
-               worksheet.mergeCells(`${colLetter1}${currentRow+1}:${colLetter2}${currentRow+1}`);
-               worksheet.mergeCells(`${colLetter1}${currentRow+2}:${colLetter2}${currentRow+2}`);
-             } catch (e) {
-               console.warn('Failed to merge additional reviewer cells:', e.message);
-             }
+            const startCol = (i * 2) + 1; // 1 (A), 3 (C), 5 (E)
+            const endCol = startCol + 1;  // 2 (B), 4 (D), 6 (F)
+            const colLetter1 = String.fromCharCode(64 + startCol);
+            const colLetter2 = String.fromCharCode(64 + endCol);
 
-             const headerCell = headerRow.getCell(startCol);
-             headerCell.value = 'Reviewed by:';
-             headerCell.font = { name: 'Times New Roman', size: 12 };
-             headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
-             // The template has borders for signatures, so add a bottom border to match "Prepared by:"
-             headerCell.border = { bottom: { style: 'thin' } };
+            try {
+              worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
+              worksheet.mergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`);
+              worksheet.mergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`);
+            } catch (e) {
+              console.warn('Failed to merge additional reviewer cells:', e.message);
+            }
 
-             const nameCell = nameRow.getCell(startCol);
-             nameCell.value = getReviewerName(row[i]);
-             nameCell.font = { name: 'Times New Roman', size: 12, bold: true };
-             nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            const headerCell = headerRow.getCell(startCol);
+            headerCell.value = 'Reviewed by:';
+            headerCell.font = { name: 'Times New Roman', size: 12 };
+            headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
+            // The template has borders for signatures, so add a bottom border to match "Prepared by:"
+            headerCell.border = { bottom: { style: 'thin' } };
 
-             const roleCell = roleRow.getCell(startCol);
-             roleCell.value = 'Name and Signature';
-             roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
-             roleCell.alignment = { horizontal: 'center', vertical: 'top' };
+            const nameCell = nameRow.getCell(startCol);
+            nameCell.value = getReviewerName(row[i]);
+            nameCell.font = { name: 'Times New Roman', size: 12, bold: true };
+            nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+            const roleCell = roleRow.getCell(startCol);
+            roleCell.value = 'Name and Signature';
+            roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
+            roleCell.alignment = { horizontal: 'center', vertical: 'top' };
           }
         }
         currentRow += 4; // leave a blank row between groups
       }
     }
-    
+
     // Generate filename
     const filename = `PR-${pr.pr_number}-${Date.now()}.xlsx`;
-    
+
     // Set response headers
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    
+
     // Write to response
     await workbook.xlsx.write(res);
     res.end();
-    
+
   } catch (error) {
     console.error('Export PR error:', error);
     res.status(500).json({ message: 'Failed to export purchase request: ' + error.message });
@@ -2147,24 +2147,24 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
     const normalizedItems = Array.isArray(items)
       ? items.map((item) => {
-          const itemId = item.item_id ?? item.id;
-          const quantity = Number(item.quantity);
-          const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
-          const totalPrice = quantity * unitPrice;
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        const totalPrice = quantity * unitPrice;
 
-          if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
-            throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
-          }
+        if (!itemId || !Number.isFinite(quantity) || quantity <= 0) {
+          throw new Error('Invalid item payload: each item requires item_id (or id) and quantity > 0');
+        }
 
-          return {
-            itemId,
-            quantity,
-            unitPrice,
-            totalPrice,
-            remarks: item.remarks ?? item.notes ?? null
-          }
+        return {
+          itemId,
+          quantity,
+          unitPrice,
+          totalPrice,
+          remarks: item.remarks ?? item.notes ?? null
+        }
       })
-    : [];
+      : [];
 
     const totalAmount = normalizedItems.reduce((sum, item) => sum + item.totalPrice, 0);
     const schedulesForValidation = hasPaymentSchedulesField
@@ -2203,21 +2203,21 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
        WHERE id = ?`,
 
       [purpose || pr.purpose,
-        remarks ?? pr.remarks,
-        date_needed || pr.date_needed,
-        project || pr.project,
-        project_address || pr.project_address,
-        order_number || pr.order_number,
+      remarks ?? pr.remarks,
+      date_needed || pr.date_needed,
+      project || pr.project,
+      project_address || pr.project_address,
+      order_number || pr.order_number,
         nextPaymentBasis,
         nextPaymentTermsCode,
         nextPaymentTermsNote,
-        nextPaymentTermsNote ? req.user.id : null,
-        nextPaymentTermsNote ? new Date() : null,
-        supplier_id ?? pr.supplier_id,
+      nextPaymentTermsNote ? req.user.id : null,
+      nextPaymentTermsNote ? new Date() : null,
+      supplier_id ?? pr.supplier_id,
         nextSupplierName,
         supplierAddress,
         totalAmount,
-        req.params.id
+      req.params.id
       ]
     );
 
