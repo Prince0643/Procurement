@@ -359,6 +359,9 @@ router.put('/:supplierName/accredit', authenticate, async (req, res) => {
           [newStatus, pr.id]
         );
 
+        // Clean up any existing stale review records to ensure a clean state
+        await db.query('DELETE FROM purchase_request_reviews WHERE purchase_request_id = ?', [pr.id]);
+
         // Create review records for required reviewers
         const reviewers = await getReviewersForPR(pr.requester_role);
         const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== pr.requested_by);

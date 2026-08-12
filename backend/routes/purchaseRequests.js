@@ -731,7 +731,7 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     await replacePaymentSchedules(conn, prId, normalizedPaymentSchedules, req.user.id);
 
     // Create review records for all required reviewers if NOT a draft
-    if (!isDraft) {
+    if (!isDraft && status !== 'Pending Accreditation Review') {
       const reviewers = await getReviewersForPR(req.user.role);
       console.log('🔍 Reviewers for PR (before filtering):', reviewers);
       console.log('🔍 Requester ID:', req.user.id);
@@ -986,7 +986,9 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
 
     // Determine new status based on requester role
     let newStatus;
-    if (req.user.role === 'engineer') {
+    if (pr.supplier_accredited === 0 || (pr.supplier_name && pr.supplier_accredited === 0)) {
+      newStatus = 'Pending Accreditation Review';
+    } else if (req.user.role === 'engineer') {
       newStatus = 'For Engineer Review';
     } else if (req.user.role === 'admin') {
       newStatus = 'For Admin Review';
@@ -1002,17 +1004,21 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
       [newStatus, req.params.id]
     );
 
-    // Create review records for all required reviewers
-    const reviewers = await getReviewersForPR(req.user.role);
+    // Create review records for all required reviewers (if not pending accreditation)
+    const filteredReviewers = [];
+    if (newStatus !== 'Pending Accreditation Review') {
+      const reviewers = await getReviewersForPR(req.user.role);
+      
+      // Filter out the requester themselves
+      const filtered = reviewers.filter(reviewerId => reviewerId !== req.user.id);
+      filteredReviewers.push(...filtered);
 
-    // Filter out the requester themselves
-    const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== req.user.id);
-
-    for (const reviewerId of filteredReviewers) {
-      await conn.query(
-        'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
-        [req.params.id, reviewerId, 'pending']
-      );
+      for (const reviewerId of filteredReviewers) {
+        await conn.query(
+          'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
+          [req.params.id, reviewerId, 'pending']
+        );
+      }
     }
 
     await conn.commit();

@@ -97,6 +97,55 @@
 
 ---
 
+## 2.1 PURCHASE REQUEST - UNACCREDITED SUPPLIER FLOW (THE CURRENT BUG)
+
+```text
+┌─────────────────┐
+│ Engineer        │
+│ Creates PR      │
+│ (Unaccredited   │
+│  Supplier)      │
+└────────┬────────┘
+         │
+         │ BUG 1: System assigns Joylene & Daniel as reviewers 
+         │ (status: 'pending') even though PR is not ready for them yet.
+         ▼
+┌─────────────────┐
+│ Status: PENDING │
+│ ACCREDITATION   │
+│ REVIEW          │
+└────────┬────────┘
+         │
+         │ Super Admin goes to Suppliers tab
+         │ and accredits the supplier
+         ▼
+┌─────────────────┐
+│ Status updates  │
+│ to FOR ENGINEER │
+│ REVIEW          │
+└────────┬────────┘
+         │
+         │ BUG 2: System tries to assign Joylene & Daniel AGAIN.
+         │ Database throws "Duplicate Entry" error and ignores it.
+         ▼
+┌─────────────────┐
+│ Joylene & Daniel│
+│ click "For      │
+│ Reviews" tab    │
+└────────┬────────┘
+         │
+         │ BUG 3: Backend sends the PR to the Frontend, BUT the 
+         │ Frontend expects a clean state and fails to render the row
+         │ because the reviewers were attached during the previous status.
+         ▼
+┌─────────────────┐
+│ Frontend shows: │
+│ "0 Requests"    │
+└─────────────────┘
+```
+
+---
+
 ## 3. PURCHASE ORDER (PO) FLOW
 
 ```
