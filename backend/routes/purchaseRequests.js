@@ -2060,7 +2060,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
           if (row[i]) {
             const columns = [1, 4, 5]; // Column A (1), Column D (4), Column E (5)
             const startCol = columns[i];
-            const endCol = startCol + 1;  // 2 (B), 4 (D), 6 (F)
+            const endCol = startCol + 1;  // 2 (B), 5 (E), 6 (F)
             const colLetter1 = String.fromCharCode(64 + startCol);
             const colLetter2 = String.fromCharCode(64 + endCol);
 
@@ -2069,7 +2069,7 @@ router.get('/:id/export', authenticate, async (req, res) => {
               worksheet.mergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`);
               worksheet.mergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`);
             } catch (e) {
-              console.warn('Failed to merge additional reviewer cells:', e.message);
+              // Ignore merge errors if already merged
             }
 
             const headerCell = headerRow.getCell(startCol);
