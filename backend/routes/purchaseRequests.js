@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getProcurementOfficers, getSuperAdmins, getEngineers, getReviewersForPR } from '../utils/notifications.js';
+import { createNotification, getProcurementOfficers, getSuperAdmins, getEngineers, getAdmins, getReviewersForPR } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';

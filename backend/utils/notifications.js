@@ -111,11 +111,12 @@ export async function getReviewersForPR(requesterRole) {
     let reviewers = [];
     
     if (requesterRole === 'engineer') {
-      // If requester is Engineer: reviewers are all Engineers + Procurement + Super Admin
+      // If requester is Engineer: reviewers are all Engineers + Admins + Procurement + Super Admin
       const engineers = await getEngineers();
+      const admins = await getAdmins();
       const procurement = await getProcurementOfficers();
       const superAdmins = await getSuperAdmins();
-      reviewers = [...engineers, ...procurement, ...superAdmins];
+      reviewers = [...engineers, ...admins, ...procurement, ...superAdmins];
     } else if (requesterRole === 'admin') {
       // If requester is Admin: reviewers are all Admins + Super Admin
       const admins = await getAdmins();
