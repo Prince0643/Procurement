@@ -2059,35 +2059,43 @@ router.get('/:id/export', authenticate, async (req, res) => {
         for (let i = 0; i < 3; i++) {
           if (row[i]) {
             const columns = [1, 4, 5]; // Column A (1), Column D (4), Column E (5)
+            const endCols = [3, 4, 6]; // Column C (3), Column D (4), Column F (6)
             const startCol = columns[i];
-            const endCol = startCol + 1;  // 2 (B), 5 (E), 6 (F)
+            const endCol = endCols[i];
             const colLetter1 = String.fromCharCode(64 + startCol);
             const colLetter2 = String.fromCharCode(64 + endCol);
 
-            try {
-              worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
-              worksheet.mergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`);
-              worksheet.mergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`);
-            } catch (e) {
-              // Ignore merge errors if already merged
+            // Only run the merge logic if the cell actually spans multiple columns
+            if (startCol !== endCol) {
+              try {
+                worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
+                worksheet.mergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`);
+                worksheet.mergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`);
+              } catch (e) {
+                // Ignore merge errors if already merged
+              }
             }
+
+            const borderStyle = { style: 'thin' };
+            const fullBorder = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
 
             const headerCell = headerRow.getCell(startCol);
             headerCell.value = 'Reviewed by:';
             headerCell.font = { name: 'Times New Roman', size: 12 };
             headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
-            // The template has borders for signatures, so add a bottom border to match "Prepared by:"
-            headerCell.border = { bottom: { style: 'thin' } };
+            headerCell.border = fullBorder; // Apply full border
 
             const nameCell = nameRow.getCell(startCol);
             nameCell.value = getReviewerName(row[i]);
             nameCell.font = { name: 'Times New Roman', size: 12, bold: true };
             nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+            nameCell.border = fullBorder; // Apply full border
 
             const roleCell = roleRow.getCell(startCol);
             roleCell.value = 'Name and Signature';
             roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
             roleCell.alignment = { horizontal: 'center', vertical: 'top' };
+            roleCell.border = fullBorder; // Apply full border
           }
         }
         currentRow += 4; // leave a blank row between groups
