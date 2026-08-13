@@ -43,6 +43,16 @@
 ## 2. PURCHASE REQUEST (PR) APPROVAL FLOW
 
 ```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     PR APPROVAL FLOW - OVERVIEW                              │
+│                                                                              │
+│  Engineer → Engineer Review → Admin Review → Procurement Review → Super Admin│
+└──────────────────────────────────────────────────────────────────────────────┘
+
+─────────────────────────────────────
+ STEP 1: Engineer Creates PR
+─────────────────────────────────────
+
 ┌─────────────────┐
 │  Engineer       │
 │  Creates PR     │
@@ -50,49 +60,128 @@
 └────────┬────────┘
          │
          ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Super Admin     │ NO  │  Send Rejection │
-│ First Review    │────>│  to Engineer    │
-│ Approve?        │     │  Status: REJECTED
-└────────┬────────┘     └─────────────────┘
-     YES │
-         │
-         ▼
-┌─────────────────┐
-│ Status: FOR     │
-│ PROCUREMENT     │
-│ REVIEW          │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Procurement     │ NO  │  Send Rejection │
-│ Reviews PR      │────>│  to Engineer    │
-│ Approve?        │     │  (with reason)  │
-└────────┬────────┘     │  Status: REJECTED
-     YES │              └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Status: FOR     │
-│ SUPER ADMIN     │
-│ FINAL APPROVAL  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Super Admin     │ NO  │  Send Rejection │
-│ Second Review   │────>│  to Engineer    │
-│ Approve?        │     │  Status: REJECTED
-└────────┬────────┘     └─────────────────┘
-     YES │
-         │
-         ▼
-┌─────────────────┐
-│ Status: FOR     │
-│ PURCHASE        │
-│ Notify Admin    │
-└─────────────────┘
+
+─────────────────────────────────────
+ STEP 2: Engineer(s) Review PR
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ All Engineers                │
+│ Review PR                    │
+│ (Each Engineer must respond) │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   ALL APPROVE      ANY DISAPPROVE
+      │                 │
+      ▼                 ▼
+(Proceed to       ┌─────────────────────────┐
+ Step 3)          │ PR sent back to the     │
+                  │ Engineer who created it │
+                  │ to EDIT the PR          │
+                  │ Status: RETURNED        │
+                  └─────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────────────┐
+                  │ Engineer edits & re-    │
+                  │ submits PR              │
+                  │ Status: PENDING         │
+                  └─────────────┬───────────┘
+                                │
+                                └──► (Back to Step 2)
+
+─────────────────────────────────────
+ STEP 3: Admin Review PR
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ All Admins                   │
+│ Review PR                    │
+│ (Each Admin must respond)    │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   ALL APPROVE      ANY DISAPPROVE
+      │                 │
+      ▼                 ▼
+(Proceed to       ┌─────────────────────────┐
+ Step 4)          │ PR sent back to the     │
+                  │ Engineer who created it │
+                  │ to EDIT the PR          │
+                  │ Status: RETURNED        │
+                  └─────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────────────┐
+                  │ Engineer edits & re-    │
+                  │ submits PR              │
+                  │ Status: PENDING         │
+                  └─────────────┬───────────┘
+                                │
+                                └──► (Back to Step 2)
+
+─────────────────────────────────────
+ STEP 4: Procurement Review PR
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ Procurement                  │
+│ Reviews PR                   │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   APPROVED         DISAPPROVED
+      │                 │
+      ▼                 ▼
+(Proceed to       ┌─────────────────────────┐
+ Step 5)          │ PR sent back to the     │
+                  │ Engineer who created it │
+                  │ to EDIT the PR          │
+                  │ Status: RETURNED        │
+                  └─────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────────────┐
+                  │ Engineer edits & re-    │
+                  │ submits PR              │
+                  │ Status: PENDING         │
+                  └─────────────┬───────────┘
+                                │
+                                └──► (Back to Step 2)
+
+─────────────────────────────────────
+ STEP 5: Super Admin Review PR
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ Super Admin                  │
+│ Reviews PR                   │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   APPROVED         DISAPPROVED
+      │                 │
+      ▼                 ▼
+┌─────────────────┐  ┌─────────────────────────┐
+│ Status:         │  │ PR sent back to the     │
+│ FOR PURCHASE    │  │ Engineer who created it │
+│ Notify Admin    │  │ to EDIT the PR          │
+└─────────────────┘  │ Status: RETURNED        │
+                     └─────────────────────────┘
+                               │
+                               ▼
+                     ┌─────────────────────────┐
+                     │ Engineer edits & re-    │
+                     │ submits PR              │
+                     │ Status: PENDING         │
+                     └─────────────┬───────────┘
+                                   │
+                                   └──► (Back to Step 2)
 ```
 
 ---
@@ -149,12 +238,28 @@
 ## 3. PURCHASE ORDER (PO) FLOW
 
 ```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                     PO FLOW - OVERVIEW                                       │
+│                                                                              │
+│  PR Approved → Admin Creates PO → All Admins Review → Admin Places Order     │
+│  → Super Admin Notified → Super Admin Approves → Engineer Receives Items     │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+─────────────────────────────────────
+ STEP 1: PR Approved (For Purchase)
+─────────────────────────────────────
+
 ┌─────────────────┐
 │  PR Approved    │
 │  (For Purchase) │
 └────────┬────────┘
          │
          ▼
+
+─────────────────────────────────────
+ STEP 2: Admin Creates Purchase Order
+─────────────────────────────────────
+
 ┌─────────────────┐
 │  Admin Creates  │
 │  Purchase Order │
@@ -162,35 +267,88 @@
 └────────┬────────┘
          │
          ▼
-┌─────────────────┐
-│  Admin Places   │
-│  Order (Real    │
-│  World Action)  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│  Status: ORDERED│
-│  Notify Super   │
-│  Admin          │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Super Admin     │ NO  │  Notify Admin   │
-│ Final Approval  │────>│  Status:        │
-│ Approve?        │     │  CANCELLED      │
-└────────┬────────┘     └─────────────────┘
-       YES │
-         │
-         ▼
-┌─────────────────┐
-│ Status:         │
+
+─────────────────────────────────────
+ STEP 3: All Admins Review PO
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ All Admins                   │
+│ Review PO                    │
+│ (Each Admin must respond)    │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   ALL APPROVE      ANY REJECT
+      │                 │
+      ▼                 ▼
+(Proceed to       ┌─────────────────────────┐
+ Step 4)          │ PO sent back to the     │
+                  │ Admin who created it    │
+                  │ to EDIT the PO          │
+                  │ Status: REJECTED        │
+                  └─────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────────────┐
+                  │ Admin edits & re-       │
+                  │ submits PO              │
+                  │ Status: DRAFT           │
+                  └─────────────┬───────────┘
+                                │
+                                └──► (Back to Step 3)
+
+─────────────────────────────────────
+ STEP 4: Admin Places Order
+─────────────────────────────────────
+
+┌─────────────────────────────────┐
+│ Admin Places Order              │
+│ (Real World Action)             │
+│ Status: ORDERED                 │
+└────────────────┬────────────────┘
+                 │
+                 ▼
+
+─────────────────────────────────────
+ STEP 5: Super Admin Notified
+─────────────────────────────────────
+
+┌─────────────────────────────────┐
+│ Super Admin is Notified         │
+│ that the order has been placed  │
+└────────────────┬────────────────┘
+                 │
+                 ▼
+
+─────────────────────────────────────
+ STEP 6: Super Admin Final Approval
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ Super Admin                  │
+│ Final Approval               │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   APPROVED         DISAPPROVED
+      │                 │
+      ▼                 ▼
+┌─────────────────┐  ┌─────────────────────────┐
+│ Notify Admin    │  │ Notify Admin            │
+│ Status:         │  │ Status: CANCELLED       │
+│ APPROVED /      │  └─────────────────────────┘
 │ CONFIRMED       │
-│ Notify Engineer │
 └────────┬────────┘
          │
          ▼
+
+─────────────────────────────────────
+ STEP 7: Engineer Receives Items
+─────────────────────────────────────
+
 ┌─────────────────┐
 │ Engineer        │
 │ Receives Items  │
@@ -199,6 +357,11 @@
 └────────┬────────┘
          │
          ▼
+
+─────────────────────────────────────
+ STEP 8: Completion Check
+─────────────────────────────────────
+
 ┌─────────────────┐
 │ All Items       │ YES ┌─────────────────┐
 │ Received?       │────>│ Status:         │

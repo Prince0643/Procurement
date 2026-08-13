@@ -706,8 +706,10 @@ setPaymentBasis('debt')
 
   const getPaymentDetailsForRequest = () => {
     if (!PAYMENT_DETAILS_ENABLED) {
+      // Payment schedule/terms UI is disabled, but still honour the user's
+      // payment_basis selection (Credit = 'debt', Debit = 'non_debt').
       return {
-        payment_basis: 'non_debt',
+        payment_basis: paymentBasis,
         payment_terms_note: null,
         payment_schedules: []
       }

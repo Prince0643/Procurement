@@ -239,21 +239,25 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
       const hasTermsCode = Boolean(String(prDetails.payment_terms_code || '').trim());
       const hasTermsNote = Boolean(String(prDetails.payment_terms_note || '').trim());
 
-      if (!hasTermsCode && !hasTermsNote) {
-        return res.status(400).json({
-          message: 'Set Payment Terms in PR approval before creating Purchase Order.'
-        });
-      }
+      // Payment terms UI is currently disabled — allow PO creation even without terms,
+      // defaulting to 'CASH'. Re-enable the block below when payment terms UI is active.
+      // if (!hasTermsCode && !hasTermsNote) {
+      //   return res.status(400).json({
+      //     message: 'Set Payment Terms in PR approval before creating Purchase Order.'
+      //   });
+      // }
 
       const fallbackTermsCode = hasTermsCode ? prDetails.payment_terms_code : 'CUSTOM';
-      const resolvedPRPaymentTerm = resolvePaymentTermFromPR(fallbackTermsCode, prDetails.payment_terms_note);
+      const resolvedPRPaymentTerm = (hasTermsCode || hasTermsNote)
+        ? resolvePaymentTermFromPR(fallbackTermsCode, prDetails.payment_terms_note)
+        : 'CASH';
 
-      if (!resolvedPRPaymentTerm) {
-        return res.status(400).json({
-          message: 'Payment Terms on PR are incomplete. Set Payment Terms in PR approval before creating Purchase Order.'
-        });
-      }
-      effectivePaymentTerm = resolvedPRPaymentTerm;
+      // if (!resolvedPRPaymentTerm) {
+      //   return res.status(400).json({
+      //     message: 'Payment Terms on PR are incomplete. Set Payment Terms in PR approval before creating Purchase Order.'
+      //   });
+      // }
+      effectivePaymentTerm = resolvedPRPaymentTerm || 'CASH';
       
       // Use supplier from PR if engineer selected one
       if (!finalSupplierId && prDetails.pr_supplier_id) {

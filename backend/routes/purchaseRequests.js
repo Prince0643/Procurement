@@ -144,6 +144,8 @@ const getExistingPaymentSchedules = async (conn, purchaseRequestId) => {
 
 const assertPaymentScheduleTotalsMatch = ({ paymentBasis, schedules, totalAmount }) => {
   if (paymentBasis !== 'debt') return;
+  // Payment schedule UI is currently disabled — skip totals check when no schedules provided.
+  if (!schedules || schedules.length === 0) return;
 
   const schedulesTotal = sumScheduleAmounts(schedules);
   const prTotal = roundMoney(totalAmount);
@@ -631,9 +633,11 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
       }
     }
 
-    if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
-      return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
-    }
+    // Payment schedule requirement is intentionally relaxed — the payment schedule
+    // UI is currently disabled, so debt PRs are allowed without schedules.
+    // if (!isDraft && paymentBasis === 'debt' && normalizedPaymentSchedules.length === 0) {
+    //   return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
+    // }
 
     const normalizedItems = Array.isArray(parsedItems)
       ? parsedItems.map((item) => {
@@ -964,12 +968,14 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     if (!pr.purpose || !String(pr.purpose).trim()) {
       return res.status(400).json({ message: 'Purpose is required to submit' });
     }
-    if (pr.payment_basis === 'debt') {
-      const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
-      if (scheduleCount === 0) {
-        return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
-      }
-    }
+    // Payment schedule requirement is intentionally relaxed — the payment schedule
+    // UI is currently disabled, so debt PRs are allowed to be submitted without schedules.
+    // if (pr.payment_basis === 'debt') {
+    //   const scheduleCount = await getPaymentScheduleCount(db, req.params.id);
+    //   if (scheduleCount === 0) {
+    //     return res.status(400).json({ message: 'At least one payment schedule is required for debt/with account PR.' });
+    //   }
+    // }
 
     // Check if PR has items
     const [itemCount] = await db.query(

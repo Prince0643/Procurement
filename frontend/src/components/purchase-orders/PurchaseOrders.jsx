@@ -230,7 +230,9 @@ const PurchaseOrders = () => {
         setShowPrResults(true)
       }
       setSrs(srsData.filter(sr => sr.status === 'Approved' || sr.status === 'For Super Admin Final Approval'))
-      setSuppliers(suppliersData)
+      // Backend returns a paginated object { suppliers: [...], page, pageSize, total }
+      const suppliersList = Array.isArray(suppliersData) ? suppliersData : (suppliersData?.suppliers ?? [])
+      setSuppliers(suppliersList)
     } catch (err) {
       console.error('Failed to load form data', err)
     } finally {
