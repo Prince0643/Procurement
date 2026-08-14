@@ -1106,7 +1106,7 @@ const PurchaseRequests = () => {
                             <CheckCircle className="w-4 h-4 text-blue-600" />
                           </Button>
                         )}
-                        {(pr.status === 'Draft' || pr.status === 'Rejected') && user?.role === 'engineer' && (
+                        {(pr.status === 'Draft' || pr.status === 'Rejected') && pr.requested_by === user?.id && (
                           <>
                             <Button
                               variant="ghost"
@@ -1256,8 +1256,8 @@ const PurchaseRequests = () => {
                 key={pr.id}
                 onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)}
                 className={`border rounded-lg p-3 cursor-pointer transition-all ${expandedId === pr.id
-                    ? 'border-yellow-500 bg-yellow-50'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                  ? 'border-yellow-500 bg-yellow-50'
+                  : 'border-gray-200 bg-white hover:border-gray-300'
                   }`}
               >
                 <div className="flex items-start justify-between mb-2">
@@ -1324,6 +1324,24 @@ const PurchaseRequests = () => {
                       >
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
+                    )}
+                    {(pr.status === 'Draft' || pr.status === 'Rejected') && pr.requested_by === user?.id && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Edit"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openEditModal(pr)
+                          }}
+                        >
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" title="Delete">
+                          <Trash2 className="w-4 h-4 text-red-500" />
+                        </Button>
+                      </>
                     )}
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === pr.id ? null : pr.id); }}>
                       {expandedId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -1500,7 +1518,7 @@ const PurchaseRequests = () => {
                       <div className="col-span-3">
                         <input
                           type="number"
-                          placeholder="Amount (optional)"
+                          placeholder="Amount"
                           value={schedule.amount}
                           onChange={(e) => updatePaymentSchedule(index, 'amount', e.target.value)}
                           onWheel={preventNumberScroll}
@@ -1512,7 +1530,7 @@ const PurchaseRequests = () => {
                       <div className="col-span-4">
                         <input
                           type="text"
-                          placeholder="Note (optional)"
+                          placeholder="Note"
                           value={schedule.note}
                           onChange={(e) => updatePaymentSchedule(index, 'note', e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm"
