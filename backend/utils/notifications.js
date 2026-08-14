@@ -102,6 +102,22 @@ export async function getEngineers() {
 }
 
 /**
+ * Get super admin reps who should be notified
+ * @returns {Promise<number[]>} - Array of user IDs with super_admin_rep role
+ */
+export async function getSuperAdminReps() {
+  try {
+    const [users] = await db.query(`
+      SELECT id FROM employees WHERE role = 'super_admin_rep' AND is_active = 1
+    `);
+    return users.map(u => u.id);
+  } catch (error) {
+    console.error('Failed to get super admin reps:', error);
+    return [];
+  }
+}
+
+/**
  * Get reviewers for a PR based on requester role
  * @param {string} requesterRole - The role of the person who created the PR
  * @returns {Promise<number[]>} - Array of user IDs who should review the PR
@@ -111,22 +127,23 @@ export async function getReviewersForPR(requesterRole) {
     let reviewers = [];
     
     if (requesterRole === 'engineer') {
-      // If requester is Engineer: reviewers are all Engineers + Admins + Procurement + Super Admin
+      // If requester is Engineer: reviewers are all Engineers + Admins + Super Admin Rep + Super Admin
       const engineers = await getEngineers();
       const admins = await getAdmins();
-      const procurement = await getProcurementOfficers();
+      const superAdminReps = await getSuperAdminReps();
       const superAdmins = await getSuperAdmins();
-      reviewers = [...engineers, ...admins, ...procurement, ...superAdmins];
+      reviewers = [...engineers, ...admins, ...superAdminReps, ...superAdmins];
     } else if (requesterRole === 'admin') {
-      // If requester is Admin: reviewers are all Admins + Super Admin
+      // If requester is Admin: reviewers are all Admins + Super Admin Rep + Super Admin
       const admins = await getAdmins();
+      const superAdminReps = await getSuperAdminReps();
       const superAdmins = await getSuperAdmins();
-      reviewers = [...admins, ...superAdmins];
-    } else if (requesterRole === 'procurement') {
-      // If requester is Procurement: reviewers are all Procurement + Super Admin
-      const procurement = await getProcurementOfficers();
+      reviewers = [...admins, ...superAdminReps, ...superAdmins];
+    } else if (requesterRole === 'super_admin_rep') {
+      // If requester is Super Admin Rep: reviewers are Super Admin Rep + Super Admin
+      const superAdminReps = await getSuperAdminReps();
       const superAdmins = await getSuperAdmins();
-      reviewers = [...procurement, ...superAdmins];
+      reviewers = [...superAdminReps, ...superAdmins];
     } else {
       // Super Admin doesn't need review
       reviewers = [];

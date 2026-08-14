@@ -131,7 +131,7 @@ const StatusBadge = ({ status }) => {
       'Approved': 'bg-green-100 text-green-800',
       'Rejected': 'bg-red-100 text-red-800',
       'Cancelled': 'bg-gray-100 text-gray-600',
-      'For Procurement Review': 'bg-orange-100 text-orange-800',
+      'For Super Admin Rep Review': 'bg-orange-100 text-orange-800',
       'For Super Admin Final Approval': 'bg-purple-100 text-purple-800',
       'PO Created': 'bg-indigo-100 text-indigo-800',
       'Paid': 'bg-green-100 text-green-800',
@@ -148,7 +148,7 @@ const StatusBadge = ({ status }) => {
 }
 
 const STATUS_FILTER_OPTIONS = [
-  'For Procurement Review',
+  'For Super Admin Rep Review',
   'For Super Admin Final Approval',
   'For Purchase',
   'Received',
@@ -1043,7 +1043,7 @@ const PurchaseRequests = () => {
                     <td className="py-3 px-4 text-sm text-gray-600">{formatDate(pr.created_at)}</td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-1">
-                        {user?.role === 'procurement' && pr.status === 'For Procurement Review' && (
+                        {false && user?.role === 'procurement' && pr.status === 'For Procurement Review' && (
                           <>
                             <Button
                               variant="ghost"
@@ -1066,6 +1066,34 @@ const PurchaseRequests = () => {
                               }}
                               title="Reject"
                               disabled={procurementSubmitting}
+                            >
+                              <XCircle className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </>
+                        )}
+                        {user?.role === 'super_admin' && pr.status === 'For Super Admin Final Approval' && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openSuperAdminModal(pr, 'approved')
+                              }}
+                              title="Approve"
+                              disabled={superAdminSubmitting}
+                            >
+                              <CheckCircle className="w-4 h-4 text-green-600" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                openSuperAdminModal(pr, 'rejected')
+                              }}
+                              title="Reject"
+                              disabled={superAdminSubmitting}
                             >
                               <XCircle className="w-4 h-4 text-red-600" />
                             </Button>
@@ -1124,7 +1152,7 @@ const PurchaseRequests = () => {
                             </Button>
                           </>
                         )}
-                        {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Procurement Review') && (
+                        {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Super Admin Rep Review' || pr.status === 'For Super Admin Final Approval') && (
                           <>
                             <Button
                               variant="ghost"
@@ -1266,7 +1294,7 @@ const PurchaseRequests = () => {
                     <p className="text-sm font-semibold text-gray-900">{pr.project}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    {user?.role === 'procurement' && pr.status === 'For Procurement Review' && (
+                    {false && user?.role === 'procurement' && pr.status === 'For Procurement Review' && (
                       <>
                         <Button
                           variant="ghost"
@@ -1292,6 +1320,32 @@ const PurchaseRequests = () => {
                         </Button>
                       </>
                     )}
+                    {user?.role === 'super_admin' && pr.status === 'For Super Admin Final Approval' && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openSuperAdminModal(pr, 'approved')
+                          }}
+                          disabled={superAdminSubmitting}
+                        >
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            openSuperAdminModal(pr, 'rejected')
+                          }}
+                          disabled={superAdminSubmitting}
+                        >
+                          <XCircle className="w-4 h-4 text-red-600" />
+                        </Button>
+                      </>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1312,7 +1366,7 @@ const PurchaseRequests = () => {
                     >
                       <FileSpreadsheet className="w-4 h-4" />
                     </Button>
-                    {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Procurement Review') && (
+                    {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Super Admin Rep Review' || pr.status === 'For Super Admin Final Approval') && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -1597,11 +1651,11 @@ const PurchaseRequests = () => {
         pr={previewPR}
         loading={previewLoading}
         onClose={closePreview}
-        onApprove={user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (_, pr) => {
+        onApprove={false && user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (_, pr) => {
           closePreview()
           openProcurementApproval(pr)
         } : undefined}
-        onReject={user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (pr) => {
+        onReject={false && user?.role === 'procurement' && previewPR?.status === 'For Procurement Review' ? (pr) => {
           closePreview()
           openProcurementReject(pr)
         } : undefined}

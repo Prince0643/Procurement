@@ -23,7 +23,7 @@ export const navigationItems = [
     path: '/dashboard',
     label: 'Dashboard',
     icon: LayoutDashboard,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin_rep', 'super_admin']
   },
   
   // Purchase Requests
@@ -31,7 +31,7 @@ export const navigationItems = [
     path: '/dashboard/purchase-requests',
     label: 'Purchase Requests',
     icon: FileText,
-    roles: ['engineer', 'procurement', 'admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin_rep']
   },
   
   // For Reviews
@@ -39,7 +39,7 @@ export const navigationItems = [
     path: '/dashboard/purchase-requests?tab=reviews',
     label: 'For Reviews',
     icon: CheckCircle,
-    roles: ['engineer', 'procurement', 'admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin_rep']
   },
 
   // Service Requests - TEMPORARILY COMMENTED OUT
@@ -63,7 +63,7 @@ export const navigationItems = [
     path: '/dashboard/items',
     label: 'Items',
     icon: Package,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin_rep', 'super_admin']
   },
 
   // Pricing History - TEMPORARILY COMMENTED OUT
@@ -151,7 +151,7 @@ export const navigationItems = [
     path: '/dashboard/settings',
     label: 'Settings',
     icon: Settings,
-    roles: ['engineer', 'procurement', 'admin', 'super_admin']
+    roles: ['engineer', 'procurement', 'admin', 'super_admin_rep', 'super_admin']
   },
 
   // Attendance - TEMPORARILY COMMENTED OUT
