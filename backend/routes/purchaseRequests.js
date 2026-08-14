@@ -1895,8 +1895,15 @@ router.get('/:id/export', authenticate, async (req, res) => {
       ORDER BY prr.created_at ASC
     `, [req.params.id]);
 
-    // Load template workbook
-    const templatePath = resolveExcelTemplatePath('PURCHASE REQUEST- FINAL-2026.xlsx');
+    // Load template workbook dynamically based on PR status
+    let templateName = 'PURCHASE REQUEST- FINAL-2026.xlsx';
+    if (['Draft', 'Pending', 'For Engineer Review', 'Returned'].includes(pr.status)) {
+      templateName = 'PURCHASE REQUEST- Engineer.xlsx';
+    } else if (['For Admin Review'].includes(pr.status)) {
+      templateName = 'PURCHASE REQUEST- Admin.xlsx';
+    }
+
+    const templatePath = resolveExcelTemplatePath(templateName);
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.readFile(templatePath);
 
@@ -2054,11 +2061,12 @@ router.get('/:id/export', authenticate, async (req, res) => {
     // Fill total (F31)
     worksheet.getCell('F31').value = pr.total_amount || 0;
 
-    // Fill requester name (A34) - "Prepared by"
+    // Fill requester name (A33) - "Prepared by" (A33:C34 is merged)
     const requesterName = `${pr.requester_first_name || ''} ${pr.requester_last_name || ''}`.trim();
-    const requesterNameCell = worksheet.getCell('A34');
+    const requesterNameCell = worksheet.getCell('A33');
+    requesterNameCell.style = {};
     requesterNameCell.value = requesterName || '';
-    requesterNameCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    requesterNameCell.font = { name: 'Times New Roman', size: 12, bold: true, italic: false };
     requesterNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
     // Calculate reviewer and approver names
@@ -2085,28 +2093,52 @@ router.get('/:id/export', authenticate, async (req, res) => {
         ? `${getReviewerName(rejectedReviewers[0])} (declined)`
         : (pr.reviewed_by_name || 'Pending review');
 
-    // Populate Primary Reviewed By
-    const reviewedByCell = worksheet.getCell('D34');
+    // Populate Primary Reviewed By (D33:D34 is merged)
+    const reviewedByCell = worksheet.getCell('D33');
+    reviewedByCell.style = {};
     reviewedByCell.value = reviewedByText;
-    reviewedByCell.font = { name: 'Times New Roman', size: 12, bold: true };
+    reviewedByCell.font = { name: 'Times New Roman', size: 12, bold: true, italic: false };
     reviewedByCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    const reviewedByRoleCell = worksheet.getCell('C35');
+    const reviewedByRoleCell = worksheet.getCell('D35');
+    reviewedByRoleCell.style = {}; // WIPE default template style to force italic!
     reviewedByRoleCell.value = 'Name and Signature';
     reviewedByRoleCell.font = { name: 'Times New Roman', size: 10, italic: true };
     reviewedByRoleCell.alignment = { horizontal: 'center', vertical: 'top' };
 
-    // Populate Received By (Approver)
+    // Populate Received By (Approver) (E33:F34 is merged)
     const approverName = pr.approver_first_name || pr.approver_last_name
       ? `${pr.approver_first_name || ''} ${pr.approver_last_name || ''}`.trim()
       : 'MARC JUSTIN E. ARZADON';
 
-    const approverNameCell = worksheet.getCell('E34');
-    approverNameCell.value = approverName;
-    approverNameCell.font = { name: 'Times New Roman', size: 12, bold: true };
-    approverNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    const approverNameCell = worksheet.getCell('E33');
+    
+    // Only write General Manager if it's the final template, else leave what's there
+    if (templateName === 'PURCHASE REQUEST- FINAL-2026.xlsx') {
+      approverNameCell.style = {};
+      approverNameCell.value = approverName;
+      approverNameCell.font = { name: 'Times New Roman', size: 12, bold: true, italic: false };
+      approverNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-    worksheet.getCell('E35').value = 'General Manager';
+      const e35 = worksheet.getCell('E35');
+      e35.style = {};
+      e35.value = 'General Manager';
+      e35.font = { name: 'Times New Roman', size: 10, italic: true };
+      e35.alignment = { horizontal: 'center', vertical: 'top' };
+    }
+
+    // Clear pre-drawn unused signature boxes below row 36 to ensure a clean slate
+    for (let r = 37; r <= 50; r++) {
+      const row = worksheet.getRow(r);
+      for (let c = 1; c <= 8; c++) {
+        const cell = row.getCell(c);
+        cell.value = null;
+        cell.border = {};
+        cell.font = undefined; // Completely obliterate any fonts typed manually in the template
+        cell.style = {}; // Destroy any other formatting (backgrounds, etc)
+        // Note: We don't strictly unmerge here, but clearing borders and values hides them well.
+      }
+    }
 
     // Additional Reviewers Logic
     if (approvedReviewers.length > 1) {
@@ -2130,37 +2162,56 @@ router.get('/:id/export', authenticate, async (req, res) => {
             const colLetter1 = String.fromCharCode(64 + startCol);
             const colLetter2 = String.fromCharCode(64 + endCol);
 
-            // Only run the merge logic if the cell actually spans multiple columns
+            const borderStyle = { style: 'thin' };
+            const fullBorder = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
+
+            // 1. Unmerge first so we can style individual cells properly without ExcelJS bugs
+            if (startCol !== endCol) {
+              try { worksheet.unMergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`); } catch(e) {}
+              try { worksheet.unMergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`); } catch(e) {}
+              try { worksheet.unMergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`); } catch(e) {}
+            }
+
+            // 2. Apply styles to EVERY cell in the block to ensure borders complete and fonts overwrite
+            for (let c = startCol; c <= endCol; c++) {
+              const hCell = headerRow.getCell(c);
+              hCell.style = {}; // Wipes any rogue cursive fonts from the template
+              hCell.font = { name: 'Times New Roman', size: 12, italic: false };
+              hCell.alignment = { horizontal: 'left', vertical: 'bottom' };
+              hCell.border = fullBorder;
+
+              const nCell = nameRow.getCell(c);
+              nCell.style = {};
+              nCell.font = { name: 'Times New Roman', size: 12, bold: true, italic: false };
+              nCell.alignment = { horizontal: 'center', vertical: 'middle' };
+              nCell.border = fullBorder;
+
+              const rCell = roleRow.getCell(c);
+              rCell.style = {};
+              rCell.font = { name: 'Times New Roman', size: 10, italic: true };
+              rCell.alignment = { horizontal: 'center', vertical: 'top' };
+              rCell.border = fullBorder;
+            }
+
+            // 3. Re-merge them perfectly
             if (startCol !== endCol) {
               try {
                 worksheet.mergeCells(`${colLetter1}${currentRow}:${colLetter2}${currentRow}`);
                 worksheet.mergeCells(`${colLetter1}${currentRow + 1}:${colLetter2}${currentRow + 1}`);
                 worksheet.mergeCells(`${colLetter1}${currentRow + 2}:${colLetter2}${currentRow + 2}`);
               } catch (e) {
-                // Ignore merge errors if already merged
+                // Ignore merge errors
               }
             }
 
-            const borderStyle = { style: 'thin' };
-            const fullBorder = { top: borderStyle, left: borderStyle, bottom: borderStyle, right: borderStyle };
-
             const headerCell = headerRow.getCell(startCol);
             headerCell.value = 'Reviewed by:';
-            headerCell.font = { name: 'Times New Roman', size: 12 };
-            headerCell.alignment = { horizontal: 'left', vertical: 'bottom' };
-            headerCell.border = fullBorder; // Apply full border
 
             const nameCell = nameRow.getCell(startCol);
             nameCell.value = getReviewerName(row[i]);
-            nameCell.font = { name: 'Times New Roman', size: 12, bold: true };
-            nameCell.alignment = { horizontal: 'center', vertical: 'middle' };
-            nameCell.border = fullBorder; // Apply full border
 
             const roleCell = roleRow.getCell(startCol);
             roleCell.value = 'Name and Signature';
-            roleCell.font = { name: 'Times New Roman', size: 10, italic: true };
-            roleCell.alignment = { horizontal: 'center', vertical: 'top' };
-            roleCell.border = fullBorder; // Apply full border
           }
         }
         currentRow += 4; // leave a blank row between groups
