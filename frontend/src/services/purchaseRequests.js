@@ -122,7 +122,7 @@ create: async (prData, accreditationFiles = []) => {
     return response.data;
   },
 
-  procurementApprove: async (
+  superAdminRepApprove: async (
     id,
     status,
     rejection_reason,
@@ -133,7 +133,7 @@ create: async (prData, accreditationFiles = []) => {
     payment_terms_code = null,
     payment_terms_note = null
   ) => {
-    const response = await api.put(`/purchase-requests/${id}/procurement-approve`, {
+    const response = await api.put(`/purchase-requests/${id}/super-admin-rep-approve`, {
       status,
       rejection_reason,
       items,
@@ -214,6 +214,11 @@ saveDraft: async (prData) => {
 
   checkSupplierAccreditation: async (supplierName) => {
     const response = await api.get(`/purchase-requests/check-supplier-accreditation/${encodeURIComponent(supplierName)}`);
+    return response.data;
+  },
+
+  delete: async (id) => {
+    const response = await api.delete(`/purchase-requests/${id}`);
     return response.data;
   }
 };

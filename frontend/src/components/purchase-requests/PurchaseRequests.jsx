@@ -697,6 +697,20 @@ const PurchaseRequests = () => {
     resetForm()
   }
 
+  const handleDeleteRequest = async (pr) => {
+    if (!window.confirm(`Are you sure you want to delete Purchase Request ${pr.pr_number}? This action cannot be undone.`)) {
+      return
+    }
+    
+    try {
+      await purchaseRequestService.delete(pr.id)
+      await fetchPurchaseRequests()
+      alert('Purchase request deleted successfully')
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete purchase request')
+    }
+  }
+
   const handleUpdate = async (e) => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
@@ -1134,24 +1148,32 @@ const PurchaseRequests = () => {
                             <CheckCircle className="w-4 h-4 text-blue-600" />
                           </Button>
                         )}
-                        {(pr.status === 'Draft' || pr.status === 'Rejected') && pr.requested_by === user?.id && (
-                          <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              title="Edit"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                openEditModal(pr)
-                              }}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" title="Delete">
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </>
+                        {(pr.status === 'Draft' || pr.status === 'Rejected' || pr.status === 'Returned') && pr.requested_by === user?.id && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Edit"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openEditModal(pr)
+                            }}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
                         )}
+                        {((pr.status === 'Draft' || pr.status === 'Rejected' || pr.status === 'Returned') && pr.requested_by === user?.id) || user?.role === 'super_admin' ? (
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            title="Delete"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteRequest(pr);
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        ) : null}
                         {urlTab === 'reviews' && (pr.status === 'For Engineer Review' || pr.status === 'For Admin Review' || pr.status === 'For Super Admin Rep Review' || pr.status === 'For Super Admin Final Approval') && (
                           <>
                             <Button
@@ -1379,24 +1401,32 @@ const PurchaseRequests = () => {
                         <CheckCircle className="w-4 h-4 text-green-600" />
                       </Button>
                     )}
-                    {(pr.status === 'Draft' || pr.status === 'Rejected') && pr.requested_by === user?.id && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Edit"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            openEditModal(pr)
-                          }}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm" title="Delete">
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </>
+                    {(pr.status === 'Draft' || pr.status === 'Rejected' || pr.status === 'Returned') && pr.requested_by === user?.id && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title="Edit"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          openEditModal(pr)
+                        }}
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
                     )}
+                    {((pr.status === 'Draft' || pr.status === 'Rejected' || pr.status === 'Returned') && pr.requested_by === user?.id) || user?.role === 'super_admin' ? (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        title="Delete"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteRequest(pr);
+                        }}
+                      >
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    ) : null}
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === pr.id ? null : pr.id); }}>
                       {expandedId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </Button>

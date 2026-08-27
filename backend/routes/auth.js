@@ -70,6 +70,13 @@ router.post('/login', [
     // Remove password from response
     delete user.password;
 
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(user.id, 'User Logged In', 'auth', null, JSON.stringify({ employee_no: user.employee_no }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
     res.json({
       message: 'Login successful',
       token,
@@ -301,5 +308,17 @@ router.post('/sync-password',
     }
   }
 );
+
+// Logout
+router.post('/logout', authenticate, async (req, res) => {
+  try {
+    const { logAudit } = await import('../utils/auditLogger.js');
+    await logAudit(req.user.id, 'User Logged Out', 'auth', null, null);
+    res.json({ message: 'Logout successful' });
+  } catch (error) {
+    console.error('Logout error:', error);
+    res.status(500).json({ message: 'Server error during logout' });
+  }
+});
 
 export default router;

@@ -83,6 +83,7 @@ const Dashboard = () => {
     fetchPricingTrends()
   }, [])
 
+
   useEffect(() => {
     const media = window.matchMedia('(max-width: 640px)')
     const update = () => setIsMobile(media.matches)
@@ -157,7 +158,7 @@ const Dashboard = () => {
         const month = new Date(tx.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short' })
         spendingByMonth[month] = (spendingByMonth[month] || 0) + (tx.amount || 0)
       })
-      
+
       // Convert to array and sort by date
       const spendingData = Object.entries(spendingByMonth)
         .map(([month, amount]) => ({ month, amount: Math.round(amount) }))

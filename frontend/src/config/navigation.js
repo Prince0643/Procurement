@@ -13,7 +13,8 @@ import {
   CheckCircle,
   Gavel,
   Users,
-  Truck
+  Truck,
+  Activity
 } from 'lucide-react';
 
 // Navigation configuration - centralized for easy management
@@ -145,6 +146,14 @@ export const navigationItems = [
     icon: Users,
     roles: ['super_admin']
   },
+
+  // Audit Logs
+  {
+    path: '/dashboard/audit-logs',
+    label: 'Audit Logs',
+    icon: Activity,
+    roles: ['super_admin']
+  },
   
   // Settings
   {
@@ -184,7 +193,7 @@ export const navigationGroups = [
   },
   {
     title: 'Administration',
-    items: ['/dashboard/approvals', '/dashboard/employees', '/dashboard/settings'] // attendance temporarily commented out
+    items: ['/dashboard/approvals', '/dashboard/employees', '/dashboard/audit-logs', '/dashboard/settings'] // attendance temporarily commented out
   }
 ];
 

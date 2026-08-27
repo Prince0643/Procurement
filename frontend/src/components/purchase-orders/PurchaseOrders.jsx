@@ -3,7 +3,7 @@ import { purchaseOrderService } from '../../services/purchaseOrders'
 import { purchaseRequestService } from '../../services/purchaseRequests'
 import { serviceRequestService } from '../../services/serviceRequests'
 import { supplierService } from '../../services/suppliers'
-import { ChevronUp, ChevronDown, FileSpreadsheet, Plus, X, Eye } from 'lucide-react'
+import { ChevronUp, ChevronDown, FileSpreadsheet, Plus, X, Eye, Edit } from 'lucide-react'
 import POPreviewModal from './POPreviewModal'
 
 // UI Components
@@ -162,6 +162,8 @@ const PurchaseOrders = () => {
   
   // Modal state
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [prs, setPrs] = useState([])
   const [srs, setSrs] = useState([])
   const [suppliers, setSuppliers] = useState([])
@@ -193,7 +195,7 @@ const PurchaseOrders = () => {
   }, [])
 
   useEffect(() => {
-    if (!showCreateModal || sourceType !== 'pr') return
+    if ((!showCreateModal && !showEditModal) || sourceType !== 'pr') return
     if (prSearchQuery.trim() === '') {
       setPrSearchResults([])
       return
@@ -240,8 +242,58 @@ const PurchaseOrders = () => {
     }
   }
 
+  const openEditModal = async (po) => {
+    setShowEditModal(true)
+    setEditingId(po.id)
+    setLoadingForm(true)
+    try {
+      const fullPO = await purchaseOrderService.getById(po.id)
+      
+      const [prsData, srsData, suppliersData] = await Promise.all([
+        purchaseRequestService.getAll('all', { status: 'For Purchase' }),
+        serviceRequestService.getAll(),
+        supplierService.getAll()
+      ])
+      const eligiblePrs = (prsData || []).filter(isEligibleDebtPRForPO)
+      setPrs(eligiblePrs)
+      setSrs(srsData.filter(sr => sr.status === 'Approved' || sr.status === 'For Super Admin Final Approval'))
+      const suppliersList = Array.isArray(suppliersData) ? suppliersData : (suppliersData?.suppliers ?? [])
+      setSuppliers(suppliersList)
+
+      setSourceType(fullPO.purchase_request_id ? 'pr' : 'sr')
+      setSelectedPR(fullPO.purchase_request_id || '')
+      setSelectedSR(fullPO.service_request_id || '')
+      setSelectedSupplier(fullPO.supplier_id || '')
+      setExpectedDeliveryDate(fullPO.expected_delivery_date ? fullPO.expected_delivery_date.split('T')[0] : '')
+      setPlaceOfDelivery(fullPO.place_of_delivery || '')
+      setProject(fullPO.project || '')
+      setOrderNumber(fullPO.order_number || '')
+      setDeliveryTerm(fullPO.delivery_term || 'COD')
+      setPaymentTerm(fullPO.payment_term || 'CASH')
+      setNotes(fullPO.notes || '')
+      
+      if (fullPO.items && fullPO.items.length > 0) {
+        setItems(fullPO.items.map(item => ({
+          item_id: item.item_id,
+          item_name: item.item_name,
+          quantity: item.quantity,
+          unit_price: item.unit_price,
+          purchase_request_item_id: item.purchase_request_item_id
+        })))
+      }
+    } catch (err) {
+      console.error('Failed to load form data for edit', err)
+      alert('Failed to load PO details for editing.')
+      closeCreateModal()
+    } finally {
+      setLoadingForm(false)
+    }
+  }
+
   const closeCreateModal = () => {
     setShowCreateModal(false)
+    setShowEditModal(false)
+    setEditingId(null)
     resetForm()
   }
 
@@ -348,10 +400,19 @@ const PurchaseOrders = () => {
         items: normalizedItems,
         save_as_draft: saveAsDraft
       }
-      await purchaseOrderService.create(poData)
+      if (editingId) {
+        const poToEdit = purchaseOrders.find(p => p.id === editingId);
+        if (poToEdit && (poToEdit.status === 'Rejected' || poToEdit.status === 'Cancelled' || poToEdit.status === 'On Hold')) {
+            await purchaseOrderService.resubmit(editingId, poData);
+        } else {
+            await purchaseOrderService.update(editingId, poData);
+        }
+      } else {
+        await purchaseOrderService.create(poData);
+      }
       await fetchPurchaseOrders()
       closeCreateModal()
-      alert(saveAsDraft ? 'Saved as draft!' : 'Purchase Order created successfully and is pending approval!')
+      alert(saveAsDraft ? 'Saved as draft!' : (editingId ? 'Purchase Order updated successfully!' : 'Purchase Order created successfully and is pending approval!'))
     } catch (err) {
       alert('Failed to create PO: ' + (err.response?.data?.message || err.message))
     } finally {
@@ -606,7 +667,7 @@ const PurchaseOrders = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-auto">
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-gray-900">Create Purchase Order</h3>
+              <h3 className="text-lg font-semibold text-gray-900">{editingId ? "Edit Purchase Order" : "Create Purchase Order"}</h3>
               <button onClick={closeCreateModal} className="text-gray-400 hover:text-gray-600">
                 <X className="w-5 h-5" />
               </button>
@@ -846,7 +907,7 @@ const PurchaseOrders = () => {
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeCreateModal}>Cancel</Button>
                   <Button type="button" variant="secondary" disabled={submitting} onClick={(e) => handleSubmit(e, true)}>{submitting ? 'Saving...' : 'Save as Draft'}</Button>
-                  <Button type="button" disabled={submitting} onClick={(e) => handleSubmit(e, false)}>{submitting ? 'Creating...' : 'Create Purchase Order'}</Button>
+                  <Button type="button" disabled={submitting} onClick={(e) => handleSubmit(e, false)}>{submitting ? 'Saving...' : (editingId ? (purchaseOrders.find(p => p.id === editingId)?.status === 'Cancelled' || purchaseOrders.find(p => p.id === editingId)?.status === 'On Hold' ? 'Save & Resubmit' : 'Update Purchase Order') : 'Create Purchase Order')}</Button>
                 </div>
               </form>
             )}

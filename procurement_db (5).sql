@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Aug 13, 2026 at 01:30 AM
+-- Generation Time: Aug 14, 2026 at 03:19 AM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -348,7 +348,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `recipient_id` (`recipient_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=319 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=335 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `notifications`
@@ -454,7 +454,23 @@ INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `
 (315, 6, 'PR Ready for Procurement Review', 'Purchase Request 2026-08-011 has been reviewed by admins and is ready for procurement review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:42'),
 (316, 8, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
 (317, 10, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
-(318, 5, 'PR Values Modified by Procurement', 'Procurement modified values in your PR 2026-08-011: Circuit Breaker 20A: unit price from ₱23.00 to ₱23, unit from \"null\" to \"pcs\"', 'PR Modified', 46, 'purchase_request', 0, '2026-08-12 07:15:18');
+(318, 5, 'PR Values Modified by Procurement', 'Procurement modified values in your PR 2026-08-011: Circuit Breaker 20A: unit price from ₱23.00 to ₱23, unit from \"null\" to \"pcs\"', 'PR Modified', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
+(319, 14, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
+(320, 16, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
+(321, 8, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
+(322, 10, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
+(323, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 0, '2026-08-13 01:43:04'),
+(324, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 0, '2026-08-13 01:43:04'),
+(325, 14, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
+(326, 16, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
+(327, 8, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
+(328, 10, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
+(329, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 0, '2026-08-13 01:54:01'),
+(330, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 0, '2026-08-13 01:54:01'),
+(331, 8, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 0, '2026-08-13 01:56:32'),
+(332, 10, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 0, '2026-08-13 01:56:32'),
+(333, 5, 'PR Rejected', 'Your Purchase Request 2026-08-010 has been rejected', 'PR Rejected', 45, 'purchase_request', 0, '2026-08-14 00:31:09'),
+(334, 7, 'PR Rejected', 'Your Purchase Request 2026-08-014 has been rejected', 'PR Rejected', 49, 'purchase_request', 0, '2026-08-14 00:31:39');
 
 -- --------------------------------------------------------
 
@@ -655,7 +671,7 @@ CREATE TABLE IF NOT EXISTS `pricing_history` (
   KEY `idx_pricing_supplier_id` (`supplier_id`),
   KEY `idx_pricing_date` (`date_recorded`),
   KEY `idx_pricing_po` (`purchase_order_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=166 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=167 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `pricing_history`
@@ -799,7 +815,8 @@ INSERT INTO `pricing_history` (`id`, `item_id`, `supplier_id`, `unit_price`, `qu
 (162, 282, 2, 1000.00, 1.00, 1000.00, 33, 54, 'ETN-2026-04-002', 'EMT-2026-04-002', '2026-04-13', 'Auto-recorded from PO ETN-2026-04-002', NULL, '2026-04-13 07:51:37', '2026-04-13 07:51:37'),
 (163, 173, 4, 500.00, 1.00, 500.00, 34, 55, 'ETN-2026-04-003', 'MTN-2026-04-001', '2026-04-14', 'Auto-recorded from PO ETN-2026-04-003', NULL, '2026-04-14 01:49:26', '2026-04-14 01:49:26'),
 (164, 282, 4, 1000.00, 1.00, 1000.00, 34, 55, 'ETN-2026-04-003', 'MTN-2026-04-001', '2026-04-14', 'Auto-recorded from PO ETN-2026-04-003', NULL, '2026-04-14 01:49:26', '2026-04-14 01:49:26'),
-(165, 173, 4, 1000.00, 1.00, 1000.00, 35, 69, 'ETN-2026-04-001', 'MTN-2026-04-001', '2026-04-16', 'Auto-recorded from PO ETN-2026-04-001', NULL, '2026-04-16 05:27:43', '2026-04-16 05:27:43');
+(165, 173, 4, 1000.00, 1.00, 1000.00, 35, 69, 'ETN-2026-04-001', 'MTN-2026-04-001', '2026-04-16', 'Auto-recorded from PO ETN-2026-04-001', NULL, '2026-04-16 05:27:43', '2026-04-16 05:27:43'),
+(166, 5, 47, 12.00, 1.00, 12.00, 2, 48, 'EAN-2026-08-001', '2026-08-013', '2026-08-13', 'Auto-recorded from PO EAN-2026-08-001', NULL, '2026-08-13 01:56:32', '2026-08-13 01:56:32');
 
 -- --------------------------------------------------------
 
@@ -866,14 +883,15 @@ CREATE TABLE IF NOT EXISTS `purchase_orders` (
   KEY `idx_po_type` (`po_type`),
   KEY `idx_po_parent_po_id` (`parent_po_id`),
   KEY `idx_po_installment_schedule_id` (`installment_schedule_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=3 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_orders`
 --
 
 INSERT INTO `purchase_orders` (`id`, `po_number`, `purchase_request_id`, `service_request_id`, `supplier_id`, `prepared_by`, `total_amount`, `po_date`, `expected_delivery_date`, `actual_delivery_date`, `status`, `created_at`, `updated_at`, `place_of_delivery`, `delivery_term`, `payment_term`, `project`, `notes`, `order_number`, `po_type`, `parent_po_id`, `installment_schedule_id`, `scheduled_payment_date`, `scheduled_amount`) VALUES
-(1, 'PO-2026-0001', 1, NULL, 10, 2, 75250.00, '2026-05-22', '2026-05-29', NULL, 'Approved', '2026-05-22 02:41:53', '2026-05-29 01:45:51', 'Main Warehouse, Site A', 'COD', 'CASH', 'Project Alpha Phase 1', 'Standard mock order for system testing and procurement validation.', 'ORD-99541', 'purchase_order', NULL, NULL, NULL, NULL);
+(1, 'PO-2026-0001', 1, NULL, 10, 2, 75250.00, '2026-05-22', '2026-05-29', NULL, 'Approved', '2026-05-22 02:41:53', '2026-05-29 01:45:51', 'Main Warehouse, Site A', 'COD', 'CASH', 'Project Alpha Phase 1', 'Standard mock order for system testing and procurement validation.', 'ORD-99541', 'purchase_order', NULL, NULL, NULL, NULL),
+(2, 'EAN-2026-08-001', 48, NULL, 47, 7, 12.00, '2026-08-13', '2026-08-14', NULL, 'Pending Approval', '2026-08-13 01:56:32', '2026-08-13 01:56:32', NULL, 'COD', 'CASH', 'BCDA - Admin', NULL, '393859493', 'purchase_order', NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -895,7 +913,14 @@ CREATE TABLE IF NOT EXISTS `purchase_order_items` (
   KEY `purchase_order_id` (`purchase_order_id`),
   KEY `purchase_request_item_id` (`purchase_request_item_id`),
   KEY `item_id` (`item_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `purchase_order_items`
+--
+
+INSERT INTO `purchase_order_items` (`id`, `purchase_order_id`, `purchase_request_item_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `created_at`) VALUES
+(1, 2, 50, 5, 1, 12.00, 12.00, '2026-08-13 01:56:32');
 
 --
 -- Triggers `purchase_order_items`
@@ -1006,7 +1031,7 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   KEY `supplier_id` (`supplier_id`),
   KEY `payment_basis` (`payment_basis`),
   KEY `purchase_requests_payment_terms_set_by_fk` (`payment_terms_set_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=47 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=50 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_requests`
@@ -1022,8 +1047,11 @@ INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `
 (42, '2026-08-007', 5, 'Pang pasita baby', NULL, '2026-08-21', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-12 02:45:02', NULL, 4910.98, '2026-08-12 02:29:38', '2026-08-12 02:45:02', NULL, 'San Juan, La Union', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, 0),
 (43, '2026-08-008', 5, 'Para jay balay para bagyo', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 1324.00, '2026-08-12 03:23:21', '2026-08-12 03:24:58', NULL, 'Ijay igdi lacong', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, 0),
 (44, '2026-08-009', 5, 'QSD', '', '2026-08-14', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 213.00, '2026-08-12 06:44:50', '2026-08-12 06:46:26', NULL, 'asd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Admin Review', NULL, NULL, NULL, 123.00, '2026-08-12 06:56:28', '2026-08-12 06:57:39', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(46, '2026-08-011', 5, 'asfdasdf', '', '2026-08-29', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 23.00, '2026-08-12 07:10:56', '2026-08-12 07:15:18', 47, 'sdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, '', NULL, 1);
+(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'ADXAs', 123.00, '2026-08-12 06:56:28', '2026-08-14 00:31:09', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
+(46, '2026-08-011', 5, 'asfdasdf', '', '2026-08-29', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 23.00, '2026-08-12 07:10:56', '2026-08-12 07:15:18', 47, 'sdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, '', NULL, 1),
+(47, '2026-08-012', 7, 'QWAFD', NULL, '2026-08-20', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-13 01:43:25', NULL, 12.00, '2026-08-13 01:42:45', '2026-08-13 01:43:25', NULL, 'QDasd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
+(48, '2026-08-013', 7, 'asdf', NULL, '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'PO Created', 8, '2026-08-13 01:54:19', NULL, 12.00, '2026-08-13 01:53:35', '2026-08-13 01:56:32', NULL, 'asd', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
+(49, '2026-08-014', 7, 'asda', '', '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'QASAs', 123.00, '2026-08-14 00:30:56', '2026-08-14 00:31:39', NULL, 'asdas', '393859493', 'debt', NULL, NULL, NULL, NULL, 'as', NULL, 0);
 
 -- --------------------------------------------------------
 
@@ -1049,7 +1077,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_items` (
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `item_id` (`item_id`),
   KEY `received_by` (`received_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=49 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_items`
@@ -1069,7 +1097,10 @@ INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `q
 (45, 43, 5, 1, 1324.00, 1324.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 03:23:21'),
 (46, 44, 5, 1, 213.00, 213.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:44:50'),
 (47, 45, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:56:28'),
-(48, 46, 14, 1, 23.00, 23.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-08-12 07:10:56');
+(48, 46, 14, 1, 23.00, 23.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-08-12 07:10:56'),
+(49, 47, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:42:45'),
+(50, 48, 5, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:53:35'),
+(51, 49, 22, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 00:30:56');
 
 -- --------------------------------------------------------
 
@@ -1113,7 +1144,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_reviews` (
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `reviewer_id` (`reviewer_id`),
   KEY `review_status` (`review_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=288 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=300 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_reviews`
@@ -1173,7 +1204,7 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (273, 45, 12, 'approved', NULL, '2026-08-12 06:56:44', '2026-08-12 06:56:28'),
 (274, 45, 13, 'approved', NULL, '2026-08-12 06:57:18', '2026-08-12 06:56:28'),
 (275, 45, 7, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
-(276, 45, 14, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
+(276, 45, 14, 'rejected', 'ADXAs', '2026-08-14 00:31:09', '2026-08-12 06:56:28'),
 (277, 45, 16, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
 (278, 45, 8, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
 (279, 45, 10, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
@@ -1184,7 +1215,19 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (284, 46, 16, 'approved', NULL, '2026-08-12 07:11:33', '2026-08-12 07:10:56'),
 (285, 46, 6, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
 (286, 46, 8, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
-(287, 46, 10, 'pending', NULL, NULL, '2026-08-12 07:10:56');
+(287, 46, 10, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
+(288, 47, 14, 'approved', NULL, '2026-08-13 01:42:54', '2026-08-13 01:42:45'),
+(289, 47, 16, 'approved', NULL, '2026-08-13 01:43:04', '2026-08-13 01:42:45'),
+(290, 47, 8, 'pending', NULL, NULL, '2026-08-13 01:42:45'),
+(291, 47, 10, 'pending', NULL, NULL, '2026-08-13 01:42:45'),
+(292, 48, 14, 'approved', NULL, '2026-08-13 01:53:52', '2026-08-13 01:53:35'),
+(293, 48, 16, 'approved', NULL, '2026-08-13 01:54:01', '2026-08-13 01:53:35'),
+(294, 48, 8, 'pending', NULL, NULL, '2026-08-13 01:53:35'),
+(295, 48, 10, 'pending', NULL, NULL, '2026-08-13 01:53:35'),
+(296, 49, 14, 'rejected', 'QASAs', '2026-08-14 00:31:39', '2026-08-14 00:31:25'),
+(297, 49, 16, 'pending', NULL, NULL, '2026-08-14 00:31:25'),
+(298, 49, 8, 'pending', NULL, NULL, '2026-08-14 00:31:25'),
+(299, 49, 10, 'pending', NULL, NULL, '2026-08-14 00:31:25');
 
 -- --------------------------------------------------------
 
@@ -1385,7 +1428,7 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
   UNIQUE KEY `supplier_code` (`supplier_code`),
   UNIQUE KEY `email` (`email`),
   KEY `fk_accredited_by` (`accredited_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=69 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `suppliers`
@@ -1414,7 +1457,8 @@ INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person
 (65, 'SUP63034425', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Active', '2026-06-09 01:13:50', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
 (66, 'SUP16634148', 'This is just for testing', NULL, NULL, NULL, 'Mangaan, Santol, La Union', 'Active', '2026-06-19 03:52:46', '2026-06-19 03:52:57', 1, 8, '2026-06-19 03:52:57', NULL, NULL),
 (67, 'SUP80713854', 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, NULL, 'San Juan, La Union', 'Active', '2026-08-12 02:30:07', '2026-08-12 02:30:09', 1, 8, '2026-08-12 02:30:09', NULL, NULL),
-(68, 'SUP01041444', 'NI mang dante', NULL, NULL, NULL, 'Ijay igdi lacong', 'Active', '2026-08-12 03:23:30', '2026-08-12 03:23:32', 1, 8, '2026-08-12 03:23:32', NULL, NULL);
+(68, 'SUP01041444', 'NI mang dante', NULL, NULL, NULL, 'Ijay igdi lacong', 'Active', '2026-08-12 03:23:30', '2026-08-12 03:23:32', 1, 8, '2026-08-12 03:23:32', NULL, NULL),
+(69, 'SUP48368464', 'as', NULL, NULL, NULL, 'asdas', 'Active', '2026-08-14 00:31:23', '2026-08-14 00:31:25', 1, 8, '2026-08-14 00:31:25', NULL, NULL);
 
 -- --------------------------------------------------------
 

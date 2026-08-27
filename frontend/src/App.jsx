@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './contexts/AuthContext';
 import { socketService } from './services/socket';
-import { notificationService } from './services/notifications';
+import { notificationService, urlBase64ToUint8Array } from './services/notifications';
 import Layout from './components/layout/Layout';
 import AppRoutes from './routes/AppRoutes';
 import './App.css';
@@ -24,6 +24,35 @@ function App() {
         console.log('Received notification:', data);
         setNotifications(prev => [data, ...prev]);
       });
+
+      // Register Push Notifications
+      const registerPush = async () => {
+        if ('serviceWorker' in navigator && 'PushManager' in window) {
+          try {
+            const registration = await navigator.serviceWorker.register('/sw.js');
+            console.log('Service Worker registered');
+            
+            // Ask for permission
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+              const publicKey = await notificationService.getVapidPublicKey();
+              const applicationServerKey = urlBase64ToUint8Array(publicKey);
+              
+              const subscription = await registration.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey
+              });
+              
+              await notificationService.subscribeToPush(subscription);
+              console.log('Push notification subscribed');
+            }
+          } catch (error) {
+            console.error('Error during service worker registration or push subscription:', error);
+          }
+        }
+      };
+      
+      registerPush();
     }
     
     return () => {

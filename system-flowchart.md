@@ -7,35 +7,33 @@
 │                           PROCUREMENT SYSTEM                                │
 └─────────────────────────────────────────────────────────────────────────────┘
 
-┌──────────────┐      ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-│   ENGINEER   │      │ PROCUREMENT  │      │    ADMIN     │      │ SUPER ADMIN  │
-│   (Requester)│      │   (Reviewer) │      │(PO Creator)  │      │  (Approver)  │
-└──────┬───────┘      └──────┬───────┘      └──────┬───────┘      └──────┬───────┘
-       │                     │                     │                     │
-       │  1. Create PR       │                     │                     │
-       │────────────────────>│                     │                     │
-       │                     │                     │                     │
-       │                     │  2. First Review    │                     │
-       │                     │────────────────────>│                     │
-       │                     │                     │                     │
-       │                     │                     │  3. Proc Review     │
-       │                     │<────────────────────│                     │
-       │                     │                     │                     │
-       │                     │  4. Second Review   │                     │
-       │                     │────────────────────>│                     │
-       │                     │                     │                     │
-       │                     │                     │  5. Create PO       │
-       │                     │                     │─────┐               │
-       │                     │                     │     │               │
-       │                     │                     │<────┘               │
-       │                     │                     │                     │
-       │                     │                     │  6. Final Approval  │
-       │                     │                     │────────────────────>│
-       │                     │                     │                     │
-       │  7. Receive Items   │                     │                     │
-       │<───────────────────────────────────────────────────────────────-│
-       │                     │                     │                     │
-       ▼                     ▼                     ▼                     ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PROCUREMENT SYSTEM                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+│   ENGINEER   │      │    ADMIN     │      │ SUPER ADMIN  │
+│   (Requester)│      │(PO Creator)  │      │  (Approver)  │
+└──────┬───────┘      └──────┬───────┘      └──────┬───────┘
+       │                     │                     │
+       │  1. Create PR       │                     │
+       │────────────────────>│                     │
+       │                     │                     │
+       │  2. Admin Review    │                     │
+       │<────────────────────│                     │
+       │                     │                     │
+       │                     │  3. Create PO       │
+       │                     │─────┐               │
+       │                     │     │               │
+       │                     │<────┘               │
+       │                     │                     │
+       │                     │  4. Final Approval  │
+       │                     │────────────────────>│
+       │                     │                     │
+       │  5. Receive Items   │                     │
+       │<──────────────────────────────────────────│
+       │                     │                     │
+       ▼                     ▼                     ▼
 ```
 
 ---
@@ -46,7 +44,7 @@
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │                     PR APPROVAL FLOW - OVERVIEW                              │
 │                                                                              │
-│  Engineer → Engineer Review → Admin Review → Procurement Review → Super Admin│
+│  Engineer → Engineer Review → Admin Review → Super Admin│
 └──────────────────────────────────────────────────────────────────────────────┘
 
 ─────────────────────────────────────
@@ -80,6 +78,7 @@
  Step 3)          │ PR sent back to the     │
                   │ Engineer who created it │
                   │ to EDIT the PR          │
+                  │ (Notifies requester)    │
                   │ Status: RETURNED        │
                   └─────────────────────────┘
                             │
@@ -111,6 +110,7 @@
  Step 4)          │ PR sent back to the     │
                   │ Engineer who created it │
                   │ to EDIT the PR          │
+                  │ (Notifies requester)    │
                   │ Status: RETURNED        │
                   └─────────────────────────┘
                             │
@@ -124,37 +124,7 @@
                                 └──► (Back to Step 2)
 
 ─────────────────────────────────────
- STEP 4: Procurement Review PR
-─────────────────────────────────────
-
-┌──────────────────────────────┐
-│ Procurement                  │
-│ Reviews PR                   │
-└──────────────┬───────────────┘
-               │
-      ┌────────┴────────┐
-      │                 │
-   APPROVED         DISAPPROVED
-      │                 │
-      ▼                 ▼
-(Proceed to       ┌─────────────────────────┐
- Step 5)          │ PR sent back to the     │
-                  │ Engineer who created it │
-                  │ to EDIT the PR          │
-                  │ Status: RETURNED        │
-                  └─────────────────────────┘
-                            │
-                            ▼
-                  ┌─────────────────────────┐
-                  │ Engineer edits & re-    │
-                  │ submits PR              │
-                  │ Status: PENDING         │
-                  └─────────────┬───────────┘
-                                │
-                                └──► (Back to Step 2)
-
-─────────────────────────────────────
- STEP 5: Super Admin Review PR
+ STEP 4: Super Admin Review PR
 ─────────────────────────────────────
 
 ┌──────────────────────────────┐
@@ -171,7 +141,8 @@
 │ Status:         │  │ PR sent back to the     │
 │ FOR PURCHASE    │  │ Engineer who created it │
 │ Notify Admin    │  │ to EDIT the PR          │
-└─────────────────┘  │ Status: RETURNED        │
+└─────────────────┘  │ (Notifies requester)    │
+                  │ Status: RETURNED        │
                      └─────────────────────────┘
                                │
                                ▼
@@ -287,6 +258,7 @@
  Step 4)          │ PO sent back to the     │
                   │ Admin who created it    │
                   │ to EDIT the PO          │
+                  │ (Notifies requester)    │
                   │ Status: REJECTED        │
                   └─────────────────────────┘
                             │
@@ -380,22 +352,21 @@
 ## 4. USER ROLES & PERMISSIONS MATRIX
 
 ```
-┌────────────────────┬──────────┬─────────────┬───────┬─────────────┐
-│      FEATURE       │ Engineer │ Procurement │ Admin │ Super Admin │
-├────────────────────┼──────────┼─────────────┼───────┼─────────────┤
-│ Browse Items       │    ✓     │      ✓      │   ✓   │      ✓      │
-│ Create PR          │    ✓     │      ✗      │   ✗   │      ✗      │
-│ Approve PR (1st)   │    ✗     │      ✗      │   ✗   │      ✓      │
-│ Approve PR (Proc)  │    ✗     │      ✓      │   ✗   │      ✗      │
-│ Approve PR (2nd)   │    ✗     │      ✗      │   ✗   │      ✓      │
-│ Create PO          │    ✗     │      ✗      │   ✓   │      ✗      │
-│ Approve PO (Final) │    ✗     │      ✗      │   ✗   │      ✓      │
-│ Mark Items Received│    ✓     │      ✗      │   ✗   │      ✗      │
-│ Manage Items       │    ✗     │      ✓      │   ✓   │      ✗      │
-│ Manage Suppliers   │    ✗     │      ✗      │   ✓   │      ✗      │
-│ View All PRs/POs   │    ✗     │      ✓      │   ✓   │      ✓      │
-│ System Settings    │    ✗     │      ✗      │   ✗   │      ✓      │
-└────────────────────┴──────────┴─────────────┴───────┴─────────────┘
+┌────────────────────┬──────────┬───────┬─────────────┐
+│      FEATURE       │ Engineer │ Admin │ Super Admin │
+├────────────────────┼──────────┼───────┼─────────────┤
+│ Browse Items       │    ✓     │   ✓   │      ✓      │
+│ Create PR          │    ✓     │   ✗   │      ✗      │
+│ Approve PR (1st)   │    ✗     │   ✗   │      ✓      │
+│ Approve PR (2nd)   │    ✗     │   ✗   │      ✓      │
+│ Create PO          │    ✗     │   ✓   │      ✗      │
+│ Approve PO (Final) │    ✗     │   ✗   │      ✓      │
+│ Mark Items Received│    ✓     │   ✗   │      ✗      │
+│ Manage Items       │    ✗     │   ✓   │      ✗      │
+│ Manage Suppliers   │    ✗     │   ✓   │      ✗      │
+│ View All PRs/POs   │    ✗     │   ✓   │      ✓      │
+│ System Settings    │    ✗     │   ✗   │      ✓      │
+└────────────────────┴──────────┴───────┴─────────────┘
 ```
 
 ---
@@ -489,14 +460,6 @@
 │ Creates SR      │
 │ Status: PENDING │
 └────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│ Procurement     │ NO  │ Notify Engineer │
-│ Reviews SR      │────>│ Status: REJECTED│
-│ Approve?        │     │ (with reason)   │
-└────────┬────────┘     └─────────────────┘
-       YES │
          │
          ▼
 ┌─────────────────┐

@@ -1,5 +1,7 @@
 import db from '../config/database.js';
 import { emitToUser } from './socket.js';
+import { sendEmail } from './emailSender.js';
+import { sendPushNotification } from './pushSender.js';
 
 /**
  * Create a notification for a user
@@ -18,8 +20,7 @@ export async function createNotification(recipientId, title, message, type = 'Sy
       VALUES (?, ?, ?, ?, ?, ?, false, NOW())
     `, [recipientId, title, message, type, relatedId, relatedType]);
     
-    // Emit real-time notification to the user
-    emitToUser(recipientId, 'notification', {
+    const notificationPayload = {
       id: result.insertId,
       title,
       message,
@@ -28,8 +29,29 @@ export async function createNotification(recipientId, title, message, type = 'Sy
       related_type: relatedType,
       is_read: false,
       created_at: new Date().toISOString()
-    });
+    };
+
+    // Emit real-time notification to the user
+    emitToUser(recipientId, 'notification', notificationPayload);
     
+    // Background tasks: Push and Email
+    // Push notification
+    sendPushNotification(recipientId, notificationPayload).catch(err => console.error('Push error:', err));
+    
+    // Email notification
+    db.query('SELECT email FROM employees WHERE id = ?', [recipientId])
+      .then(([rows]) => {
+        if (rows.length > 0 && rows[0].email) {
+          const html = `
+            <h2>${title}</h2>
+            <p>${message}</p>
+            <p><small>Type: ${type}</small></p>
+          `;
+          sendEmail(rows[0].email, title, html).catch(err => console.error('Email error:', err));
+        }
+      })
+      .catch(err => console.error('Error fetching email for notification:', err));
+
     return result.insertId;
   } catch (error) {
     console.error('Failed to create notification:', error);

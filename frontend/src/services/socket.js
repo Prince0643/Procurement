@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 import { clearApiCache } from './api';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://procurement-api.xandree.com';
+const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:5001';
 
 class SocketService {
   constructor() {

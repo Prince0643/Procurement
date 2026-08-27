@@ -67,6 +67,10 @@ export const purchaseOrderService = {
     return response.data;
   },
 
+  update: async (id, poData) => {
+    const response = await api.put(`/purchase-orders/${id}`, poData);
+    return response.data;
+  },
   resubmit: async (id, poData) => {
     const response = await api.put(`/purchase-orders/${id}/resubmit`, poData);
     return response.data;
@@ -90,6 +94,16 @@ export const purchaseOrderService = {
 
   deleteAttachment: async (id, attachmentId) => {
     const response = await api.delete(`/purchase-orders/${id}/attachments/${attachmentId}`);
+    return response.data;
+  },
+
+  adminReview: async (id, status, comment) => {
+    const response = await api.post(`/purchase-orders/${id}/admin-review`, { status, comment });
+    return response.data;
+  },
+
+  receiveItems: async (id, items) => {
+    const response = await api.post(`/purchase-orders/${id}/receive`, { items });
     return response.data;
   }
 };

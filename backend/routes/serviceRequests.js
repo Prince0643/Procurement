@@ -1,7 +1,7 @@
 import express from 'express';
-import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getProcurementOfficers, getSuperAdmins, getAdmins } from '../utils/notifications.js';
+import { createNotification, getSuperAdmins, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';
@@ -501,7 +501,7 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     await conn.beginTransaction();
 
     await conn.query(
-      "UPDATE service_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
+      "UPDATE service_requests SET status = 'For Admin Review', updated_at = NOW() WHERE id = ?",
       [req.params.id]
     );
 
@@ -511,7 +511,7 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     const procurementOfficers = await getProcurementOfficers();
     for (const officerId of procurementOfficers) {
       await createNotification(
-        officerId,
+        adminId,
         'New Service Request',
         `Service Request ${sr.sr_number} has been submitted and requires your review`,
         'PR Created',
@@ -521,14 +521,14 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     }
 
     // Emit real-time SR update to procurement officers
-    req.io.to('role_procurement').emit('sr_updated', {
+    req.io.to('role_admin').emit('sr_updated', {
       id: sr.id,
       sr_number: sr.sr_number,
-      status: 'For Procurement Review',
+      status: 'For Admin Review',
       type: 'new_sr'
     });
 
-    res.json({ message: 'Service request submitted successfully', status: 'For Procurement Review' });
+    res.json({ message: 'Service request submitted successfully', status: 'For Admin Review' });
   } catch (error) {
     if (conn) {
       try {
@@ -544,8 +544,8 @@ router.put('/:id/submit', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject by Procurement (to Super Admin Final Approval)
-router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
+// Approve/Reject by Admin (to Super Admin Final Approval)
+router.put('/:id/admin-approve', authenticate, requireAdmin, async (req, res) => {
   let conn;
   try {
     const { status, rejection_reason, supplier_id, supplier_address } = req.body;
@@ -561,9 +561,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     
     const sr = srs[0];
     
-    if (sr.status !== 'For Procurement Review') {
+    if (sr.status !== 'For Admin Review') {
       await conn.rollback();
-      return res.status(400).json({ message: 'Service request not ready for Procurement review' });
+      return res.status(400).json({ message: 'Service request not ready for Admin review' });
     }
     
     let newStatus;
@@ -601,13 +601,13 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     const srData = srs[0];
 
     if (status === 'approved') {
-      // Procurement approved - notify Super Admin for final approval
+      // Admin approved - notify Super Admin for final approval
       const superAdmins = await getSuperAdmins();
       for (const adminId of superAdmins) {
         await createNotification(
           adminId,
           'SR Pending Final Approval',
-          `Service Request ${srData.sr_number} has been reviewed by Procurement and requires your final approval`,
+          `Service Request ${srData.sr_number} has been reviewed by Admin and requires your final approval`,
           'PR Approved',
           req.params.id,
           'service_request'
@@ -617,8 +617,8 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       // Rejected - notify engineer
       await createNotification(
         srData.requested_by,
-        'Service Request Rejected by Procurement',
-        `Your Service Request ${srData.sr_number} has been rejected by Procurement${rejection_reason ? ': ' + rejection_reason : ''}`,
+        'Service Request Rejected by Admin',
+        `Your Service Request ${srData.sr_number} has been rejected by Admin${rejection_reason ? ': ' + rejection_reason : ''}. Please edit and resubmit your request.`,
         'PR Rejected',
         req.params.id,
         'service_request'
@@ -631,16 +631,16 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       sr_number: srData.sr_number,
       status: newStatus,
       type: 'status_update',
-      updated_by: 'procurement'
+      updated_by: 'admin'
     });
 
-    res.json({ message: `Service request ${status} by Procurement successfully`, status: newStatus });
+    res.json({ message: `Service request ${status} by Admin successfully`, status: newStatus });
   } catch (error) {
     if (conn) await conn.rollback();
     if (error?.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
-    console.error('Procurement approval error:', error);
+    console.error('Admin approval error:', error);
     res.status(500).json({ message: 'Failed to update service request: ' + error.message });
   } finally {
     if (conn) conn.release();
@@ -718,7 +718,7 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       await createNotification(
         sr.requested_by,
         'Service Request Rejected',
-        `Your Service Request ${sr.sr_number} has been rejected by Super Admin${rejection_reason ? ': ' + rejection_reason : ''}`,
+        `Your Service Request ${sr.sr_number} has been rejected by Super Admin${rejection_reason ? ': ' + rejection_reason : ''}. Please edit and resubmit your request.`,
         'PR Rejected',
         sr.id,
         'service_request'
@@ -788,32 +788,58 @@ router.put('/:id/received', authenticate, async (req, res) => {
   }
 });
 
-// Delete Service Request (Draft only, engineer only)
+// Delete Service Request (Draft only for creator, any status for Super Admin)
 router.delete('/:id', authenticate, async (req, res) => {
+  let conn;
   try {
+    const isSuperAdmin = req.user.role === 'super_admin';
     const [srs] = await db.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
+    
     if (srs.length === 0) {
       return res.status(404).json({ message: 'Service request not found' });
     }
 
     const sr = srs[0];
 
-    // Only the original requester can delete
-    if (sr.requested_by !== req.user.id) {
-      return res.status(403).json({ message: 'Only the original requester can delete this service request' });
+    // Access control check
+    if (!isSuperAdmin) {
+      if (sr.requested_by !== req.user.id) {
+        return res.status(403).json({ message: 'Only the original requester can delete this service request' });
+      }
+      if (sr.status !== 'Draft') {
+        return res.status(400).json({ message: 'Only draft service requests can be deleted' });
+      }
     }
 
-    // Only draft SRs can be deleted
-    if (sr.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft service requests can be deleted' });
-    }
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    await db.query('DELETE FROM service_requests WHERE id = ?', [req.params.id]);
+    await conn.query('DELETE FROM service_request_items WHERE service_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM service_request_reviews WHERE service_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM service_requests WHERE id = ?', [req.params.id]);
+
+    await conn.commit();
+
+    if (isSuperAdmin) {
+      try {
+        const { logAudit } = await import('../utils/auditLogger.js');
+        await logAudit(req.user.id, 'Request Deleted', 'service_requests', req.params.id, JSON.stringify({ sr_number: sr.sr_number }));
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+    }
 
     res.json({ message: 'Service request deleted successfully' });
   } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {}
+    }
     console.error('Delete service request error:', error);
     res.status(500).json({ message: 'Failed to delete service request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -972,6 +998,82 @@ router.get('/:id/export', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Failed to export service request', error);
     res.status(500).json({ message: 'Failed to export service request: ' + error.message });
+  }
+});
+
+
+// Resubmit rejected Service Request
+router.put('/:id/resubmit', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { purpose, description, service_type, sr_type, project, project_address, supplier_id, amount, quantity, unit, date_needed, remarks, order_number, payment_terms_note } = req.body;
+    const finalSrType = service_type === 'Emergency/Direct Purchase' ? 'payment_request' : sr_type;
+    const normalizedPaymentTermsNote = (payment_terms_note || '').trim() || null;
+
+    conn = await db.getConnection();
+    
+    // Check if SR exists and is rejected
+    const [srs] = await conn.query('SELECT * FROM service_requests WHERE id = ?', [req.params.id]);
+    if (srs.length === 0) {
+      return res.status(404).json({ message: 'Service request not found' });
+    }
+    const sr = srs[0];
+
+    // Only original requester can resubmit
+    if (sr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can resubmit this SR' });
+    }
+
+    // Only rejected SRs can be resubmitted
+    if (sr.status !== 'Rejected') {
+      return res.status(400).json({ message: 'Only rejected service requests can be resubmitted' });
+    }
+
+    await conn.query(
+      `UPDATE service_requests SET 
+        purpose = ?, description = ?, service_type = ?, sr_type = ?, project = ?, project_address = ?, 
+        supplier_id = ?, amount = ?, quantity = ?, unit = ?, date_needed = ?, remarks = ?, order_number = ?, 
+        payment_terms_note = ?, status = 'For Admin Review', updated_at = NOW() 
+       WHERE id = ?`,
+      [
+        purpose, description || null, service_type, finalSrType, project || null, project_address || null,
+        supplier_id || null, amount, finalSrType === 'payment_request' ? quantity : null, unit || null,
+        date_needed || null, remarks || null, order_number || null, normalizedPaymentTermsNote, req.params.id
+      ]
+    );
+
+    // Notify Admins
+    const [admins] = await conn.query("SELECT id FROM employees WHERE role = 'admin' AND is_active = true");
+    for (const admin of admins) {
+      await createNotification(
+        admin.id,
+        'SR Resubmitted',
+        `Service Request ${sr.sr_number} has been resubmitted and requires your review.`,
+        'PR Created',
+        sr.id,
+        'service_request'
+      );
+      if (req.io) {
+        req.io.to(`user_${admin.id}`).emit('notification', {
+          title: 'SR Resubmitted',
+          message: `Service Request ${sr.sr_number} has been resubmitted.`
+        });
+      }
+    }
+
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(req.user.id, 'Request Resubmitted', 'service_requests', sr.id, JSON.stringify({ sr_number: sr.sr_number }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'Service request resubmitted successfully', status: 'For Admin Review' });
+  } catch (error) {
+    console.error('Resubmit SR error:', error);
+    res.status(500).json({ message: 'Failed to resubmit service request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

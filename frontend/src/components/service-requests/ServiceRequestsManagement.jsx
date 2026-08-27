@@ -941,15 +941,15 @@ const ServiceRequestsManagement = () => {
                   >
                     <Download className="w-4 h-4" />
                   </Button>
-                  {(user?.role === 'engineer' || user?.role === 'admin') && sr.status === 'Draft' && sr.requested_by === user?.id && (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)} title="Submit">
-                        <Send className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(sr)} title="Delete">
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </Button>
-                    </>
+                  {((user?.role === 'engineer' || user?.role === 'admin') && sr.status === 'Draft' && sr.requested_by === user?.id) && (
+                    <Button variant="ghost" size="sm" onClick={() => handleSubmit(sr)} title="Submit">
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {(((user?.role === 'engineer' || user?.role === 'admin') && sr.status === 'Draft' && sr.requested_by === user?.id) || user?.role === 'super_admin') && (
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(sr)} title="Delete">
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </Button>
                   )}
                   {user?.role === 'engineer' &&
                     sr.requested_by === user?.id &&

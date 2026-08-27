@@ -783,32 +783,56 @@ router.get('/:id/export', authenticate, async (req, res) => {
   }
 });
 
-// Delete Payment Request (admin only)
+// Delete Payment Request (admin/super admin)
 router.delete('/:id', authenticate, requireAdmin, async (req, res) => {
+  let conn;
   try {
-    const [paymentRequests] = await db.query('SELECT purchase_request_id FROM payment_requests WHERE id = ?', [req.params.id]);
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const [paymentRequests] = await db.query('SELECT pr_number, purchase_request_id FROM payment_requests WHERE id = ?', [req.params.id]);
     if (paymentRequests.length === 0) {
       return res.status(404).json({ message: 'Payment request not found' });
     }
+    const reqData = paymentRequests[0];
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
     // Delete items first (cascade should handle this, but being explicit)
-    await db.query('DELETE FROM payment_request_items WHERE payment_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM payment_request_items WHERE payment_request_id = ?', [req.params.id]);
     
     // Delete payment request
-    await db.query('DELETE FROM payment_requests WHERE id = ?', [req.params.id]);
+    await conn.query('DELETE FROM payment_requests WHERE id = ?', [req.params.id]);
 
     // Revert PR status back to 'For Purchase'
-    if (paymentRequests[0].purchase_request_id) {
-      await db.query(
+    if (reqData.purchase_request_id) {
+      await conn.query(
         "UPDATE purchase_requests SET status = 'For Purchase' WHERE id = ?",
-        [paymentRequests[0].purchase_request_id]
+        [reqData.purchase_request_id]
       );
+    }
+
+    await conn.commit();
+
+    if (isSuperAdmin) {
+      try {
+        const { logAudit } = await import('../utils/auditLogger.js');
+        await logAudit(req.user.id, 'Request Deleted', 'payment_requests', req.params.id, JSON.stringify({ pr_number: reqData.pr_number }));
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
     }
 
     res.json({ message: 'Payment request deleted successfully' });
   } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {}
+    }
     console.error('Failed to delete payment request', error);
     res.status(500).json({ message: 'Failed to delete payment request' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

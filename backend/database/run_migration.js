@@ -26,7 +26,8 @@ async function runMigration() {
     const connection = await pool.getConnection();
     console.log('Connected to database');
     
-    const sqlPath = path.join(__dirname, 'migrations', 'make_middle_initial_nullable.sql');
+    const fileName = process.argv[2] || 'make_middle_initial_nullable.sql';
+    const sqlPath = path.join(__dirname, 'migrations', fileName);
     const sql = fs.readFileSync(sqlPath, 'utf8');
     
     console.log('Running migration from:', sqlPath);

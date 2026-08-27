@@ -59,4 +59,38 @@ router.put('/read-all', authenticate, async (req, res) => {
   }
 });
 
+// Subscribe to push notifications
+router.post('/subscribe', authenticate, async (req, res) => {
+  const subscription = req.body;
+  const employeeId = req.user.id;
+
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ message: 'Invalid subscription' });
+  }
+
+  try {
+    // Check if it already exists
+    const [existing] = await db.query(
+      'SELECT id FROM push_subscriptions WHERE employee_id = ? AND endpoint = ?',
+      [employeeId, subscription.endpoint]
+    );
+
+    if (existing.length === 0) {
+      await db.query(
+        'INSERT INTO push_subscriptions (employee_id, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)',
+        [employeeId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
+      );
+    }
+    res.status(201).json({ message: 'Subscription saved' });
+  } catch (error) {
+    console.error('Failed to save subscription:', error);
+    res.status(500).json({ message: 'Failed to save subscription' });
+  }
+});
+
+// Get VAPID public key
+router.get('/vapid-public-key', (req, res) => {
+  res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
+});
+
 export default router;

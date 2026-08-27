@@ -140,7 +140,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
     
     const [rmbCount] = await db.query(`
       SELECT COUNT(*) as count FROM reimbursements 
-      WHERE status IN ('For Procurement Review', 'For Super Admin Final Approval')
+      WHERE status IN ('For Admin Review', 'For Super Admin Final Approval')
     `);
     
     const totalCount = 
@@ -361,7 +361,7 @@ router.post('/', authenticate, async (req, res) => {
         date_needed || null,
         remarks || null,
         normalizedPaymentTermsNote,
-        'For Procurement Review'
+        'For Admin Review'
       ]
     );
     await replacePaymentSchedules(conn, result.insertId, normalizedPaymentSchedules, req.user.id);
@@ -372,7 +372,7 @@ router.post('/', authenticate, async (req, res) => {
       message: 'Reimbursement created successfully',
       reimbursementId: result.insertId,
       rmb_number: rmbNumber,
-      status: 'For Procurement Review'
+      status: 'For Admin Review'
     });
   } catch (error) {
     if (conn) {
@@ -429,7 +429,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
     
     const [rmbCount] = await db.query(`
       SELECT COUNT(*) as count FROM reimbursements 
-      WHERE status IN ('For Procurement Review', 'For Super Admin Final Approval')
+      WHERE status IN ('For Admin Review', 'For Super Admin Final Approval')
     `);
     
     const totalCount = 
@@ -594,10 +594,10 @@ router.put('/:id/submit', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject reimbursement (procurement, admin, super_admin)
+// Approve/Reject reimbursement (admin, super_admin)
 router.put('/:id/approve', authenticate, async (req, res) => {
-  // Allow procurement, admin, and super_admin to approve
-  if (!['procurement', 'admin', 'super_admin'].includes(req.user.role)) {
+  // Allow admin and super_admin to approve
+  if (!['admin', 'super_admin'].includes(req.user.role)) {
     return res.status(403).json({ message: 'Access denied' });
   }
   
@@ -612,14 +612,14 @@ router.put('/:id/approve', authenticate, async (req, res) => {
 
     const r = rows[0];
 
-    // Procurement can only approve/reject when status is 'For Procurement Review'
-    if (req.user.role === 'procurement' && r.status !== 'For Procurement Review') {
-      return res.status(400).json({ message: 'Reimbursement is not pending procurement review' });
+    // Admin can only approve/reject when status is 'For Admin Review'
+    if (req.user.role === 'admin' && r.status !== 'For Admin Review') {
+      return res.status(400).json({ message: 'Reimbursement is not pending admin review' });
     }
     
     // Admin/Super Admin can approve when status is 'For Super Admin Final Approval' or other pending states
     if (['admin', 'super_admin'].includes(req.user.role)) {
-      if (r.status !== 'For Procurement Review' && r.status !== 'For Super Admin Final Approval' && r.status !== 'Pending') {
+      if (r.status !== 'For Admin Review' && r.status !== 'For Super Admin Final Approval' && r.status !== 'Pending') {
         return res.status(400).json({ message: 'Reimbursement not ready for approval' });
       }
     }
@@ -634,9 +634,9 @@ router.put('/:id/approve', authenticate, async (req, res) => {
         await conn.rollback();
         return res.status(400).json({ message: 'At least one payment schedule is required before approval.' });
       }
-      // If procurement approves, move to 'For Super Admin Final Approval'
+      // If admin approves, move to 'For Super Admin Final Approval'
       // If super admin approves, move to 'For Purchase'
-      if (req.user.role === 'procurement') {
+      if (req.user.role === 'admin') {
         newStatus = 'For Super Admin Final Approval';
       } else {
         newStatus = 'For Purchase';
@@ -658,13 +658,13 @@ router.put('/:id/approve', authenticate, async (req, res) => {
     // Notify the requester
     if (status === 'approved') {
       if (newStatus === 'For Super Admin Final Approval') {
-        // Notify super admins that procurement approved
+        // Notify super admins that admin approved
         const superAdmins = await getSuperAdmins();
         for (const adminId of superAdmins) {
           await createNotification(
             adminId,
             'Reimbursement Pending Final Approval',
-            `Reimbursement ${r.rmb_number} has been approved by procurement and requires your final approval`,
+            `Reimbursement ${r.rmb_number} has been approved by admin and requires your final approval`,
             'PR Approved',
             r.id,
             'reimbursement'
@@ -673,8 +673,8 @@ router.put('/:id/approve', authenticate, async (req, res) => {
       }
       await createNotification(
         r.requested_by,
-        newStatus === 'For Super Admin Final Approval' ? 'Reimbursement Approved by Procurement' : 'Reimbursement Approved',
-        `Your Reimbursement ${r.rmb_number} has been ${newStatus === 'For Super Admin Final Approval' ? 'approved by procurement and is pending final approval' : 'approved'}`,
+        newStatus === 'For Super Admin Final Approval' ? 'Reimbursement Approved by Admin' : 'Reimbursement Approved',
+        `Your Reimbursement ${r.rmb_number} has been ${newStatus === 'For Super Admin Final Approval' ? 'approved by admin and is pending final approval' : 'approved'}`,
         'PR Approved',
         r.id,
         'reimbursement'
@@ -683,7 +683,7 @@ router.put('/:id/approve', authenticate, async (req, res) => {
       await createNotification(
         r.requested_by,
         'Reimbursement Rejected',
-        `Your Reimbursement ${r.rmb_number} has been rejected${rejection_reason ? ': ' + rejection_reason : ''}`,
+        `Your Reimbursement ${r.rmb_number} has been rejected${rejection_reason ? ': ' + rejection_reason : ''}. Please edit and resubmit your request.`,
         'PR Rejected',
         r.id,
         'reimbursement'
@@ -862,57 +862,58 @@ router.delete('/:id/attachments/:attachmentId', authenticate, async (req, res) =
   }
 });
 
-// Delete reimbursement (Draft only)
+// Delete reimbursement (Draft only for creator, any status for Super Admin)
 router.delete('/:id', authenticate, async (req, res) => {
+  let conn;
   try {
+    const isSuperAdmin = req.user.role === 'super_admin';
     const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
+    
     if (rows.length === 0) {
       return res.status(404).json({ message: 'Reimbursement not found' });
     }
 
     const r = rows[0];
 
-    if (r.requested_by !== req.user.id) {
-      return res.status(403).json({ message: 'Only the original requester can delete this reimbursement' });
+    // Access control check
+    if (!isSuperAdmin) {
+      if (r.requested_by !== req.user.id) {
+        return res.status(403).json({ message: 'Only the original requester can delete this reimbursement' });
+      }
+      if (r.status !== 'Draft') {
+        return res.status(400).json({ message: 'Only draft reimbursements can be deleted' });
+      }
     }
 
-    if (r.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft reimbursements can be deleted' });
-    }
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    await db.query('DELETE FROM reimbursements WHERE id = ?', [req.params.id]);
+    await conn.query('DELETE FROM reimbursement_reviews WHERE reimbursement_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM reimbursement_attachments WHERE reimbursement_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM reimbursements WHERE id = ?', [req.params.id]);
+
+    await conn.commit();
+
+    if (isSuperAdmin) {
+      try {
+        const { logAudit } = await import('../utils/auditLogger.js');
+        await logAudit(req.user.id, 'Request Deleted', 'reimbursements', req.params.id, JSON.stringify({ tracking_number: r.tracking_number }));
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+    }
 
     res.json({ message: 'Reimbursement deleted successfully' });
   } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {}
+    }
     console.error('Delete reimbursement error:', error);
     res.status(500).json({ message: 'Failed to delete reimbursement: ' + error.message });
-  }
-});
-
-// Delete reimbursement (Draft only)
-router.delete('/:id', authenticate, async (req, res) => {
-  try {
-    const [rows] = await db.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
-    if (rows.length === 0) {
-      return res.status(404).json({ message: 'Reimbursement not found' });
-    }
-
-    const r = rows[0];
-
-    if (r.requested_by !== req.user.id) {
-      return res.status(403).json({ message: 'Only the original requester can delete this reimbursement' });
-    }
-
-    if (r.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft reimbursements can be deleted' });
-    }
-
-    await db.query('DELETE FROM reimbursements WHERE id = ?', [req.params.id]);
-
-    res.json({ message: 'Reimbursement deleted successfully' });
-  } catch (error) {
-    console.error('Delete reimbursement error:', error);
-    res.status(500).json({ message: 'Failed to delete reimbursement: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
@@ -1015,6 +1016,102 @@ router.get('/:id/export', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Export reimbursement error:', error);
     res.status(500).json({ message: 'Failed to export reimbursement: ' + error.message });
+  }
+});
+
+
+// Resubmit rejected Reimbursement
+router.put('/:id/resubmit', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { purpose, description, amount, date_needed, project, project_address, remarks, payment_schedules } = req.body;
+    
+    conn = await db.getConnection();
+    
+    // Check if Reimbursement exists and is rejected
+    const [rmbs] = await conn.query('SELECT * FROM reimbursements WHERE id = ?', [req.params.id]);
+    if (rmbs.length === 0) {
+      return res.status(404).json({ message: 'Reimbursement not found' });
+    }
+    const r = rmbs[0];
+
+    // Only original requester can resubmit
+    if (r.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can resubmit this reimbursement' });
+    }
+
+    // Only rejected Reimbursements can be resubmitted
+    if (r.status !== 'Rejected' && r.status !== 'Returned') {
+      return res.status(400).json({ message: 'Only rejected or returned reimbursements can be resubmitted' });
+    }
+
+    await conn.beginTransaction();
+
+    await conn.query(
+      `UPDATE reimbursements SET 
+        purpose = ?, description = ?, amount = ?, date_needed = ?, project = ?, project_address = ?, remarks = ?, status = 'For Admin Review', updated_at = NOW() 
+       WHERE id = ?`,
+      [
+        purpose, description || null, amount, date_needed || null, project || null, project_address || null, remarks || null, req.params.id
+      ]
+    );
+
+    if (payment_schedules) {
+        // Simple update: delete and re-insert payment schedules
+        await conn.query('DELETE FROM payment_schedules WHERE service_request_id = ?', [req.params.id]);
+        
+        let normalizedSchedules = [];
+        try {
+            if (typeof payment_schedules === 'string') {
+                normalizedSchedules = JSON.parse(payment_schedules);
+            } else if (Array.isArray(payment_schedules)) {
+                normalizedSchedules = payment_schedules;
+            }
+        } catch(e) {}
+        
+        for (const schedule of normalizedSchedules) {
+            await conn.query(
+                'INSERT INTO payment_schedules (service_request_id, payment_date, amount, note, created_by) VALUES (?, ?, ?, ?, ?)',
+                [req.params.id, schedule.payment_date, schedule.amount, schedule.note, req.user.id]
+            );
+        }
+    }
+
+    await conn.commit();
+
+    // Notify Admins
+    const [admins] = await db.query("SELECT id FROM employees WHERE role = 'admin' AND is_active = true");
+    for (const admin of admins) {
+      await createNotification(
+        admin.id,
+        'Reimbursement Resubmitted',
+        `Reimbursement ${r.rmb_number} has been resubmitted and requires your review.`,
+        'PR Created',
+        r.id,
+        'reimbursement'
+      );
+      if (req.io) {
+        req.io.to(`user_${admin.id}`).emit('notification', {
+          title: 'Reimbursement Resubmitted',
+          message: `Reimbursement ${r.rmb_number} has been resubmitted.`
+        });
+      }
+    }
+
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(req.user.id, 'Request Resubmitted', 'reimbursements', r.id, JSON.stringify({ rmb_number: r.rmb_number }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'Reimbursement resubmitted successfully', status: 'For Admin Review' });
+  } catch (error) {
+    if (conn) await conn.rollback();
+    console.error('Resubmit Reimbursement error:', error);
+    res.status(500).json({ message: 'Failed to resubmit reimbursement: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

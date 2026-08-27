@@ -70,6 +70,8 @@ curl -i http://127.0.0.1:5001/api/health
 
 ---
 
+
+
 ## 4. The Database Update
 
 If the update includes new tables or columns, apply SQL **before** or **after** the code deploy (match your team's instructions).
@@ -77,11 +79,19 @@ If the update includes new tables or columns, apply SQL **before** or **after** 
 **Option A: Run a provided `.sql` patch file**
 
 ```bash
-# Copy patch to server, then import (replace path and password as needed)
+# If using a local MySQL client on the host:
 mysql -u root -p procurement_db < /path/to/your/patch.sql
 
 # Verify tables
 mysql -u root -p -e "USE procurement_db; SHOW TABLES;"
+
+# ---------------------------------------------------------
+# IF MYSQL IS RUNNING IN DOCKER (assuming service is 'db'):
+# Pipe the SQL file directly into the container
+cat /path/to/your/patch.sql | docker compose --env-file /opt/procurement/.env.prod exec -T db mysql -u root -p procurement_db
+
+# Verify tables inside Docker
+docker compose --env-file /opt/procurement/.env.prod exec db mysql -u root -p -e "USE procurement_db; SHOW TABLES;"
 ```
 
 **Option B: Fresh DB init (destructive — only for new environments)**

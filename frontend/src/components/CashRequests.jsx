@@ -580,7 +580,12 @@ const CashRequests = () => {
       console.log('Full crData being sent:', crData)
       
       if (editingId) {
-        await cashRequestService.update(editingId, crData)
+        const crToEdit = cashRequests.find(c => c.id === editingId);
+        if (crToEdit && (crToEdit.status === 'Rejected' || crToEdit.status === 'Returned')) {
+          await cashRequestService.resubmit(editingId, crData);
+        } else {
+          await cashRequestService.update(editingId, crData);
+        }
         alert('Cash Request updated successfully!')
       } else {
         await cashRequestService.create(crData)
@@ -807,7 +812,7 @@ const CashRequests = () => {
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleExport(cr.id, cr.cr_number); }} title="Export to Excel">
                           <Download className="w-4 h-4" />
                         </Button>
-                        {cr.status === 'Draft' && cr.requested_by === user?.id && (
+                        {(cr.status === 'Draft' || cr.status === 'Rejected' || cr.status === 'Returned') && cr.requested_by === user?.id && (
                           <>
                             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditModal(cr); }} title="Edit">
                               <Edit className="w-4 h-4" />
@@ -815,11 +820,13 @@ const CashRequests = () => {
                             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleSubmitForApproval(cr.id); }} title="Submit for Approval">
                               <Send className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(cr.id); }} title="Delete">
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
                           </>
                         )}
+                        {((cr.status === 'Draft' || cr.status === 'Rejected' || cr.status === 'Returned') && cr.requested_by === user?.id) || user?.role === 'super_admin' ? (
+                          <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(cr.id); }} title="Delete">
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        ) : null}
                         {cr.status === 'For Procurement Review' && (
                           <>
                             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleProcurementApprove(cr.id, 'approved'); }} title="Approve">
@@ -965,6 +972,18 @@ const CashRequests = () => {
                     >
                       <Eye className="w-4 h-4" />
                     </Button>
+                    {(cr.status === 'Draft' || cr.status === 'Rejected' || cr.status === 'Returned') && cr.requested_by === user?.id && (
+                      <>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openEditModal(cr); }} title="Edit">
+                          <Edit className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
+                    {((cr.status === 'Draft' || cr.status === 'Rejected' || cr.status === 'Returned') && cr.requested_by === user?.id) || user?.role === 'super_admin' ? (
+                      <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleDelete(cr.id); }} title="Delete">
+                        <Trash2 className="w-4 h-4 text-red-500" />
+                      </Button>
+                    ) : null}
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === cr.id ? null : cr.id); }}>
                       {expandedId === cr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </Button>
@@ -1224,7 +1243,7 @@ const CashRequests = () => {
 
                 <div className="flex justify-end gap-3 pt-4 border-t">
                   <Button type="button" variant="secondary" onClick={closeModal}>Cancel</Button>
-                  <Button type="submit" disabled={submitting}>{submitting ? 'Saving...' : (editingId ? 'Update' : 'Create Cash Request')}</Button>
+                  <Button type="submit" disabled={submitting}>{submitting ? 'Saving...' : (editingId ? (cashRequests.find(c => c.id === editingId)?.status === 'Rejected' || cashRequests.find(c => c.id === editingId)?.status === 'Returned' ? 'Save & Resubmit' : 'Update') : 'Create Cash Request')}</Button>
                 </div>
               </form>
             )}

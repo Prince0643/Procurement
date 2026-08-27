@@ -617,14 +617,14 @@ const ReimbursementsManagement = () => {
                     <Eye className="w-4 h-4 text-blue-600" />
                   </Button>
                   {['engineer', 'procurement'].includes(user?.role) && r.status === 'Draft' && r.requested_by === user?.id && (
-                    <>
-                      <Button variant="ghost" size="sm" onClick={() => handleSubmit(r)} title="Submit">
-                        <Send className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(r)} title="Delete">
-                        <Trash2 className="w-4 h-4 text-red-600" />
-                      </Button>
-                    </>
+                    <Button variant="ghost" size="sm" onClick={() => handleSubmit(r)} title="Submit">
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  )}
+                  {((['engineer', 'procurement'].includes(user?.role) && r.status === 'Draft' && r.requested_by === user?.id) || user?.role === 'super_admin') && (
+                    <Button variant="ghost" size="sm" onClick={() => handleDelete(r)} title="Delete">
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </Button>
                   )}
                   {user?.role === 'engineer' &&
                     r.requested_by === user?.id &&

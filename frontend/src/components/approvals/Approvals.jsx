@@ -16,7 +16,7 @@ import DVPreviewModal from '../disbursement-vouchers/DVPreviewModal';
 import SRPreviewModal from '../service-requests/SRPreviewModal';
 import CRPreviewModal from '../cash-requests/CRPreviewModal';
 import POApprovalPreviewModal from '../payment-orders/POApprovalPreviewModal';
-import { CheckCircle, XCircle, Clock, ChevronUp, ChevronDown, FileText, CreditCard, Eye, X } from 'lucide-react';
+import { CheckCircle, XCircle, Clock, ChevronUp, ChevronDown, FileText, CreditCard, Eye, X, Trash2 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Card = ({ children, className = '' }) => (
@@ -138,7 +138,8 @@ const LockedBadge = () => (
 const REVIEW_STATUSES = new Set([
   'For Engineer Review',
   'For Admin Review',
-  'For Procurement Review'
+  'For Super Admin Rep Review',
+  'For Admin Review'
 ]);
 
 const normalizeRole = (role) => String(role || '').trim().toLowerCase();
@@ -147,7 +148,8 @@ const canApproveByStatus = (status, userRole) => {
   const role = normalizeRole(userRole);
   if (status === 'For Engineer Review') return role === 'engineer';
   if (status === 'For Admin Review') return role === 'admin';
-  if (status === 'For Procurement Review') return role === 'procurement';
+  if (status === 'For Super Admin Rep Review') return role === 'super_admin_rep';
+  if (status === 'For Admin Review') return role === 'admin';
   if (status === 'For Super Admin Final Approval') return role === 'super_admin';
   return true;
 };
@@ -345,7 +347,7 @@ const Approvals = () => {
     pr.status === 'For Super Admin Final Approval' ||
     pr.status === 'For Engineer Review' ||
     pr.status === 'For Admin Review' ||
-    pr.status === 'For Procurement Review'
+    pr.status === 'For Admin Review'
   );
 
   const onHoldPRs = purchaseRequests.filter(pr => 
@@ -382,9 +384,9 @@ const Approvals = () => {
     sr.status === 'Approved' || sr.status === 'PO Created' || sr.status === 'Paid' || sr.status === 'Received'
   );
 
-  // Filter Cash Requests that need Procurement review
-  const procurementReviewCashRequests = cashRequests.filter(cr => 
-    cr.status === 'For Procurement Review'
+  // Filter Cash Requests that need Admin review
+  const adminReviewCashRequests = cashRequests.filter(cr => 
+    cr.status === 'For Admin Review'
   );
 
   // Filter Cash Requests that need Super Admin final approval
@@ -415,7 +417,7 @@ const Approvals = () => {
 
   // Filter Reimbursements that need approval
   const pendingReimbursements = reimbursements.filter(r => 
-    r.status === 'For Procurement Review' || r.status === 'For Super Admin Final Approval'
+    r.status === 'For Admin Review' || r.status === 'For Super Admin Final Approval'
   );
   
   const onHoldReimbursements = reimbursements.filter(r => 
@@ -699,12 +701,12 @@ const Approvals = () => {
     }
   };
 
-  const handleProcurementApproveCR = async (id, action) => {
+  const handleAdminApproveCR = async (id, action) => {
     const row = cashRequests.find((item) => item.id === id);
     if (blockIfLockedOrder(row?.order_number)) return;
     try {
       setProcessingId(id);
-      await cashRequestService.procurementApprove(id, action);
+      await cashRequestService.adminApprove(id, action);
       await fetchData();
     } catch (err) {
       alert('Failed to process cash request: ' + err.message);
@@ -793,6 +795,77 @@ const Approvals = () => {
       console.error('Failed to fetch Payment Order details:', err);
     } finally {
       setLoadingPreview(false);
+    }
+  };
+
+  
+  const handleDeletePR = async (id) => {
+    if (!window.confirm('Are you sure you want to permanently delete this request? This action cannot be undone and will be logged.')) return;
+    try {
+      setProcessingId(id);
+      await purchaseRequestService.delete(id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting PR:', error);
+      alert(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteCR = async (id) => {
+    if (!window.confirm('Are you sure you want to permanently delete this request? This action cannot be undone and will be logged.')) return;
+    try {
+      setProcessingId(id);
+      await cashRequestService.delete(id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting CR:', error);
+      alert(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteSR = async (id) => {
+    if (!window.confirm('Are you sure you want to permanently delete this request? This action cannot be undone and will be logged.')) return;
+    try {
+      setProcessingId(id);
+      await serviceRequestService.delete(id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting SR:', error);
+      alert(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeletePaymentRequest = async (id) => {
+    if (!window.confirm('Are you sure you want to permanently delete this request? This action cannot be undone and will be logged.')) return;
+    try {
+      setProcessingId(id);
+      await paymentRequestService.delete(id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting Payment Request:', error);
+      alert(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setProcessingId(null);
+    }
+  };
+
+  const handleDeleteReimbursement = async (id) => {
+    if (!window.confirm('Are you sure you want to permanently delete this request? This action cannot be undone and will be logged.')) return;
+    try {
+      setProcessingId(id);
+      await reimbursementService.delete(id);
+      await fetchData();
+    } catch (error) {
+      console.error('Error deleting Reimbursement:', error);
+      alert(error.response?.data?.message || 'Failed to delete request');
+    } finally {
+      setProcessingId(null);
     }
   };
 
@@ -1592,6 +1665,16 @@ const Approvals = () => {
                             >
                               <XCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === pr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePR(pr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1659,6 +1742,16 @@ const Approvals = () => {
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === pr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePR(pr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1718,6 +1811,16 @@ const Approvals = () => {
                         <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === pr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePR(pr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -2142,7 +2245,17 @@ const Approvals = () => {
                           >
                             <CheckCircle className="w-4 h-4" />
                           </Button>
-                          <Button
+                          {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === pr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePaymentRequest(pr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
                             variant="ghost"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleViewPayment(pr); }}
@@ -2214,7 +2327,17 @@ const Approvals = () => {
                       <td className="py-3 px-4">{renderStatusWithLock(pr)}</td>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
-                          <Button
+                          {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === pr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeletePaymentRequest(pr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
+                            <Button
                             variant="ghost"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleViewPayment(pr); }}
@@ -2378,7 +2501,18 @@ const Approvals = () => {
                 <InfoRow label="Project" value={pr.project || '-'} />
                 <InfoRow label="Amount" value={formatCurrency(pr.amount)} />
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <Button variant="ghost" size="sm" onClick={() => handleViewPayment(pr)} className="px-2">
+                  {user?.role === 'super_admin' && (
+                        <Button
+                          variant="danger"
+                          size="sm"
+                          disabled={processingId === pr.id}
+                          onClick={() => handleDeletePaymentRequest(pr.id)}
+                          className="px-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="sm" onClick={() => handleViewPayment(pr)} className="px-2">
                     <Eye className="w-4 h-4" />
                   </Button>
                   <button onClick={() => setExpandedId(expandedId === pr.id ? null : pr.id)} className="text-gray-400 hover:text-gray-600">
@@ -2760,6 +2894,16 @@ const Approvals = () => {
                             >
                               <XCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === sr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteSR(sr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -2833,6 +2977,16 @@ const Approvals = () => {
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === sr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteSR(sr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -2898,6 +3052,16 @@ const Approvals = () => {
                         <td className="py-3 px-4">{renderStatusWithLock(sr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === sr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteSR(sr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -3093,6 +3257,16 @@ const Approvals = () => {
                             >
                               <XCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === cr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteCR(cr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -3172,6 +3346,16 @@ const Approvals = () => {
                             >
                               <CheckCircle className="w-4 h-4" />
                             </Button>
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === cr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteCR(cr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -3243,6 +3427,16 @@ const Approvals = () => {
                         <td className="py-3 px-4">{renderStatusWithLock(cr)}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-2">
+                            {user?.role === 'super_admin' && (
+                              <Button
+                                variant="danger"
+                                size="sm"
+                                disabled={processingId === cr.id}
+                                onClick={(e) => { e.stopPropagation(); handleDeleteCR(cr.id); }}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"

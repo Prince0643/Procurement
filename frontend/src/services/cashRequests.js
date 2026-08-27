@@ -87,8 +87,8 @@ export const cashRequestService = {
     return response.data;
   },
 
-  procurementApprove: async (id, status, remarks = null) => {
-    const response = await api.put(`/cash-requests/${id}/procurement-approve`, {
+  adminApprove: async (id, status, remarks = null) => {
+    const response = await api.put(`/cash-requests/${id}/admin-approve`, {
       status,
       remarks
     });

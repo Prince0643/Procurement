@@ -32,5 +32,30 @@ export const notificationService = {
   markAllAsRead: async () => {
     const response = await api.put('/notifications/read-all');
     return response.data;
+  },
+
+  getVapidPublicKey: async () => {
+    const response = await api.get('/notifications/vapid-public-key');
+    return response.data.publicKey;
+  },
+
+  subscribeToPush: async (subscription) => {
+    const response = await api.post('/notifications/subscribe', subscription);
+    return response.data;
   }
 };
+
+export function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding)
+    .replace(/\-/g, '+')
+    .replace(/_/g, '/');
+
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}

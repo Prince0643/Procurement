@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticate, requireAdmin, requireSuperAdmin, requireAdminOnly } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 import db from '../config/database.js';
-import { createNotification, getSuperAdmins } from '../utils/notifications.js';
+import { createNotification, getSuperAdmins, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -153,7 +153,16 @@ router.get('/:id', authenticate, async (req, res) => {
       ORDER BY pa.uploaded_at DESC
     `, [req.params.id]);
 
-    res.json({ purchaseOrder: { ...pos[0], items, attachments } });
+    // Get admin reviews for this PO
+    const [reviews] = await db.query(`
+      SELECT par.*, e.first_name as reviewer_first_name, e.last_name as reviewer_last_name, e.role as reviewer_role
+      FROM po_admin_reviews par
+      JOIN employees e ON par.reviewer_id = e.id
+      WHERE par.po_id = ? AND par.is_current = 1
+      ORDER BY par.reviewed_at DESC
+    `, [req.params.id]);
+
+    res.json({ purchaseOrder: { ...pos[0], items, attachments, reviews } });
   } catch (error) {
     console.error('Failed to fetch purchase order', error);
     res.status(500).json({ message: 'Failed to fetch purchase order' });
@@ -364,10 +373,17 @@ router.post('/', authenticate, requireAdminOnly, async (req, res) => {
 
     await conn.commit();
 
-    // Notify Super Admins that a new PO needs approval (only if not a draft)
+    // Create admin reviews and notify admins that a new PO needs approval
     if (!save_as_draft) {
-      const superAdmins = await getSuperAdmins();
-      for (const adminId of superAdmins) {
+      const admins = await getAdmins();
+      
+      for (const adminId of admins) {
+        // Insert pending review
+        await conn.query(
+          'INSERT INTO po_admin_reviews (po_id, reviewer_id, review_status, is_current, created_at) VALUES (?, ?, ?, 1, NOW())',
+          [poId, adminId, 'PENDING']
+        );
+        
         await createNotification(
           adminId,
           'New PO Pending Approval',
@@ -485,17 +501,49 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
 // Update PO status (admin only)
 router.put('/:id/status', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { status } = req.body; // 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled'
-    const [pos] = await db.query('SELECT order_number FROM purchase_orders WHERE id = ?', [req.params.id]);
+    const { status } = req.body; // 'pending', 'confirmed', 'shipped', 'delivered', 'cancelled', 'Pending Approval'
+    const [pos] = await db.query('SELECT order_number, status FROM purchase_orders WHERE id = ?', [req.params.id]);
     if (pos.length === 0) {
       return res.status(404).json({ message: 'Purchase order not found' });
     }
     await assertOrderNumberUnlocked(pos[0].order_number, 'status update');
     
+    const oldStatus = pos[0].status;
+
     await db.query(
       'UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?',
       [status, req.params.id]
     );
+
+    // If moving to 'Pending Approval', create admin reviews
+    if (status === 'Pending Approval' && oldStatus === 'Draft') {
+      const conn = await db.getConnection();
+      try {
+        const admins = await getAdmins();
+        
+        // Invalidate old reviews just in case
+        await conn.query('UPDATE po_admin_reviews SET is_current = 0 WHERE po_id = ?', [req.params.id]);
+        
+        for (const adminId of admins) {
+          // Insert pending review
+          await conn.query(
+            'INSERT INTO po_admin_reviews (po_id, reviewer_id, review_status, is_current, created_at) VALUES (?, ?, ?, 1, NOW())',
+            [req.params.id, adminId, 'PENDING']
+          );
+          
+          await createNotification(
+            adminId,
+            'PO Pending Approval',
+            `Purchase Order ${pos[0].order_number} requires your approval`,
+            'PO Created',
+            req.params.id,
+            'purchase_order'
+          );
+        }
+      } finally {
+        conn.release();
+      }
+    }
 
     res.json({ message: 'Purchase order status updated successfully' });
   } catch (error) {
@@ -816,6 +864,232 @@ router.delete('/:id/attachments/:attachmentId', authenticate, async (req, res) =
   } catch (error) {
     console.error('Failed to delete attachment', error);
     res.status(500).json({ message: 'Failed to delete attachment' });
+  }
+});
+
+// Admin Review PO
+router.post('/:id/admin-review', authenticate, requireAdmin, async (req, res) => {
+  let conn;
+  try {
+    const { status, comment } = req.body; // 'approved', 'rejected'
+    
+    if (status !== 'approved' && status !== 'rejected') {
+      return res.status(400).json({ message: 'Status must be approved or rejected' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    const [pos] = await conn.query('SELECT status, po_number, prepared_by FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    const po = pos[0];
+    if (po.status !== 'Pending Approval') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Purchase order is not pending admin review' });
+    }
+
+    // Check if review already exists for this admin
+    const [existing] = await conn.query(
+      'SELECT id FROM po_admin_reviews WHERE po_id = ? AND reviewer_id = ? AND is_current = 1',
+      [req.params.id, req.user.id]
+    );
+
+    if (existing.length > 0) {
+      // Update existing
+      await conn.query(
+        'UPDATE po_admin_reviews SET review_status = ?, review_comment = ?, reviewed_at = NOW() WHERE id = ?',
+        [status.toUpperCase(), comment || null, existing[0].id]
+      );
+    } else {
+      // Insert new
+      await conn.query(
+        `INSERT INTO po_admin_reviews (po_id, reviewer_id, review_status, review_comment, is_current, reviewed_at)
+         VALUES (?, ?, ?, ?, 1, NOW())`,
+        [req.params.id, req.user.id, status.toUpperCase(), comment || null]
+      );
+    }
+
+    if (status === 'rejected') {
+      await conn.query("UPDATE purchase_orders SET status = 'On Hold', updated_at = NOW() WHERE id = ?", [req.params.id]);
+      
+      await createNotification(
+        po.prepared_by,
+        'PO Rejected by Admin',
+        `Purchase Order ${po.po_number} was rejected by an Admin and is On Hold. Please edit and resubmit your request.`,
+        'PO Rejected',
+        req.params.id,
+        'purchase_order'
+      );
+    } else {
+      // Check if all admins have approved
+      const [pendingAdmins] = await conn.query(
+        "SELECT id FROM po_admin_reviews WHERE po_id = ? AND is_current = 1 AND review_status = 'PENDING'",
+        [req.params.id]
+      );
+      
+      if (pendingAdmins.length === 0) {
+         // Notify Super Admins that it's fully admin-approved and ready for them
+         const superAdmins = await getSuperAdmins();
+         for (const adminId of superAdmins) {
+           await createNotification(
+             adminId,
+             'PO Ready for Super Admin Approval',
+             `Purchase Order ${po.po_number} has been approved by all Admins and requires your final approval`,
+             'PO Created',
+             req.params.id,
+             'purchase_order'
+           );
+         }
+      }
+    }
+
+    await conn.commit();
+    res.json({ message: 'Review submitted successfully' });
+  } catch (error) {
+    if (conn) {
+      try { await conn.rollback(); } catch(e) {}
+    }
+    console.error('PO admin review error:', error);
+    res.status(500).json({ message: 'Failed to submit review' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Receive PO Items
+router.post('/:id/receive', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { items } = req.body; // Array of { item_id, quantity_received }
+    
+    if (!items || !Array.isArray(items)) {
+      return res.status(400).json({ message: 'Invalid items array' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    const [pos] = await conn.query("SELECT status FROM purchase_orders WHERE id = ?", [req.params.id]);
+    if (pos.length === 0) {
+      await conn.rollback();
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    const po = pos[0];
+    if (po.status !== 'Approved' && po.status !== 'Partial Received') {
+      await conn.rollback();
+      return res.status(400).json({ message: 'Cannot receive items for this PO status' });
+    }
+
+    let allCompleted = true;
+
+    for (const item of items) {
+      const [poItems] = await conn.query(
+        "SELECT id, quantity, received_quantity FROM purchase_order_items WHERE purchase_order_id = ? AND item_id = ?",
+        [req.params.id, item.item_id]
+      );
+
+      if (poItems.length > 0) {
+        const poItem = poItems[0];
+        const addedQuantity = Number(item.quantity_received) || 0;
+        
+        if (addedQuantity > 0) {
+          const newReceived = poItem.received_quantity + addedQuantity;
+          const itemStatus = newReceived >= poItem.quantity ? 'Completed' : 'Partial Received';
+
+          await conn.query(
+            "UPDATE purchase_order_items SET received_quantity = ?, status = ? WHERE id = ?",
+            [newReceived, itemStatus, poItem.id]
+          );
+        }
+      }
+    }
+
+    // Check if ALL items are completed
+    const [remainingItems] = await conn.query(
+      "SELECT COUNT(*) as count FROM purchase_order_items WHERE purchase_order_id = ? AND status != 'Completed'",
+      [req.params.id]
+    );
+
+    const poStatus = remainingItems[0].count === 0 ? 'Completed' : 'Partial Received';
+
+    await conn.query(
+      "UPDATE purchase_orders SET status = ?, updated_at = NOW() WHERE id = ?",
+      [poStatus, req.params.id]
+    );
+
+    await conn.commit();
+    res.json({ message: 'Items received successfully', status: poStatus });
+  } catch (error) {
+    if (conn) {
+      try { await conn.rollback(); } catch(e) {}
+    }
+    console.error('PO receive error:', error);
+    res.status(500).json({ message: 'Failed to receive items' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+
+// Update Draft Purchase Order
+router.put('/:id', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { supplier_id, expected_delivery_date, place_of_delivery, project, delivery_term, payment_term, notes, items } = req.body;
+
+    // Check if PO exists and is draft
+    const [pos] = await db.query('SELECT * FROM purchase_orders WHERE id = ?', [req.params.id]);
+    if (pos.length === 0) {
+      return res.status(404).json({ message: 'Purchase order not found' });
+    }
+
+    const po = pos[0];
+    if (po.status !== 'Draft') {
+      return res.status(400).json({ message: 'Only draft purchase orders can be updated' });
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    // Calculate new total amount if items provided
+    let totalAmount = po.total_amount;
+    if (items && items.length > 0) {
+      totalAmount = items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+
+      // Delete existing items
+      await conn.query('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [req.params.id]);
+
+      // Insert new items
+      for (const item of items) {
+        await conn.query(
+          'INSERT INTO purchase_order_items (purchase_order_id, purchase_request_item_id, item_id, quantity, unit_price, total_price) VALUES (?, ?, ?, ?, ?, ?)',
+          [req.params.id, item.purchase_request_item_id || null, item.item_id, item.quantity, item.unit_price, item.quantity * item.unit_price]
+        );
+      }
+    }
+
+    // Update PO details
+    await conn.query(
+      `UPDATE purchase_orders SET 
+        supplier_id = ?, expected_delivery_date = ?, place_of_delivery = ?, project = ?, 
+        delivery_term = ?, payment_term = ?, notes = ?, total_amount = ?, updated_at = NOW() 
+       WHERE id = ?`,
+      [supplier_id, expected_delivery_date || null, place_of_delivery || null, project || null, delivery_term || null, payment_term || null, notes || null, totalAmount, req.params.id]
+    );
+
+    await conn.commit();
+    res.json({ message: 'Purchase order updated successfully' });
+  } catch (error) {
+    if (conn) await conn.rollback();
+    console.error('Update PO error:', error);
+    res.status(500).json({ message: 'Failed to update purchase order: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

@@ -104,8 +104,8 @@ export const serviceRequestService = {
     return response.data;
   },
 
-  procurementApprove: async (id, status, supplierId, rejectionReason) => {
-    const response = await api.put(`/service-requests/${id}/procurement-approve`, {
+  adminApprove: async (id, status, supplierId, rejectionReason) => {
+    const response = await api.put(`/service-requests/${id}/admin-approve`, {
       status,
       supplier_id: supplierId,
       rejection_reason: rejectionReason

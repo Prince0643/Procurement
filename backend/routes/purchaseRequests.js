@@ -2,9 +2,9 @@ import express from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { authenticate, requireProcurement, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getProcurementOfficers, getSuperAdmins, getEngineers, getAdmins, getReviewersForPR, getSuperAdminReps } from '../utils/notifications.js';
+import { createNotification, getSuperAdmins, getEngineers, getAdmins, getReviewersForPR, getSuperAdminReps } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';
@@ -433,9 +433,9 @@ router.get('/:id', authenticate, async (req, res) => {
       }
     }
 
-    // Get per-item rejection remarks if PR is rejected or sent back to procurement
+    // Get per-item rejection remarks if PR is rejected or sent back to super_admin_rep
     let itemRemarks = [];
-    if (pr.status === 'Rejected' || pr.status === 'For Procurement Review') {
+    if (pr.status === 'Rejected') {
       const [remarks] = await db.query(`
         SELECT pirr.purchase_request_item_id, pirr.item_id, pirr.remark, pirr.created_at,
                e.first_name as created_by_first_name, e.last_name as created_by_last_name
@@ -555,8 +555,6 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
       status = 'For Engineer Review';
     } else if (req.user.role === 'admin') {
       status = 'For Admin Review';
-    } else if (req.user.role === 'procurement') {
-      status = 'For Procurement Review';
     } else {
       status = 'For Super Admin Final Approval';
     }
@@ -942,7 +940,7 @@ router.put('/:id/draft', authenticate, async (req, res) => {
   }
 });
 
-// Submit Draft PR (engineer only) - moves to For Procurement Review and notifies procurement
+// Submit Draft PR (engineer only) - moves to For Super Admin Rep Review and notifies super_admin_rep
 router.put('/:id/submit-draft', authenticate, async (req, res) => {
   let conn;
   try {
@@ -998,8 +996,6 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
       newStatus = 'For Engineer Review';
     } else if (req.user.role === 'admin') {
       newStatus = 'For Admin Review';
-    } else if (req.user.role === 'procurement') {
-      newStatus = 'For Procurement Review';
     } else {
       newStatus = 'For Super Admin Final Approval';
     }
@@ -1041,14 +1037,6 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
       );
     }
 
-    // Emit real-time PR update
-    req.io.to('role_procurement').emit('pr_updated', {
-      id: pr.id,
-      pr_number: pr.pr_number,
-      status: newStatus,
-      type: 'new_pr'
-    });
-
     res.json({ message: 'Draft submitted successfully', status: newStatus });
   } catch (error) {
     if (conn) {
@@ -1065,7 +1053,7 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
   }
 });
 
-// Review PR (for Engineers, Admins, Procurement)
+// Review PR (for Engineers, Admins, Super Admin Rep)
 router.post('/:id/review', authenticate, async (req, res) => {
   let conn;
   try {
@@ -1170,7 +1158,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
     console.log('🔍 Review workflow: PR ID:', req.params.id, 'Requester role:', pr.requester_role);
 
     if (pr.requester_role === 'engineer') {
-      // Engineer requester: Engineers → Admins → Procurement → Super Admin
+      // Engineer requester: Engineers → Admins → Super Admin Rep → Super Admin
       // Check if all engineers have approved
       const [engineerReviews] = await conn.query(
         `SELECT prr.review_status 
@@ -1242,7 +1230,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
           notificationTitle = 'PR Ready for Admin Review';
           notificationMessage = `Purchase Request ${pr.pr_number} has been reviewed by engineers and is ready for admin review`;
         } else if (adminsApproved || adminReviews.length === 0) {
-          // Admins done or no admins, check procurement
+          // Admins done or no admins, check super admin rep
           const [repReviews] = await conn.query(
             `SELECT prr.review_status 
              FROM purchase_request_reviews prr
@@ -1464,7 +1452,7 @@ router.post('/:id/review', authenticate, async (req, res) => {
   }
 });
 
-// Approve/Reject PR by Super Admin (First Approval - to Procurement)
+// Approve/Reject PR by Super Admin (First Approval - to Super Admin Rep)
 router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, async (req, res) => {
   let conn;
   try {
@@ -1522,7 +1510,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     } else if (status === 'hold') {
       newStatus = 'On Hold';
     } else if (status === 'rejected') {
-      newStatus = 'For Procurement Review';
+      newStatus = 'For Super Admin Rep Review';
     } else {
       newStatus = 'Rejected';
     }
@@ -1596,7 +1584,7 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
       await createNotification(
         pr.requested_by,
         'PR Rejected',
-        `Your Purchase Request ${pr.pr_number} has been rejected${remarks ? ': ' + remarks : ''}`,
+        `Your Purchase Request ${pr.pr_number} has been rejected. Please edit and resubmit your request.`,
         'PR Rejected',
         req.params.id,
         'purchase_request'
@@ -1625,8 +1613,8 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
   }
 });
 
-// Approve/Reject PR by Procurement (to Super Admin Final Approval)
-router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
+// Approve/Reject PR by Super Admin Rep (to Super Admin Final Approval)
+router.put('/:id/super_admin_rep-approve', authenticate, async (req, res) => {
   let conn;
   try {
     const {
@@ -1653,9 +1641,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     const currentStatus = prs[0].status;
     await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
 
-    if (currentStatus !== 'For Procurement Review') {
+    if (currentStatus !== 'For Super Admin Rep Review') {
       await conn.rollback();
-      return res.status(400).json({ message: 'Purchase request not ready for Procurement approval' });
+      return res.status(400).json({ message: 'Purchase request not ready for Super Admin Rep approval' });
     }
 
     let newStatus;
@@ -1683,7 +1671,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
         [req.params.id]
       );
 
-      // Track changes made by procurement
+      // Track changes made by super_admin_rep
       const changes = [];
 
       // Update unit prices for items and calculate totals
@@ -1775,26 +1763,26 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     const pr = prDetails[0];
 
     if (status === 'approved') {
-      // Procurement approved - notify Super Admin for final approval
+      // Super Admin Rep approved - notify Super Admin for final approval
       const superAdmins = await getSuperAdmins();
       for (const adminId of superAdmins) {
         await createNotification(
           adminId,
           'PR Pending Final Approval',
-          `Purchase Request ${pr.pr_number} has been reviewed by Procurement and requires your final approval`,
+          `Purchase Request ${pr.pr_number} has been reviewed by Super Admin Rep and requires your final approval`,
           'PR Approved',
           req.params.id,
           'purchase_request'
         );
       }
 
-      // Notify engineer about any changes made by procurement
+      // Notify engineer about any changes made by super_admin_rep
       if (req.changes && req.changes.length > 0) {
         const changesSummary = req.changes.map(c => `${c.item_name}: ${c.changes.join(', ')}`).join('; ');
         await createNotification(
           pr.requested_by,
-          'PR Values Modified by Procurement',
-          `Procurement modified values in your PR ${pr.pr_number}: ${changesSummary}`,
+          'PR Values Modified by Super Admin Rep',
+          `Super Admin Rep modified values in your PR ${pr.pr_number}: ${changesSummary}`,
           'PR Modified',
           req.params.id,
           'purchase_request'
@@ -1804,8 +1792,8 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       // Rejected - notify engineer and Super Admin
       await createNotification(
         pr.requested_by,
-        'PR Rejected by Procurement',
-        `Your Purchase Request ${pr.pr_number} has been rejected by Procurement${rejection_reason ? ': ' + rejection_reason : ''}`,
+        'PR Rejected by Super Admin Rep',
+        `Your Purchase Request ${pr.pr_number} has been rejected by Super Admin Rep. Please edit and resubmit your request.`,
         'PR Rejected',
         req.params.id,
         'purchase_request'
@@ -1818,7 +1806,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       pr_number: pr.pr_number,
       status: newStatus,
       type: 'status_update',
-      updated_by: 'procurement'
+      updated_by: 'super_admin_rep'
     });
 
     res.json({ message: `Purchase request ${status} successfully`, status: newStatus, total_amount: totalAmount });
@@ -1827,7 +1815,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     if (error?.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
-    console.error('Procurement approval error:', error);
+    console.error('Super Admin Rep approval error:', error);
     res.status(500).json({ message: 'Failed to update purchase request' });
   } finally {
     if (conn) conn.release();
@@ -2079,7 +2067,6 @@ router.get('/:id/export', authenticate, async (req, res) => {
       const labels = {
         engineer: 'Engineer',
         admin: 'Admin',
-        procurement: 'Procurement',
         super_admin: 'Super Admin'
       };
       return labels[role] || 'Reviewer';
@@ -2317,12 +2304,12 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
       supplierAddress = supRows[0].address ?? null;
     }
 
-    // Update PR details and reset status to For Procurement Review, clear all pricing data
+    // Update PR details and reset status to For Super Admin Rep Review, clear all pricing data
     await conn.query(
       `UPDATE purchase_requests 
        SET purpose = ?, remarks = ?, date_needed = ?, project = ?, project_address = ?, order_number = ?, 
            payment_basis = ?, payment_terms_code = ?, payment_terms_note = ?, payment_terms_set_by = ?, payment_terms_set_at = ?, supplier_id = ?,
-           supplier_name = ?, status = 'For Procurement Review', approved_by = NULL, approved_at = NULL, 
+           supplier_name = ?, status = 'For Super Admin Rep Review', approved_by = NULL, approved_at = NULL, 
            supplier_address = ?, rejection_reason = NULL, 
            total_amount = ?, updated_at = NOW()
        WHERE id = ?`,
@@ -2372,20 +2359,25 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
     await conn.commit();
 
-    // Notify procurement officers about resubmitted PR
-    const procurementOfficers = await getProcurementOfficers();
-    for (const officerId of procurementOfficers) {
-      await createNotification(
-        officerId,
-        'PR Resubmitted',
-        `Purchase Request ${pr.pr_number} has been resubmitted by ${req.user.first_name} ${req.user.last_name}`,
-        'PR Created',
-        pr.id,
-        'purchase_request'
-      );
+    // Notify Super Admin Reps about resubmitted PR
+    const reps = await getSuperAdminReps();
+    for (const repId of reps) {
+      if (req.io) {
+        req.io.to(`user_${repId}`).emit('notification', {
+          title: 'PR Resubmitted',
+          message: `Purchase Request ${pr.pr_number} has been resubmitted.`
+        });
+      }
     }
 
-    res.json({ message: 'Purchase request resubmitted successfully', status: 'For Procurement Review' });
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(req.user.id, 'Request Resubmitted', 'purchase_requests', pr.id, JSON.stringify({ pr_number: pr.pr_number }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'Purchase request resubmitted successfully', status: 'For Super Admin Rep Review' });
   } catch (error) {
     if (conn) {
       try {
@@ -2424,8 +2416,8 @@ router.put('/:id/approve', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to approve at this stage.' });
     }
 
-    if (currentStatus === 'For Procurement Review' && userRole !== 'procurement') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Procurement review. You do not have permission to approve at this stage.' });
+    if (currentStatus === 'For Super Admin Rep Review' && userRole !== 'super_admin_rep') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin Rep review. You do not have permission to approve at this stage.' });
     }
 
     if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
@@ -2501,8 +2493,8 @@ router.put('/:id/status', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to update the status at this stage.' });
     }
 
-    if (currentStatus === 'For Procurement Review' && userRole !== 'procurement') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Procurement review. You do not have permission to update the status at this stage.' });
+    if (currentStatus === 'For Super Admin Rep Review' && userRole !== 'super_admin_rep') {
+      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin Rep review. You do not have permission to update the status at this stage.' });
     }
 
     if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
@@ -2520,6 +2512,63 @@ router.put('/:id/status', authenticate, async (req, res) => {
       return res.status(error.statusCode).json({ message: error.message });
     }
     res.status(500).json({ message: 'Failed to update purchase request status' });
+  }
+});
+
+// Delete Purchase Request (Draft only for creator, any status for Super Admin)
+router.delete('/:id', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const isSuperAdmin = req.user.role === 'super_admin';
+    const [prs] = await db.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+    
+    if (prs.length === 0) {
+      return res.status(404).json({ message: 'Purchase request not found' });
+    }
+
+    const pr = prs[0];
+
+    // Access control check
+    if (!isSuperAdmin) {
+      if (pr.requested_by !== req.user.id) {
+        return res.status(403).json({ message: 'Only the original requester can delete this purchase request' });
+      }
+      if (pr.status !== 'Draft') {
+        return res.status(400).json({ message: 'Only draft purchase requests can be deleted' });
+      }
+    }
+
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    await conn.query('DELETE FROM purchase_request_items WHERE purchase_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM purchase_request_reviews WHERE purchase_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM purchase_request_payment_schedules WHERE purchase_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM pr_item_rejection_remarks WHERE purchase_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM purchase_requests WHERE id = ?', [req.params.id]);
+
+    await conn.commit();
+
+    if (isSuperAdmin) {
+      try {
+        const { logAudit } = await import('../utils/auditLogger.js');
+        await logAudit(req.user.id, 'Request Deleted', 'purchase_requests', req.params.id, JSON.stringify({ pr_number: pr.pr_number, project: pr.project }));
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+    }
+
+    res.json({ message: 'Purchase request deleted successfully' });
+  } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {}
+    }
+    console.error('Delete purchase request error:', error);
+    res.status(500).json({ message: 'Failed to delete purchase request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

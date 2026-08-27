@@ -1,7 +1,7 @@
 import express from 'express';
-import { authenticate, requireAdmin, requireSuperAdmin, requireProcurement } from '../middleware/auth.js';
+import { authenticate, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 import db from '../config/database.js';
-import { createNotification, getAdmins, getProcurementOfficers } from '../utils/notifications.js';
+import { createNotification, getAdmins } from '../utils/notifications.js';
 import ExcelJS from 'exceljs';
 import { resolveExcelTemplatePath } from '../utils/excelTemplatePath.js';
 import { assertProjectIsActive } from '../utils/branchProjects.js';
@@ -384,9 +384,9 @@ router.put('/:id', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the original requester can update this cash request' });
     }
 
-    // Only draft CRs can be updated
-    if (cr.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft cash requests can be updated' });
+    // Only draft, rejected, or returned CRs can be updated
+    if (cr.status !== 'Draft' && cr.status !== 'Rejected' && cr.status !== 'Returned') {
+      return res.status(400).json({ message: 'Only draft, rejected, or returned cash requests can be updated' });
     }
 
     const normalizedPaymentTermsNote = hasOwn(req.body, 'payment_terms_note')
@@ -451,7 +451,7 @@ router.put('/:id', authenticate, async (req, res) => {
   }
 });
 
-// Submit Cash Request (Draft -> For Procurement Review)
+// Submit Cash Request (Draft -> For Admin Review)
 router.put('/:id/submit', authenticate, async (req, res) => {
   let conn;
   try {
@@ -468,9 +468,9 @@ router.put('/:id/submit', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the original requester can submit this cash request' });
     }
 
-    // Only draft CRs can be submitted
-    if (cr.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft cash requests can be submitted' });
+    // Only draft, rejected, or returned CRs can be submitted
+    if (cr.status !== 'Draft' && cr.status !== 'Rejected' && cr.status !== 'Returned') {
+      return res.status(400).json({ message: 'Only draft, rejected, or returned cash requests can be submitted' });
     }
 
     // Validate required fields
@@ -490,26 +490,39 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     await conn.beginTransaction();
 
     await conn.query(
-      "UPDATE cash_requests SET status = 'For Procurement Review', updated_at = NOW() WHERE id = ?",
+      "UPDATE cash_requests SET status = 'For Admin Review', updated_at = NOW() WHERE id = ?",
       [req.params.id]
     );
 
     await conn.commit();
 
-    // Notify procurement for review
+    // Notify admin for review
     const procurementUsers = await getProcurementOfficers();
-    for (const userId of procurementUsers) {
+    for (const p of procurementUsers) {
       await createNotification(
-        userId,
-        'Cash Request For Review',
-        `Cash Request ${cr.cr_number} has been submitted and requires Procurement review`,
-        'PR Created',
+        p,
+        'CR Submitted/Resubmitted',
+        `Cash Request ${cr.order_number} has been submitted by ${req.user.first_name} ${req.user.last_name}`,
+        'CR Created',
         cr.id,
         'cash_request'
       );
+      if (req.io) {
+        req.io.to(`user_${p}`).emit('notification', {
+          title: 'CR Submitted',
+          message: `Cash Request ${cr.order_number} has been submitted.`
+        });
+      }
     }
 
-    res.json({ message: 'Cash request submitted successfully', status: 'For Procurement Review' });
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(req.user.id, 'Request Submitted', 'cash_requests', cr.id, JSON.stringify({ order_number: cr.order_number }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'Cash request submitted successfully', status: 'For Admin Review' });
   } catch (error) {
     if (conn) {
       try {
@@ -524,8 +537,8 @@ router.put('/:id/submit', authenticate, async (req, res) => {
     if (conn) conn.release();
   }
 });
-// Procurement Approval/Reject Cash Request (moves to For Super Admin Final Approval)
-router.put('/:id/procurement-approve', authenticate, requireProcurement, async (req, res) => {
+// Admin Approval/Reject Cash Request (moves to For Super Admin Final Approval)
+router.put('/:id/admin-approve', authenticate, requireAdmin, async (req, res) => {
   let conn;
   try {
     const { status, remarks } = req.body;
@@ -537,9 +550,9 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
 
     const cr = crs[0];
 
-    // Only For Procurement Review CRs can be procurement approved
-    if (cr.status !== 'For Procurement Review') {
-      return res.status(400).json({ message: 'Cash request not ready for Procurement review' });
+    // Only For Admin Review CRs can be admin approved
+    if (cr.status !== 'For Admin Review') {
+      return res.status(400).json({ message: 'Cash request not ready for Admin review' });
     }
 
     conn = await db.getConnection();
@@ -577,8 +590,8 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     if (status === 'approved') {
       await createNotification(
         cr.requested_by,
-        'Cash Request Approved by Procurement',
-        `Your Cash Request ${cr.cr_number} has been reviewed by Procurement and is waiting for Super Admin final approval`,
+        'Cash Request Approved by Admin',
+        `Your Cash Request ${cr.cr_number} has been reviewed by Admin and is waiting for Super Admin final approval`,
         'PR Approved',
         cr.id,
         'cash_request'
@@ -596,7 +609,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
       await createNotification(
         cr.requested_by,
         'Cash Request Rejected',
-        `Your Cash Request ${cr.cr_number} has been rejected${remarks ? ': ' + remarks : ''}`,
+        `Your Cash Request ${cr.cr_number} has been rejected${remarks ? ': ' + remarks : ''}. Please edit and resubmit your request.. Please edit and resubmit your request.`,
         'PR Rejected',
         cr.id,
         'cash_request'
@@ -615,7 +628,7 @@ router.put('/:id/procurement-approve', authenticate, requireProcurement, async (
     if (error?.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
-    console.error('Procurement approve cash request error:', error);
+    console.error('Admin approve cash request error:', error);
     res.status(500).json({ message: 'Failed to approve cash request: ' + error.message });
   } finally {
     if (conn) conn.release();
@@ -694,7 +707,7 @@ router.put('/:id/super-admin-approve', authenticate, requireSuperAdmin, async (r
       await createNotification(
         cr.requested_by,
         'Cash Request Rejected',
-        `Your Cash Request ${cr.cr_number} has been rejected${remarks ? ': ' + remarks : ''}`,
+        `Your Cash Request ${cr.cr_number} has been rejected${remarks ? ': ' + remarks : ''}. Please edit and resubmit your request.`,
         'PR Rejected',
         cr.id,
         'cash_request'
@@ -910,32 +923,139 @@ router.get('/:id/export', authenticate, async (req, res) => {
   }
 });
 
-// Delete Cash Request (Draft only, engineer only)
+// Delete Cash Request (Draft only for creator, any status for Super Admin)
 router.delete('/:id', authenticate, async (req, res) => {
+  let conn;
   try {
+    const isSuperAdmin = req.user.role === 'super_admin';
     const [crs] = await db.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
+    
     if (crs.length === 0) {
       return res.status(404).json({ message: 'Cash request not found' });
     }
 
     const cr = crs[0];
 
-    // Only the original requester can delete
-    if (cr.requested_by !== req.user.id) {
-      return res.status(403).json({ message: 'Only the original requester can delete this cash request' });
+    // Access control check
+    if (!isSuperAdmin) {
+      if (cr.requested_by !== req.user.id) {
+        return res.status(403).json({ message: 'Only the original requester can delete this cash request' });
+      }
+      if (cr.status !== 'Draft') {
+        return res.status(400).json({ message: 'Only draft cash requests can be deleted' });
+      }
     }
 
-    // Only draft CRs can be deleted
-    if (cr.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft cash requests can be deleted' });
-    }
+    conn = await db.getConnection();
+    await conn.beginTransaction();
 
-    await db.query('DELETE FROM cash_requests WHERE id = ?', [req.params.id]);
+    await conn.query('DELETE FROM cash_request_reviews WHERE cash_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM payment_schedules WHERE cash_request_id = ?', [req.params.id]);
+    await conn.query('DELETE FROM cash_requests WHERE id = ?', [req.params.id]);
+
+    await conn.commit();
+
+    if (isSuperAdmin) {
+      try {
+        const { logAudit } = await import('../utils/auditLogger.js');
+        await logAudit(req.user.id, 'Request Deleted', 'cash_requests', req.params.id, JSON.stringify({ order_number: cr.order_number }));
+      } catch (auditErr) {
+        console.error('Audit log error:', auditErr);
+      }
+    }
 
     res.json({ message: 'Cash request deleted successfully' });
   } catch (error) {
+    if (conn) {
+      try {
+        await conn.rollback();
+      } catch {}
+    }
     console.error('Delete cash request error:', error);
     res.status(500).json({ message: 'Failed to delete cash request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+
+// Resubmit rejected Cash Request
+router.put('/:id/resubmit', authenticate, async (req, res) => {
+  let conn;
+  try {
+    const { purpose, description, amount, date_needed, project, project_address, remarks } = req.body;
+    
+    conn = await db.getConnection();
+    
+    // Check if CR exists and is rejected
+    const [crs] = await conn.query('SELECT * FROM cash_requests WHERE id = ?', [req.params.id]);
+    if (crs.length === 0) {
+      return res.status(404).json({ message: 'Cash request not found' });
+    }
+    const cr = crs[0];
+
+    // Only original requester can resubmit
+    if (cr.requested_by !== req.user.id) {
+      return res.status(403).json({ message: 'Only the original requester can resubmit this CR' });
+    }
+
+    // Only rejected CRs can be resubmitted
+    if (cr.status !== 'Rejected' && cr.status !== 'Returned') {
+      return res.status(400).json({ message: 'Only rejected or returned cash requests can be resubmitted' });
+    }
+
+    // Check if expedited (from amount)
+    let newStatus = amount <= 1000 ? 'For Super Admin Final Approval' : 'For Department Head Review';
+
+    await conn.query(
+      `UPDATE cash_requests SET 
+        purpose = ?, description = ?, amount = ?, date_needed = ?, project = ?, project_address = ?, remarks = ?, status = ?, updated_at = NOW() 
+       WHERE id = ?`,
+      [
+        purpose, description || null, amount, date_needed || null, project || null, project_address || null, remarks || null, newStatus, req.params.id
+      ]
+    );
+
+    // Notify appropriate approvers based on newStatus
+    let notifyRoles = [];
+    if (newStatus === 'For Department Head Review') {
+       notifyRoles = ['admin']; // Using admin for dept head placeholder or similar based on existing logic
+    } else {
+       notifyRoles = ['super_admin'];
+    }
+
+    const [approvers] = await conn.query(`SELECT id FROM employees WHERE role IN (?) AND is_active = true`, [notifyRoles]);
+    
+    for (const approver of approvers) {
+      await createNotification(
+        approver.id,
+        'CR Resubmitted',
+        `Cash Request ${cr.cr_number} has been resubmitted and requires your review.`,
+        'PR Created',
+        cr.id,
+        'cash_request'
+      );
+      if (req.io) {
+        req.io.to(`user_${approver.id}`).emit('notification', {
+          title: 'CR Resubmitted',
+          message: `Cash Request ${cr.cr_number} has been resubmitted.`
+        });
+      }
+    }
+
+    try {
+      const { logAudit } = await import('../utils/auditLogger.js');
+      await logAudit(req.user.id, 'Request Resubmitted', 'cash_requests', cr.id, JSON.stringify({ cr_number: cr.cr_number }));
+    } catch (auditErr) {
+      console.error('Audit log error:', auditErr);
+    }
+
+    res.json({ message: 'Cash request resubmitted successfully', status: newStatus });
+  } catch (error) {
+    console.error('Resubmit CR error:', error);
+    res.status(500).json({ message: 'Failed to resubmit cash request: ' + error.message });
+  } finally {
+    if (conn) conn.release();
   }
 });
 
