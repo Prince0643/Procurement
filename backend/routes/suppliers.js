@@ -359,25 +359,15 @@ router.put('/:supplierName/accredit', authenticate, async (req, res) => {
           [newStatus, pr.id]
         );
 
-        // Clean up any existing stale review records to ensure a clean state
-        await db.query('DELETE FROM purchase_request_reviews WHERE purchase_request_id = ?', [pr.id]);
-
         // Create review records for required reviewers
         const reviewers = await getReviewersForPR(pr.requester_role);
         const filteredReviewers = reviewers.filter(reviewerId => reviewerId !== pr.requested_by);
 
         for (const reviewerId of filteredReviewers) {
-          try {
-            await db.query(
-              'INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
-              [pr.id, reviewerId, 'pending']
-            );
-          } catch (err) {
-            // Ignore duplicate key errors (review record already exists)
-            if (err.code !== 'ER_DUP_ENTRY') {
-              throw err;
-            }
-          }
+          await db.query(
+            'INSERT IGNORE INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status) VALUES (?, ?, ?)',
+            [pr.id, reviewerId, 'pending']
+          );
         }
 
         console.log(`✅ Updated PR ${pr.id} status to ${newStatus} with ${filteredReviewers.length} reviewers`);

@@ -513,12 +513,23 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
 
     // Only validate required fields if NOT saving as draft
     if (!isDraft) {
+      if (!date_needed || !String(date_needed).trim()) {
+        return res.status(400).json({ message: 'Date needed is required' });
+      }
       if (!purpose || !String(purpose).trim()) {
         return res.status(400).json({ message: 'Purpose is required' });
       }
 
       if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
         return res.status(400).json({ message: 'At least one item is required' });
+      }
+
+      const invalidItems = parsedItems.filter(item => {
+        const up = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        return !Number.isFinite(up) || up <= 0;
+      });
+      if (invalidItems.length > 0) {
+        return res.status(400).json({ message: 'All items must have a unit price strictly greater than 0' });
       }
     }
 
@@ -814,9 +825,9 @@ router.put('/:id/draft', authenticate, async (req, res) => {
       return res.status(403).json({ message: 'Only the original requester can update this draft' });
     }
 
-    // Only draft PRs can be updated
-    if (pr.status !== 'Draft') {
-      return res.status(400).json({ message: 'Only draft purchase requests can be updated' });
+    // Only draft and pending accreditation PRs can be updated here
+    if (pr.status !== 'Draft' && pr.status !== 'Pending Accreditation Review') {
+      return res.status(400).json({ message: 'Only draft or pending accreditation purchase requests can be updated' });
     }
 
     conn = await db.getConnection();
@@ -966,6 +977,10 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     if (!pr.purpose || !String(pr.purpose).trim()) {
       return res.status(400).json({ message: 'Purpose is required to submit' });
     }
+    
+    if (!pr.date_needed) {
+      return res.status(400).json({ message: 'Date needed is required to submit' });
+    }
     // Payment schedule requirement is intentionally relaxed — the payment schedule
     // UI is currently disabled, so debt PRs are allowed to be submitted without schedules.
     // if (pr.payment_basis === 'debt') {
@@ -975,14 +990,19 @@ router.put('/:id/submit-draft', authenticate, async (req, res) => {
     //   }
     // }
 
-    // Check if PR has items
-    const [itemCount] = await db.query(
-      'SELECT COUNT(*) as count FROM purchase_request_items WHERE purchase_request_id = ?',
+    // Check if PR has valid items
+    const [items] = await db.query(
+      'SELECT unit_price FROM purchase_request_items WHERE purchase_request_id = ?',
       [req.params.id]
     );
 
-    if (itemCount[0].count === 0) {
+    if (items.length === 0) {
       return res.status(400).json({ message: 'At least one item is required to submit' });
+    }
+
+    const invalidItems = items.filter(item => !Number.isFinite(item.unit_price) || item.unit_price <= 0);
+    if (invalidItems.length > 0) {
+      return res.status(400).json({ message: 'All items must have a unit price strictly greater than 0 to submit' });
     }
 
     conn = await db.getConnection();

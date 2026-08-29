@@ -83,11 +83,13 @@ const getApproverName = (pr) => {
 };
 
 const getReviewerName = (review) => {
+  if (!review) return 'Reviewer';
   const name = `${review.reviewer_first_name || ''} ${review.reviewer_last_name || ''}`.trim();
   return name || review.reviewer_name || 'Reviewer';
 };
 
 const getReviewerRoleLabel = (role) => {
+  if (!role) return 'Reviewer';
   const labels = {
     engineer: 'Engineer',
     admin: 'Admin',

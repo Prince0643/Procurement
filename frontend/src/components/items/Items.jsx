@@ -772,7 +772,10 @@ setPaymentBasis('debt')
   const handleSubmitPR = async (e) => {
     e.preventDefault()
     if (!purpose) { alert('Purpose is required'); return }
+    if (!dateNeeded) { alert('Date Needed is required'); return }
+    if (!supplierInput.trim()) { alert('Supplier is required'); return }
     if (cart.length === 0) { alert('At least one item is required'); return }
+    if (cart.some(item => !item.unit_price || item.unit_price <= 0)) { alert('Unit cost must be greater than 0 for all items'); return }
 
     try {
       const paymentDetails = getPaymentDetailsForRequest()
@@ -1313,13 +1316,13 @@ setPaymentBasis('debt')
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <Input label="Date Needed" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} />
+                <Input label="Date Needed *" type="date" value={dateNeeded} onChange={(e) => setDateNeeded(e.target.value)} required />
                 <Input label="Request Number" value={orderNumber} onChange={(e) => setOrderNumber(e.target.value)} placeholder="Optional" />
               </div>
 
 <div className="space-y-4 mb-4">
   <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
+    <label className="block text-sm font-medium text-gray-700 mb-1">Supplier *</label>
     <input
       type="text"
       value={supplierInput}
@@ -1366,7 +1369,7 @@ setPaymentBasis('debt')
 
 <div className="mb-4">
   <label className="block text-sm font-medium text-gray-700 mb-1">
-    Supplier Accreditation Documents (Optional)
+    Supplier Accreditation Documents (Coming Soon)
   </label>
   <p className="text-xs text-gray-500 mb-2">
     Upload PDF, images, or other documents to prove supplier accreditation
@@ -1375,8 +1378,10 @@ setPaymentBasis('debt')
     type="file"
     multiple
     accept=".pdf,.jpg,.jpeg,.png,.gif,.doc,.docx,.xls,.xlsx"
-    onChange={handleFileUpload}
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+    onChange={() => alert('This feature is coming soon')}
+    disabled
+    title="This feature is coming soon"
+    className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 cursor-not-allowed text-sm"
   />
   {accreditationFiles.length > 0 && (
     <div className="mt-2 space-y-1">
