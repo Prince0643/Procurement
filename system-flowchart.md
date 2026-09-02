@@ -107,7 +107,7 @@
       │                 │
       ▼                 ▼
 (Proceed to       ┌─────────────────────────┐
- Step 4)          │ PR sent back to the     │
+ Step 5)          │ PR sent back to the     │
                   │ Engineer who created it │
                   │ to EDIT the PR          │
                   │ (Notifies requester)    │
@@ -124,7 +124,39 @@
                                 └──► (Back to Step 2)
 
 ─────────────────────────────────────
- STEP 4: Super Admin Review PR
+ STEP 4: Super Admin Rep Review PR
+─────────────────────────────────────
+
+┌──────────────────────────────┐
+│ All Super Admin Reps         │
+│ Review PR                    │
+│ (Each Rep must respond)      │
+└──────────────┬───────────────┘
+               │
+      ┌────────┴────────┐
+      │                 │
+   ALL APPROVE      ANY DISAPPROVE
+      │                 │
+      ▼                 ▼
+┌─────────────┐   ┌─────────────────────────┐
+│ Check Amount│   │ PR sent back to the     │
+│ < 10,000 -> │   │ Engineer who created it │
+│ FOR PURCHASE│   │ to EDIT the PR          │
+│ >= 10,000 ->│   │ (Notifies requester)    │
+│ Proceed to  │   │ Status: RETURNED        │
+│ Step 5      │   └─────────────────────────┘
+                            │
+                            ▼
+                  ┌─────────────────────────┐
+                  │ Engineer edits & re-    │
+                  │ submits PR              │
+                  │ Status: PENDING         │
+                  └─────────────┬───────────┘
+                                │
+                                └──► (Back to Step 2)
+
+─────────────────────────────────────
+ STEP 5: Super Admin Review PR
 ─────────────────────────────────────
 
 ┌──────────────────────────────┐
@@ -157,7 +189,7 @@
 
 ---
 
-## 2.1 PURCHASE REQUEST - UNACCREDITED SUPPLIER FLOW (THE CURRENT BUG)
+## 2.1 PURCHASE REQUEST - UNACCREDITED SUPPLIER FLOW
 
 ```text
 ┌─────────────────┐
@@ -167,8 +199,7 @@
 │  Supplier)      │
 └────────┬────────┘
          │
-         │ BUG 1: System assigns Joylene & Daniel as reviewers 
-         │ (status: 'pending') even though PR is not ready for them yet.
+         │ (Reviewers are purposefully NOT assigned yet)
          ▼
 ┌─────────────────┐
 │ Status: PENDING │
@@ -183,24 +214,26 @@
 │ Status updates  │
 │ to FOR ENGINEER │
 │ REVIEW          │
+│ (or appropriate │
+│ review status)  │
 └────────┬────────┘
          │
-         │ BUG 2: System tries to assign Joylene & Daniel AGAIN.
-         │ Database throws "Duplicate Entry" error and ignores it.
+         │ System dynamically assigns required reviewers
+         │ based on requester role.
          ▼
 ┌─────────────────┐
-│ Joylene & Daniel│
+│ Reviewers       │
 │ click "For      │
 │ Reviews" tab    │
 └────────┬────────┘
          │
-         │ BUG 3: Backend sends the PR to the Frontend, BUT the 
-         │ Frontend expects a clean state and fails to render the row
-         │ because the reviewers were attached during the previous status.
+         │ Frontend safely renders the PR row because
+         │ state is clean and reviewers were just attached.
          ▼
 ┌─────────────────┐
-│ Frontend shows: │
-│ "0 Requests"    │
+│ Proceed to      │
+│ normal PR       │
+│ Review Flow     │
 └─────────────────┘
 ```
 
@@ -255,7 +288,7 @@
       │                 │
       ▼                 ▼
 (Proceed to       ┌─────────────────────────┐
- Step 4)          │ PO sent back to the     │
+ Step 5)          │ PO sent back to the     │
                   │ Admin who created it    │
                   │ to EDIT the PO          │
                   │ (Notifies requester)    │
@@ -563,3 +596,4 @@
 5. **Figma** - Design tool with flowchart plugins
 6. **Whimsical** - Quick flowcharts
 7. **Paper + Pen** - Always works!
+
