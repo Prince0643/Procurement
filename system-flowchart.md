@@ -239,6 +239,35 @@
 
 ---
 
+## 2.2 PURCHASE REQUEST - BYPASS FLOW
+
+```text
+┌─────────────────┐
+│ Engineer        │
+│ Creates PR      │
+│ Status: PENDING │
+└────────┬────────┘
+         │
+         ▼
+┌───────────────────────────┐
+│ Super Admin (Any Amount)  │
+│           OR              │
+│ Super Admin Rep (<10,000) │
+└────────┬──────────────────┘
+         │
+         │ Clicks "Bypass Approvals"
+         ▼
+┌───────────────────────────┐
+│ Status: FOR PURCHASE      │
+│ - Approves PR directly    │
+│ - Notifies all pending    │
+│   reviewers               │
+│ - Sets is_bypassed = 1    │
+└───────────────────────────┘
+```
+
+---
+
 ## 3. PURCHASE ORDER (PO) FLOW
 
 ```

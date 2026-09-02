@@ -8,12 +8,17 @@ const AuditLogs = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const limit = 10;
 
   useEffect(() => {
     const fetchLogs = async () => {
+      setLoading(true);
       try {
-        const response = await api.get('/audit-logs');
-        setLogs(response.data);
+        const response = await api.get(`/audit-logs?page=${page}&limit=${limit}`);
+        setLogs(response.data.data || []);
+        setTotalPages(response.data.totalPages || 1);
       } catch (err) {
         setError(err.response?.data?.message || 'Failed to load audit logs.');
       } finally {
@@ -27,9 +32,9 @@ const AuditLogs = () => {
       setLoading(false);
       setError('Access denied. Super Admin only.');
     }
-  }, [user]);
+  }, [user, page]);
 
-  if (loading) return <div className="p-4 text-gray-500">Loading audit logs...</div>;
+  if (loading && logs.length === 0) return <div className="p-4 text-gray-500">Loading audit logs...</div>;
   if (error) return <div className="p-4 text-red-500 font-medium">{error}</div>;
 
   return (
@@ -92,6 +97,28 @@ const AuditLogs = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+            
+            <div className="mt-4 flex items-center justify-between">
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page <= 1}
+                  className="px-3 py-1 border rounded-md text-sm font-medium bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page >= totalPages}
+                  className="px-3 py-1 border rounded-md text-sm font-medium bg-white hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Next
+                </button>
+              </div>
+              <div className="text-sm text-gray-700">
+                Page <span className="font-medium">{page}</span> of <span className="font-medium">{totalPages}</span>
+              </div>
             </div>
           </div>
         </div>

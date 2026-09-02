@@ -212,6 +212,11 @@ saveDraft: async (prData) => {
     return response.data;
   },
 
+  bypass: async (id) => {
+    const response = await api.put(`/purchase-requests/${id}/bypass`);
+    return response.data;
+  },
+
   checkSupplierAccreditation: async (supplierName) => {
     const response = await api.get(`/purchase-requests/check-supplier-accreditation/${encodeURIComponent(supplierName)}`);
     return response.data;

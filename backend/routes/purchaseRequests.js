@@ -335,6 +335,8 @@ router.get('/:id', authenticate, async (req, res) => {
 	             e.role as requester_role,
 	             approver.first_name as approver_first_name,
 	             approver.last_name as approver_last_name,
+	             bypasser.first_name as bypassed_by_first_name,
+	             bypasser.last_name as bypassed_by_last_name,
 	             COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
 	             COALESCE(pr.supplier_name, s.supplier_name) as payee_name,
 	             COALESCE(pr.supplier_address, s.address) as payee_address,
@@ -343,6 +345,7 @@ router.get('/:id', authenticate, async (req, res) => {
 	      FROM purchase_requests pr
 	      JOIN employees e ON pr.requested_by = e.id
 	      LEFT JOIN employees approver ON pr.approved_by = approver.id
+	      LEFT JOIN employees bypasser ON pr.bypassed_by = bypasser.id
 	      LEFT JOIN suppliers s ON pr.supplier_id = s.id
 	      LEFT JOIN suppliers engineer_selected ON pr.supplier_id = engineer_selected.id
 	      WHERE pr.id = ?
@@ -1633,6 +1636,91 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
   }
 });
 
+  // Bypass PR Approvals
+  router.put('/:id/bypass', authenticate, async (req, res) => {
+    let conn;
+    try {
+      const userRole = req.user.role;
+      if (!['super_admin', 'super_admin_rep'].includes(userRole)) {
+        return res.status(403).json({ message: 'Only Super Admin or Super Admin Representative can bypass PR approvals.' });
+      }
+
+      conn = await db.getConnection();
+      await conn.beginTransaction();
+
+      const [prs] = await conn.query(
+        'SELECT pr.*, e.email as requester_email, e.first_name, e.last_name FROM purchase_requests pr JOIN employees e ON pr.requested_by = e.id WHERE pr.id = ?',
+        [req.params.id]
+      );
+      if (prs.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Purchase request not found' });
+      }
+
+      const pr = prs[0];
+      const totalAmount = parseFloat(pr.total_amount) || 0;
+
+      // Super admin rep can only bypass if amount < 10000
+      if (userRole === 'super_admin_rep' && totalAmount >= 10000) {
+        await conn.rollback();
+        return res.status(403).json({ message: 'Super Admin Representative can only bypass PRs with a total amount less than 10,000.' });
+      }
+
+      if (pr.status === 'For Purchase' || pr.status === 'Rejected') {
+        await conn.rollback();
+        return res.status(400).json({ message: `Cannot bypass PR. Current status is already ${pr.status}.` });
+      }
+
+      const newStatus = 'For Purchase';
+
+      await conn.query(
+        'UPDATE purchase_requests SET status = ?, is_bypassed = 1, bypassed_by = ? WHERE id = ?',
+        [newStatus, req.user.id, req.params.id]
+      );
+
+      // Notify requester
+      await createNotification(
+        pr.requested_by,
+        'PR Bypassed and Approved',
+        `Your Purchase Request ${pr.pr_number} has been bypassed and approved by ${req.user.first_name} ${req.user.last_name} (${userRole === 'super_admin' ? 'Super Admin' : 'Super Admin Rep'}). It is now ready for PO creation.`,
+        `/dashboard/purchase-requests/${pr.id}`
+      );
+
+      // Notify pending reviewers (Engineers, Admins, Super Admin Reps depending on current status)
+      let pendingReviewers = [];
+      if (pr.status === 'Pending' || pr.status === 'For Engineer Review') {
+        pendingReviewers = await getEngineers();
+      } else if (pr.status === 'For Admin Review') {
+        pendingReviewers = await getAdmins();
+      } else if (pr.status === 'For Super Admin Rep Review') {
+        pendingReviewers = await getSuperAdminReps();
+      } else if (pr.status === 'For Super Admin Final Approval') {
+        pendingReviewers = await getSuperAdmins();
+      }
+      
+      // Remove the user bypassing from the pending reviewers if they are in the list
+      pendingReviewers = pendingReviewers.filter(id => id !== req.user.id);
+
+      for (const reviewerId of pendingReviewers) {
+        await createNotification(
+          reviewerId,
+          'PR Bypassed',
+          `Purchase Request ${pr.pr_number} has been bypassed and approved by ${req.user.first_name} ${req.user.last_name}. Your review is no longer needed.`,
+          `/dashboard/purchase-requests/${pr.id}`
+        );
+      }
+
+      await conn.commit();
+      res.json({ message: 'Purchase request bypassed successfully', status: newStatus });
+    } catch (error) {
+      if (conn) await conn.rollback();
+      console.error('Error bypassing purchase request:', error);
+      res.status(500).json({ message: 'Error bypassing purchase request' });
+    } finally {
+      if (conn) conn.release();
+    }
+  });
+
 // Approve/Reject PR by Super Admin Rep (to Super Admin Final Approval)
 router.put('/:id/super_admin_rep-approve', authenticate, async (req, res) => {
   let conn;
@@ -1850,14 +1938,22 @@ router.get('/:id/export', authenticate, async (req, res) => {
       SELECT pr.*, 
              e.first_name as requester_first_name, 
              e.last_name as requester_last_name,
+             e.role as requester_role,
              approver.first_name as approver_first_name,
              approver.last_name as approver_last_name,
+             bypasser.first_name as bypassed_by_first_name,
+             bypasser.last_name as bypassed_by_last_name,
              COALESCE(pr.supplier_name, s.supplier_name) as supplier_name,
-             s.contact_person as supplier_contact
+             COALESCE(pr.supplier_name, s.supplier_name) as payee_name,
+             COALESCE(pr.supplier_address, s.address) as payee_address,
+             s.address as supplier_address,
+             engineer_selected.supplier_name as engineer_supplier_name
       FROM purchase_requests pr
       JOIN employees e ON pr.requested_by = e.id
       LEFT JOIN employees approver ON pr.approved_by = approver.id
+      LEFT JOIN employees bypasser ON pr.bypassed_by = bypasser.id
       LEFT JOIN suppliers s ON pr.supplier_id = s.id
+      LEFT JOIN suppliers engineer_selected ON pr.supplier_id = engineer_selected.id
       WHERE pr.id = ?
     `, [req.params.id]);
 

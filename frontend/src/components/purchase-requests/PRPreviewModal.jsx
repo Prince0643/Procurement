@@ -170,12 +170,18 @@ const PRPreviewModal = ({
     review.reviewer_role !== 'super_admin'
   );
   const formatReviewerList = (reviews) => reviews.map(getReviewerName).join(', ');
-  const reviewedByText = approvedReviewers.length > 0
+  
+  const reviewedByText = pr.is_bypassed
+    ? `${pr.bypassed_by_first_name || ''} ${pr.bypassed_by_last_name || ''}`.trim() || 'Super Admin'
+    : approvedReviewers.length > 0
     ? getReviewerName(approvedReviewers[0])
     : rejectedReviewers.length > 0
       ? `${getReviewerName(rejectedReviewers[0])} (declined)`
       : (pr.reviewed_by_name || 'Pending review');
-  const reviewedByRoleText = approvedReviewers.length > 0
+      
+  const reviewedByRoleText = pr.is_bypassed
+    ? 'Approved via Bypass'
+    : approvedReviewers.length > 0
     ? getReviewerRoleLabel(approvedReviewers[0].reviewer_role)
     : rejectedReviewers.length > 0
       ? getReviewerRoleLabel(rejectedReviewers[0].reviewer_role)
@@ -194,6 +200,26 @@ const PRPreviewModal = ({
       return false;
     }
   })();
+
+  const handleBypass = async () => {
+    if (!pr?.id) return;
+    const confirmBypass = window.confirm("Are you sure you want to bypass all pending reviews and approve this PR directly?");
+    if (!confirmBypass) return;
+    try {
+      setSubmittingReview(true);
+      await purchaseRequestService.bypass(pr.id);
+      alert('PR bypassed successfully');
+      onClose?.();
+      // Need to reload window or trigger refresh in parent component. 
+      // If parent has a refresh function we could call it, otherwise window.location.reload()
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.message || 'Failed to bypass PR');
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
 
   const handleLocalApprove = async () => {
     if (!pr?.id) return;
@@ -475,6 +501,18 @@ const PRPreviewModal = ({
             <Button variant="secondary" className="w-full sm:w-auto" onClick={handleClose}>
               Close
             </Button>
+
+            {/* Render bypass button for authorized users */}
+            {user && (user.role === 'super_admin' || (user.role === 'super_admin_rep' && total < 10000)) && pr.status !== 'For Purchase' && pr.status !== 'Rejected' && !readOnly && (
+              <Button
+                variant="primary"
+                className="w-full sm:w-auto"
+                onClick={handleBypass}
+                disabled={processingId === pr.id || submittingReview}
+              >
+                Bypass Approvals
+              </Button>
+            )}
 
             {/* Render reject button if parent provided handler and action allowed, or if current user is a pending reviewer */}
             {( (onReject && canAct) || userPendingReview ) && (
