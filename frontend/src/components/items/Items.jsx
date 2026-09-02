@@ -815,7 +815,7 @@ setPaymentBasis('debt')
     }
   }
 
-  const canManageCatalog = ['procurement', 'admin', 'super_admin', 'engineer'].includes(user?.role)
+  const canManageCatalog = user?.role === 'super_admin'
 
   // Get categories from database + add 'all' option
   const filterCategories = [
