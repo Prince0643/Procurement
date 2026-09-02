@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { authService } from '../../services/auth';
-import { Key, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react';
+import { Key, Eye, EyeOff, CheckCircle, AlertCircle, Database, Download } from 'lucide-react';
+import { useAuth } from '../../contexts/AuthContext';
 
 const Settings = () => {
+  const { user } = useAuth();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -10,8 +12,10 @@ const Settings = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [backupLoading, setBackupLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
+  const [backupError, setBackupError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -60,6 +64,41 @@ const Settings = () => {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBackup = async () => {
+    try {
+      setBackupLoading(true);
+      setBackupError('');
+      const token = localStorage.getItem('token');
+      
+      const response = await fetch('http://localhost:5001/api/settings/backup', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to generate backup');
+      }
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // The backend sets the Content-Disposition header, but we can also provide a fallback filename
+      a.download = `procurement_backup_${new Date().toISOString().split('T')[0]}.sql`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+    } catch (err) {
+      console.error(err);
+      setBackupError('Failed to generate database backup. Please try again.');
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -229,6 +268,55 @@ const Settings = () => {
           </li>
         </ul>
       </div>
+
+      {/* Advanced Settings (Super Admin Only) */}
+      {user?.role === 'super_admin' && (
+        <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200">
+          <div className="p-6 border-b border-gray-200 bg-red-50 rounded-t-lg">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <Database className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Advanced Settings</h2>
+                <p className="text-sm text-gray-500">System-level configuration and maintenance</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-6">
+            <h3 className="text-md font-medium text-gray-900 mb-2">Database Management</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Download a complete SQL backup of the procurement database. This includes all schemas, tables, and records. Keep this file secure.
+            </p>
+            
+            {backupError && (
+              <div className="flex items-start gap-2 p-3 mb-4 rounded-md bg-red-50 text-red-700 text-sm border border-red-200">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{backupError}</span>
+              </div>
+            )}
+
+            <button
+              onClick={handleBackup}
+              disabled={backupLoading}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {backupLoading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4" />
+                  Download Full Backup
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
