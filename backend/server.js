@@ -6,6 +6,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import helmet from 'helmet';
+import morgan from 'morgan';
+import logger from './utils/logger.js';
 import db from './config/database.js';
 import { initSocket } from './utils/socket.js';
 import sanitizeInput from './middleware/sanitize.js';
@@ -41,6 +43,9 @@ const app = express();
 const httpServer = createServer(app);
 const PORT = process.env.PORT || 5005;
 const paymentReminderEnabled = String(process.env.PAYMENT_REMINDER_ENABLED || 'true').toLowerCase() !== 'false';
+
+// HTTP Request Logging via Morgan & Winston
+app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
 // Trust proxy for accurate rate limiting behind Nginx
 app.set('trust proxy', 1);
@@ -192,7 +197,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.stack);
   res.status(500).json({ 
     message: 'Something went wrong!',
     error: process.env.NODE_ENV === 'development' ? err.message : undefined
@@ -205,13 +210,13 @@ app.use((req, res) => {
 });
 
 httpServer.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
+  logger.info(`Server running on port ${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
   if (paymentReminderEnabled) {
     startPaymentScheduleReminderJob();
-    console.log('Payment schedule reminder job started');
+    logger.info('Payment schedule reminder job started');
   } else {
-    console.log('Payment schedule reminder job is disabled');
+    logger.info('Payment schedule reminder job is disabled');
   }
 });
 

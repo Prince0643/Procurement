@@ -10,7 +10,7 @@ const pool = mysql.createPool({
   password: process.env.DB_PASSWORD || '',
   database: process.env.DB_NAME || 'procurement_db',
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || '50', 10),
   queueLimit: 0,
   enableKeepAlive: true,
   keepAliveInitialDelay: 0
