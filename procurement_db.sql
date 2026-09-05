@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Aug 14, 2026 at 03:19 AM
+-- Generation Time: Sep 04, 2026 at 12:34 AM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -228,30 +228,34 @@ CREATE TABLE IF NOT EXISTS `employees` (
   `first_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
   `middle_initial` varchar(2) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `last_name` varchar(50) COLLATE utf8mb4_unicode_ci NOT NULL,
-  `role` enum('engineer','procurement','admin','super_admin') COLLATE utf8mb4_unicode_ci DEFAULT 'engineer',
+  `role` enum('engineer','procurement','admin','super_admin','super_admin_rep') COLLATE utf8mb4_unicode_ci DEFAULT 'engineer',
   `department` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `password` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
   `is_active` tinyint(1) DEFAULT '1',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `employee_no` (`employee_no`)
-) ENGINE=InnoDB AUTO_INCREMENT=19 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `employees`
 --
 
-INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `middle_initial`, `last_name`, `role`, `department`, `password`, `is_active`, `created_at`, `updated_at`) VALUES
-(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'engineer', 'Engineering', '$2a$10$g5BT/XyIWksZvK4LqqQTjuL/pjSglLqGdRQCGoPw375t5Q2g4XkKK', 1, '2026-02-10 02:36:33', '2026-06-08 07:29:05'),
-(6, 'PRO-2026-0001', 'Junnel', 'B', 'Tadina', 'procurement', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-12 07:10:20'),
-(7, 'ADMIN-2026-0001', 'ELAINE', 'M', 'AGUILAR', 'admin', 'Administration', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-12 06:06:26'),
-(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$axW..03rjtzmDLOgyvn2ceyJResqKMyiyWQD7vYUa3gmTWvRqaENq', 1, '2026-02-10 02:36:33', '2026-04-14 01:20:11'),
-(10, 'SA001', 'Super', 'D', 'Adminesu', 'super_admin', 'Management', '$2a$10$2VAa8J7EZDnfspG1/t4G1ez6MXGEnf3DLiPNqcJEm4ypE0p9RATNq', 1, '2026-02-12 00:55:00', '2026-02-12 02:48:05'),
-(12, 'ENG-2026-0005', 'Joylene', 'F', 'Balanon', 'engineer', 'Engineering', '$2a$10$fFUgVn7r1fE8YPLnwcTDZOhWhEhjxY1gg3rULIps0uoMBVsBE95W.', 1, '2026-02-12 02:45:21', '2026-02-12 02:50:16'),
-(13, 'ENG-2026-0006', 'Winnielyn Kaye', 'W', 'Olarte', 'engineer', 'Procurement', '$2a$10$.GDmwlv/XvEmPJzt3oIb0.39RVYiJMsxBwcTaMbmFInk3th76KpIu', 1, '2026-02-12 02:45:41', '2026-02-12 02:54:11'),
-(14, 'ADMIN-2026-0002', 'RONALYN', 'W', 'MALLARE', 'admin', 'Administration', '$2a$10$zZXZI/tYRPS37ZQVDeThpeaBi5uCv1P1e1EsBkScqRmt/1.iZPFWK', 1, '2026-02-12 02:46:45', '2026-08-12 06:06:09'),
-(16, 'ADMIN-2026-0004', 'MARJORIE', 'O', 'GARCIA', 'admin', 'Administration', '$2a$10$pj5HrIzaIYIkWlCbcOy9sOBNxrQitgV2.Umuh.wldfJWEYy5t0Ta6', 1, '2026-02-12 02:47:46', '2026-08-12 06:06:00');
+INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `middle_initial`, `last_name`, `role`, `department`, `password`, `is_active`, `created_at`, `updated_at`, `email`) VALUES
+(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'super_admin_rep', 'Engineering', '$2a$10$g5BT/XyIWksZvK4LqqQTjuL/pjSglLqGdRQCGoPw375t5Q2g4XkKK', 1, '2026-02-10 02:36:33', '2026-08-14 04:52:27', NULL),
+(6, 'PRO-2026-0001', 'Junnel', 'B', 'Tadina', 'engineer', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-14 06:47:24', NULL),
+(7, 'ADMIN-2026-0001', 'ELAINE', 'M', 'AGUILAR', 'admin', 'Administration', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-12 06:06:26', NULL),
+(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$axW..03rjtzmDLOgyvn2ceyJResqKMyiyWQD7vYUa3gmTWvRqaENq', 1, '2026-02-10 02:36:33', '2026-04-14 01:20:11', NULL),
+(10, 'SA001', 'Super', 'D', 'Adminesu', 'super_admin', 'Management', '$2a$10$2VAa8J7EZDnfspG1/t4G1ez6MXGEnf3DLiPNqcJEm4ypE0p9RATNq', 1, '2026-02-12 00:55:00', '2026-02-12 02:48:05', NULL),
+(12, 'ENG-2026-0005', 'Joylene', 'F', 'Balanon', 'engineer', 'Engineering', '$2a$10$fFUgVn7r1fE8YPLnwcTDZOhWhEhjxY1gg3rULIps0uoMBVsBE95W.', 1, '2026-02-12 02:45:21', '2026-02-12 02:50:16', NULL),
+(13, 'ENG-2026-0006', 'Winnielyn Kaye', 'W', 'Olarte', 'engineer', 'Procurement', '$2a$10$.GDmwlv/XvEmPJzt3oIb0.39RVYiJMsxBwcTaMbmFInk3th76KpIu', 1, '2026-02-12 02:45:41', '2026-02-12 02:54:11', NULL),
+(14, 'ADMIN-2026-0002', 'RONALYN', 'W', 'MALLARE', 'admin', 'Administration', '$2a$10$zZXZI/tYRPS37ZQVDeThpeaBi5uCv1P1e1EsBkScqRmt/1.iZPFWK', 1, '2026-02-12 02:46:45', '2026-08-12 06:06:09', NULL),
+(16, 'ADMIN-2026-0004', 'MARJORIE', 'O', 'GARCIA', 'admin', 'Administration', '$2a$10$pj5HrIzaIYIkWlCbcOy9sOBNxrQitgV2.Umuh.wldfJWEYy5t0Ta6', 1, '2026-02-12 02:47:46', '2026-08-12 06:06:00', NULL),
+(19, 'ADMIN-2026-0005', 'LYRA', 'F', 'JAVONILLO', 'admin', 'Administration', '$2a$10$xHUq1Y4DXeC9lhhcLPiTy.Y/s2MXaqR737x4Rdw8iHK4Cfw8q5qjG', 1, '2026-08-14 06:48:34', '2026-08-14 06:48:34', NULL),
+(20, 'ENG-2026-0008', 'EARL', 'N', 'NISPEROS', 'engineer', 'Engineering', '$2a$10$HwoxtxQmy2HMokTt1s6tie1PfKKbP24wZ7gJHMBCDX16kLKo8SXy2', 1, '2026-08-14 06:51:13', '2026-08-14 06:51:13', NULL),
+(21, 'ENG-2026-0009', 'JOANA', 'M', 'BAAGEN', 'engineer', 'Engineering', '$2a$10$opLKGHpkkVuulYRfKf3L3uNrDdGj3LkQM0GKa3nBF3orWE.YcoSz2', 1, '2026-08-14 06:51:30', '2026-08-14 06:51:30', NULL);
 
 -- --------------------------------------------------------
 
@@ -276,7 +280,7 @@ CREATE TABLE IF NOT EXISTS `items` (
   UNIQUE KEY `item_name` (`item_name`),
   KEY `category_id` (`category_id`),
   KEY `created_by` (`created_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=25 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=26 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `items`
@@ -306,7 +310,8 @@ INSERT INTO `items` (`id`, `item_code`, `item_name`, `description`, `category_id
 (21, 'ITM019', 'Office Chair Ergonomic', 'Mesh office chair', 11, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
 (22, 'ITM020', 'Carton Box Medium', 'Corrugated shipping box', 12, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
 (23, 'SKU-023', 'junell tadina', 'xfdhfgh', 3, 'pcs', 5, 'Active', '2026-06-08 01:53:24', '2026-06-08 01:53:24'),
-(24, 'SKU-024', 'Laminator', 'this is just for testing', 2, 'pcs', 7, 'Active', '2026-06-19 03:50:52', '2026-06-19 03:50:52');
+(24, 'SKU-024', 'Laminator', 'this is just for testing', 2, 'pcs', 7, 'Active', '2026-06-19 03:50:52', '2026-06-19 03:50:52'),
+(25, 'SKU-025', 'Bond Paper', '', 2, 'pcs', 13, 'Active', '2026-09-03 06:42:21', '2026-09-03 06:42:21');
 
 -- --------------------------------------------------------
 
@@ -348,7 +353,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `recipient_id` (`recipient_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=335 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=528 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `notifications`
@@ -357,120 +362,314 @@ CREATE TABLE IF NOT EXISTS `notifications` (
 INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `related_id`, `related_type`, `is_read`, `created_at`) VALUES
 (219, 6, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 0, '2026-06-05 06:14:35'),
 (220, 12, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 1, '2026-06-05 06:14:35'),
-(221, 13, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 0, '2026-06-05 06:14:35'),
+(221, 13, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 1, '2026-06-05 06:14:35'),
 (222, 8, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 1, '2026-06-05 06:14:35'),
-(223, 10, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 0, '2026-06-05 06:14:35'),
+(223, 10, 'New PR Created', 'Purchase Request 2026-06-001 has been created and is ready for your review', 'PR Created', 36, 'purchase_request', 1, '2026-06-05 06:14:35'),
 (224, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-001 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 36, 'purchase_request', 1, '2026-06-05 06:16:26'),
-(225, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-001 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 36, 'purchase_request', 0, '2026-06-05 06:16:26'),
+(225, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-001 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 36, 'purchase_request', 1, '2026-06-05 06:16:26'),
 (226, 6, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 0, '2026-06-08 07:15:18'),
 (227, 12, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 1, '2026-06-08 07:15:18'),
-(228, 13, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 0, '2026-06-08 07:15:18'),
+(228, 13, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 1, '2026-06-08 07:15:18'),
 (229, 8, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 1, '2026-06-08 07:15:18'),
-(230, 10, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 0, '2026-06-08 07:15:18'),
+(230, 10, 'New PR Created', 'Purchase Request 2026-06-002 has been created and is ready for your review', 'PR Created', 37, 'purchase_request', 1, '2026-06-08 07:15:18'),
 (231, 6, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 0, '2026-06-08 08:02:34'),
 (232, 12, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 1, '2026-06-08 08:02:34'),
-(233, 13, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 0, '2026-06-08 08:02:34'),
-(234, 8, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 0, '2026-06-08 08:02:34'),
-(235, 10, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 0, '2026-06-08 08:02:34'),
-(236, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-003 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 38, 'purchase_request', 0, '2026-06-08 08:03:21'),
-(237, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-003 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 38, 'purchase_request', 0, '2026-06-08 08:03:21'),
+(233, 13, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 1, '2026-06-08 08:02:34'),
+(234, 8, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 1, '2026-06-08 08:02:34'),
+(235, 10, 'New PR Created', 'Purchase Request 2026-06-003 has been created and is ready for your review', 'PR Created', 38, 'purchase_request', 1, '2026-06-08 08:02:34'),
+(236, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-003 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 38, 'purchase_request', 1, '2026-06-08 08:03:21'),
+(237, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-003 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 38, 'purchase_request', 1, '2026-06-08 08:03:21'),
 (238, 6, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 0, '2026-06-08 08:05:43'),
 (239, 12, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 1, '2026-06-08 08:05:43'),
 (240, 13, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 1, '2026-06-08 08:05:43'),
-(241, 8, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 0, '2026-06-08 08:05:43'),
-(242, 10, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 0, '2026-06-08 08:05:43'),
-(243, 7, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 0, '2026-06-08 08:07:04'),
+(241, 8, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 1, '2026-06-08 08:05:43'),
+(242, 10, 'New PR Created', 'Purchase Request 2026-06-004 has been created and is ready for your review', 'PR Created', 39, 'purchase_request', 1, '2026-06-08 08:05:43'),
+(243, 7, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 1, '2026-06-08 08:07:04'),
 (244, 14, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 0, '2026-06-08 08:07:04'),
-(245, 8, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 0, '2026-06-08 08:07:04'),
-(246, 10, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 0, '2026-06-08 08:07:04'),
-(247, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-005 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 40, 'purchase_request', 0, '2026-06-08 08:08:09'),
-(248, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-005 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 40, 'purchase_request', 0, '2026-06-08 08:08:09'),
+(245, 8, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 1, '2026-06-08 08:07:04'),
+(246, 10, 'New PR Created', 'Purchase Request 2026-06-005 has been created and is ready for your review', 'PR Created', 40, 'purchase_request', 1, '2026-06-08 08:07:04'),
+(247, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-005 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 40, 'purchase_request', 1, '2026-06-08 08:08:09'),
+(248, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-005 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 40, 'purchase_request', 1, '2026-06-08 08:08:09'),
 (249, 14, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 0, '2026-06-19 03:52:19'),
 (250, 16, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 0, '2026-06-19 03:52:19'),
-(251, 8, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 0, '2026-06-19 03:52:19'),
-(252, 10, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 0, '2026-06-19 03:52:19'),
-(253, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-006 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 41, 'purchase_request', 0, '2026-06-19 03:54:53'),
-(254, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-006 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 41, 'purchase_request', 0, '2026-06-19 03:54:53'),
-(255, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-007 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 42, 'purchase_request', 0, '2026-08-12 02:44:30'),
-(256, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-007 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 42, 'purchase_request', 0, '2026-08-12 02:44:30'),
-(257, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:19'),
+(251, 8, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 1, '2026-06-19 03:52:19'),
+(252, 10, 'New PR Created', 'Purchase Request 2026-06-006 has been created and is ready for your review', 'PR Created', 41, 'purchase_request', 1, '2026-06-19 03:52:19'),
+(253, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-06-006 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 41, 'purchase_request', 1, '2026-06-19 03:54:53'),
+(254, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-06-006 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 41, 'purchase_request', 1, '2026-06-19 03:54:53'),
+(255, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-007 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 42, 'purchase_request', 1, '2026-08-12 02:44:30'),
+(256, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-007 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 42, 'purchase_request', 1, '2026-08-12 02:44:30'),
+(257, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 1, '2026-08-12 03:24:19'),
 (258, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:19'),
 (259, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:19'),
-(260, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:41'),
+(260, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 1, '2026-08-12 03:24:41'),
 (261, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:41'),
 (262, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:41'),
-(263, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:50'),
+(263, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 1, '2026-08-12 03:24:50'),
 (264, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:50'),
 (265, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-008 has been reviewed by engineers and is ready for admin review', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:50'),
-(266, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-008 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:58'),
-(267, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-008 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 43, 'purchase_request', 0, '2026-08-12 03:24:58'),
+(266, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-008 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 43, 'purchase_request', 1, '2026-08-12 03:24:58'),
+(267, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-008 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 43, 'purchase_request', 1, '2026-08-12 03:24:58'),
 (268, 6, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(269, 12, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(270, 13, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(271, 7, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
+(269, 12, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 1, '2026-08-12 06:44:50'),
+(270, 13, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 1, '2026-08-12 06:44:50'),
+(271, 7, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 1, '2026-08-12 06:44:50'),
 (272, 14, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
 (273, 16, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(274, 8, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(275, 10, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 0, '2026-08-12 06:44:50'),
-(276, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:45:44'),
+(274, 8, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 1, '2026-08-12 06:44:50'),
+(275, 10, 'New PR Created', 'Purchase Request 2026-08-009 has been created and is ready for your review', 'PR Created', 44, 'purchase_request', 1, '2026-08-12 06:44:50'),
+(276, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 1, '2026-08-12 06:45:44'),
 (277, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:45:44'),
 (278, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:45:44'),
-(279, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:10'),
+(279, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 1, '2026-08-12 06:46:10'),
 (280, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:10'),
 (281, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:10'),
-(282, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:18'),
+(282, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 1, '2026-08-12 06:46:18'),
 (283, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:18'),
 (284, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-009 has been reviewed by engineers and is ready for admin review', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:18'),
-(285, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-009 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:26'),
-(286, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-009 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 44, 'purchase_request', 0, '2026-08-12 06:46:26'),
+(285, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-009 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 44, 'purchase_request', 1, '2026-08-12 06:46:26'),
+(286, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-009 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 44, 'purchase_request', 1, '2026-08-12 06:46:26'),
 (287, 6, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(288, 12, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(289, 13, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(290, 7, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
+(288, 12, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 1, '2026-08-12 06:56:28'),
+(289, 13, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 1, '2026-08-12 06:56:28'),
+(290, 7, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 1, '2026-08-12 06:56:28'),
 (291, 14, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
 (292, 16, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(293, 8, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(294, 10, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 0, '2026-08-12 06:56:28'),
-(295, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-010 has been reviewed by engineers and is ready for admin review', 'PR Review', 45, 'purchase_request', 0, '2026-08-12 06:57:39'),
+(293, 8, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 1, '2026-08-12 06:56:28'),
+(294, 10, 'New PR Created', 'Purchase Request 2026-08-010 has been created and is ready for your review', 'PR Created', 45, 'purchase_request', 1, '2026-08-12 06:56:28'),
+(295, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-010 has been reviewed by engineers and is ready for admin review', 'PR Review', 45, 'purchase_request', 1, '2026-08-12 06:57:39'),
 (296, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-010 has been reviewed by engineers and is ready for admin review', 'PR Review', 45, 'purchase_request', 0, '2026-08-12 06:57:39'),
 (297, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-010 has been reviewed by engineers and is ready for admin review', 'PR Review', 45, 'purchase_request', 0, '2026-08-12 06:57:39'),
-(298, 12, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
-(299, 13, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
-(300, 7, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
+(298, 12, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 1, '2026-08-12 07:10:56'),
+(299, 13, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 1, '2026-08-12 07:10:56'),
+(300, 7, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 1, '2026-08-12 07:10:56'),
 (301, 14, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
 (302, 16, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
 (303, 6, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
-(304, 8, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
-(305, 10, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 0, '2026-08-12 07:10:56'),
-(306, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:14'),
+(304, 8, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 1, '2026-08-12 07:10:56'),
+(305, 10, 'New PR Created', 'Purchase Request 2026-08-011 has been created and is ready for your review', 'PR Created', 46, 'purchase_request', 1, '2026-08-12 07:10:56'),
+(306, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 1, '2026-08-12 07:11:14'),
 (307, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:14'),
 (308, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:14'),
-(309, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:26'),
+(309, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 1, '2026-08-12 07:11:26'),
 (310, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:26'),
 (311, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:26'),
-(312, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:33'),
+(312, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 1, '2026-08-12 07:11:33'),
 (313, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:33'),
 (314, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-011 has been reviewed by engineers and is ready for admin review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:33'),
 (315, 6, 'PR Ready for Procurement Review', 'Purchase Request 2026-08-011 has been reviewed by admins and is ready for procurement review', 'PR Review', 46, 'purchase_request', 0, '2026-08-12 07:11:42'),
-(316, 8, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
-(317, 10, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
+(316, 8, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 1, '2026-08-12 07:15:18'),
+(317, 10, 'PR Pending Final Approval', 'Purchase Request 2026-08-011 has been reviewed by Procurement and requires your final approval', 'PR Approved', 46, 'purchase_request', 1, '2026-08-12 07:15:18'),
 (318, 5, 'PR Values Modified by Procurement', 'Procurement modified values in your PR 2026-08-011: Circuit Breaker 20A: unit price from ₱23.00 to ₱23, unit from \"null\" to \"pcs\"', 'PR Modified', 46, 'purchase_request', 0, '2026-08-12 07:15:18'),
 (319, 14, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
 (320, 16, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
-(321, 8, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
-(322, 10, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 0, '2026-08-13 01:42:45'),
-(323, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 0, '2026-08-13 01:43:04'),
-(324, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 0, '2026-08-13 01:43:04'),
+(321, 8, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 1, '2026-08-13 01:42:45'),
+(322, 10, 'New PR Created', 'Purchase Request 2026-08-012 has been created and is ready for your review', 'PR Created', 47, 'purchase_request', 1, '2026-08-13 01:42:45'),
+(323, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 1, '2026-08-13 01:43:04'),
+(324, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-012 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 47, 'purchase_request', 1, '2026-08-13 01:43:04'),
 (325, 14, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
 (326, 16, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
-(327, 8, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
-(328, 10, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 0, '2026-08-13 01:53:35'),
-(329, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 0, '2026-08-13 01:54:01'),
-(330, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 0, '2026-08-13 01:54:01'),
-(331, 8, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 0, '2026-08-13 01:56:32'),
-(332, 10, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 0, '2026-08-13 01:56:32'),
+(327, 8, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 1, '2026-08-13 01:53:35'),
+(328, 10, 'New PR Created', 'Purchase Request 2026-08-013 has been created and is ready for your review', 'PR Created', 48, 'purchase_request', 1, '2026-08-13 01:53:35'),
+(329, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 1, '2026-08-13 01:54:01'),
+(330, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-013 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 48, 'purchase_request', 1, '2026-08-13 01:54:01'),
+(331, 8, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 1, '2026-08-13 01:56:32'),
+(332, 10, 'New PO Pending Approval', 'Purchase Order EAN-2026-08-001 has been created and requires your approval', 'PO Created', 2, 'purchase_order', 1, '2026-08-13 01:56:32'),
 (333, 5, 'PR Rejected', 'Your Purchase Request 2026-08-010 has been rejected', 'PR Rejected', 45, 'purchase_request', 0, '2026-08-14 00:31:09'),
-(334, 7, 'PR Rejected', 'Your Purchase Request 2026-08-014 has been rejected', 'PR Rejected', 49, 'purchase_request', 0, '2026-08-14 00:31:39');
+(334, 7, 'PR Rejected', 'Your Purchase Request 2026-08-014 has been rejected', 'PR Rejected', 49, 'purchase_request', 1, '2026-08-14 00:31:39'),
+(335, 13, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 1, '2026-08-14 05:01:05'),
+(336, 7, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 1, '2026-08-14 05:01:05'),
+(337, 14, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 0, '2026-08-14 05:01:05'),
+(338, 16, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 0, '2026-08-14 05:01:05'),
+(339, 5, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 0, '2026-08-14 05:01:05'),
+(340, 8, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 1, '2026-08-14 05:01:05'),
+(341, 10, 'New PR Created', 'Purchase Request 2026-08-015 has been created and is ready for your review', 'PR Created', 50, 'purchase_request', 1, '2026-08-14 05:01:05'),
+(342, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 1, '2026-08-14 05:01:19'),
+(343, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:19'),
+(344, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:19'),
+(345, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 1, '2026-08-14 05:01:40'),
+(346, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:40'),
+(347, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:40'),
+(348, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 1, '2026-08-14 05:01:49'),
+(349, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:49'),
+(350, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-015 has been reviewed by engineers and is ready for admin review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:49'),
+(351, 5, 'PR Ready for Super Admin Representative Review', 'Purchase Request 2026-08-015 has been reviewed by admins and is ready for Super Admin Representative review', 'PR Review', 50, 'purchase_request', 0, '2026-08-14 05:01:58'),
+(352, 8, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-015 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 50, 'purchase_request', 1, '2026-08-14 05:02:38'),
+(353, 10, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-015 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 50, 'purchase_request', 1, '2026-08-14 05:02:38'),
+(354, 14, 'New PR Created', 'Purchase Request 2026-08-016 has been created and is ready for your review', 'PR Created', 51, 'purchase_request', 0, '2026-08-14 05:04:03'),
+(355, 16, 'New PR Created', 'Purchase Request 2026-08-016 has been created and is ready for your review', 'PR Created', 51, 'purchase_request', 0, '2026-08-14 05:04:03'),
+(356, 5, 'New PR Created', 'Purchase Request 2026-08-016 has been created and is ready for your review', 'PR Created', 51, 'purchase_request', 0, '2026-08-14 05:04:04'),
+(357, 8, 'New PR Created', 'Purchase Request 2026-08-016 has been created and is ready for your review', 'PR Created', 51, 'purchase_request', 1, '2026-08-14 05:04:04'),
+(358, 10, 'New PR Created', 'Purchase Request 2026-08-016 has been created and is ready for your review', 'PR Created', 51, 'purchase_request', 1, '2026-08-14 05:04:04'),
+(359, 5, 'PR Ready for Super Admin Representative Review', 'Purchase Request 2026-08-016 has been reviewed by admins and is ready for Super Admin Representative review', 'PR Review', 51, 'purchase_request', 0, '2026-08-14 05:04:18'),
+(360, 8, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-016 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 51, 'purchase_request', 1, '2026-08-14 05:04:34'),
+(361, 10, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-016 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 51, 'purchase_request', 1, '2026-08-14 05:04:34'),
+(362, 8, 'New PR Created', 'Purchase Request 2026-08-017 has been created and is ready for your review', 'PR Created', 52, 'purchase_request', 1, '2026-08-14 06:49:20'),
+(363, 10, 'New PR Created', 'Purchase Request 2026-08-017 has been created and is ready for your review', 'PR Created', 52, 'purchase_request', 1, '2026-08-14 06:49:20'),
+(364, 6, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(365, 13, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 1, '2026-08-14 06:52:32'),
+(366, 20, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(367, 21, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(368, 7, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 1, '2026-08-14 06:52:32'),
+(369, 14, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(370, 16, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(371, 19, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(372, 5, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 0, '2026-08-14 06:52:32'),
+(373, 8, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 1, '2026-08-14 06:52:32'),
+(374, 10, 'New PR Created', 'Purchase Request 2026-08-019 has been created and is ready for your review', 'PR Created', 54, 'purchase_request', 1, '2026-08-14 06:52:32'),
+(375, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:53:18'),
+(376, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:18'),
+(377, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:18'),
+(378, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:18'),
+(379, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:53:29'),
+(380, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:29'),
+(381, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:29'),
+(382, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:29'),
+(383, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:53:37'),
+(384, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:37'),
+(385, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:37'),
+(386, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:37'),
+(387, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:53:45'),
+(388, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:45'),
+(389, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:45'),
+(390, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-019 has been reviewed by engineers and is ready for admin review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:53:45'),
+(391, 5, 'PR Ready for Super Admin Representative Review', 'Purchase Request 2026-08-019 has been reviewed by admins and is ready for Super Admin Representative review', 'PR Review', 54, 'purchase_request', 0, '2026-08-14 06:54:04'),
+(392, 8, 'PR Ready for Final Approval', 'Purchase Request 2026-08-019 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:54:21'),
+(393, 10, 'PR Ready for Final Approval', 'Purchase Request 2026-08-019 has been reviewed by all required reviewers and is ready for your final approval', 'PR Review', 54, 'purchase_request', 1, '2026-08-14 06:54:21'),
+(394, 6, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(395, 13, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 1, '2026-08-14 07:07:09'),
+(396, 20, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(397, 21, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(398, 7, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 1, '2026-08-14 07:07:09'),
+(399, 14, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(400, 16, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(401, 19, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(402, 5, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 0, '2026-08-14 07:07:09'),
+(403, 8, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 1, '2026-08-14 07:07:09'),
+(404, 10, 'New PR Created', 'Purchase Request 2026-08-020 has been created and is ready for your review', 'PR Created', 55, 'purchase_request', 1, '2026-08-14 07:07:09'),
+(405, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:07:53'),
+(406, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:07:53'),
+(407, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:07:53'),
+(408, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:07:53'),
+(409, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:08:06'),
+(410, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:06'),
+(411, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:06'),
+(412, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:06'),
+(413, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:08:14'),
+(414, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:14'),
+(415, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:14'),
+(416, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:14'),
+(417, 7, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:08:22'),
+(418, 14, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:22'),
+(419, 16, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:22'),
+(420, 19, 'PR Ready for Admin Review', 'Purchase Request 2026-08-020 has been reviewed by engineers and is ready for admin review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:22'),
+(421, 5, 'PR Ready for Super Admin Representative Review', 'Purchase Request 2026-08-020 has been reviewed by admins and is ready for Super Admin Representative review', 'PR Review', 55, 'purchase_request', 0, '2026-08-14 07:08:30'),
+(422, 8, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-020 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:08:48'),
+(423, 10, 'PR Approved (< 10,000)', 'Purchase Request 2026-08-020 has been approved by Super Admin Representative and is ready for PO creation', 'PR Review', 55, 'purchase_request', 1, '2026-08-14 07:08:48'),
+(424, 6, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(425, 12, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 1, '2026-08-27 02:30:42'),
+(426, 20, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(427, 21, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(428, 7, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 1, '2026-08-27 02:30:42'),
+(429, 14, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(430, 16, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(431, 19, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(432, 5, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 0, '2026-08-27 02:30:42'),
+(433, 8, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 1, '2026-08-27 02:30:42'),
+(434, 10, 'New PR Created', 'Purchase Request 2026-08-021 has been created and is ready for your review', 'PR Created', 56, 'purchase_request', 1, '2026-08-27 02:30:42'),
+(435, 13, 'PR Rejected', 'Your Purchase Request 2026-08-021 has been rejected', 'PR Rejected', 56, 'purchase_request', 1, '2026-08-27 02:32:47'),
+(436, 13, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 1, '2026-08-27 02:43:16'),
+(437, 7, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 1, '2026-08-27 02:43:16'),
+(438, 14, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 0, '2026-08-27 02:43:16'),
+(439, 16, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 0, '2026-08-27 02:43:16'),
+(440, 19, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 0, '2026-08-27 02:43:16'),
+(441, 8, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 1, '2026-08-27 02:43:16'),
+(442, 10, 'PR Payment Schedule Reminder', 'PR 2026-08-021 has a payment due 1 day (Fri Aug 28 2026 00:00:00 GMT+0800 (Philippine Standard Time)) | Amount: PHP 1,234.00', 'Payment Reminder', 56, 'purchase_request', 1, '2026-08-27 02:43:16'),
+(443, 6, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(444, 12, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 1, '2026-08-27 03:15:48'),
+(445, 13, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 1, '2026-08-27 03:15:48'),
+(446, 20, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(447, 7, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 1, '2026-08-27 03:15:48'),
+(448, 14, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(449, 16, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(450, 19, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(451, 5, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 0, '2026-08-27 03:15:48'),
+(452, 8, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 1, '2026-08-27 03:15:48'),
+(453, 10, 'New PR Created', 'Purchase Request 2026-08-022 has been created and is ready for your review', 'PR Created', 57, 'purchase_request', 1, '2026-08-27 03:15:48'),
+(454, 21, 'PR Rejected', 'Your Purchase Request 2026-08-022 has been rejected', 'PR Rejected', 57, 'purchase_request', 0, '2026-08-27 03:16:23'),
+(455, 6, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(456, 13, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 1, '2026-08-27 03:31:45'),
+(457, 20, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(458, 21, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(459, 7, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 1, '2026-08-27 03:31:45'),
+(460, 14, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(461, 16, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(462, 19, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(463, 5, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 0, '2026-08-27 03:31:45'),
+(464, 8, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 1, '2026-08-27 03:31:45'),
+(465, 10, 'New PR Created', 'Purchase Request 2026-08-023 has been created and is ready for your review', 'PR Created', 58, 'purchase_request', 1, '2026-08-27 03:31:45'),
+(466, 12, 'PR Rejected', 'Your Purchase Request 2026-08-023 has been rejected', 'PR Rejected', 58, 'purchase_request', 1, '2026-08-27 03:35:12'),
+(467, 6, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:44'),
+(468, 13, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:44'),
+(469, 20, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:44'),
+(470, 21, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:44'),
+(471, 7, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 1, '2026-09-02 03:22:45'),
+(472, 14, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:45'),
+(473, 16, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:45'),
+(474, 19, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:45'),
+(475, 5, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:45'),
+(476, 8, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 1, '2026-09-02 03:22:45'),
+(477, 10, 'New PR Created', 'Purchase Request 2026-09-024 has been created and is ready for your review', 'PR Created', 59, 'purchase_request', 0, '2026-09-02 03:22:45'),
+(478, 12, 'PR Rejected', 'Your Purchase Request 2026-09-024 has been rejected', 'PR Rejected', 59, 'purchase_request', 1, '2026-09-02 03:24:58'),
+(479, 6, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(480, 13, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(481, 20, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(482, 21, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(483, 7, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 1, '2026-09-02 05:40:18'),
+(484, 14, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(485, 16, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(486, 19, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(487, 5, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(488, 8, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 1, '2026-09-02 05:40:18'),
+(489, 10, 'New PR Created', 'Purchase Request 2026-09-025 has been created and is ready for your review', 'PR Created', 60, 'purchase_request', 0, '2026-09-02 05:40:18'),
+(490, 12, 'PR Rejected', 'Your Purchase Request 2026-09-025 has been rejected', 'PR Rejected', 60, 'purchase_request', 0, '2026-09-02 05:41:10'),
+(491, 8, 'Item Request Processed', 'Purchase Request 2026-09-026 has been processed by ELAINE and is ready for your approval.', '/dashboard/purchase-requests/61', NULL, NULL, 0, '2026-09-03 08:11:09');
+INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `related_id`, `related_type`, `is_read`, `created_at`) VALUES
+(492, 10, 'Item Request Processed', 'Purchase Request 2026-09-026 has been processed by ELAINE and is ready for your approval.', '/dashboard/purchase-requests/61', NULL, NULL, 0, '2026-09-03 08:11:09'),
+(493, 6, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(494, 12, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(495, 20, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(496, 21, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(497, 7, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 1, '2026-09-03 08:20:52'),
+(498, 14, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(499, 16, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(500, 19, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(501, 5, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(502, 8, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(503, 10, 'New PR Created', 'Purchase Request 2026-09-027 has been created and is ready for your review', 'PR Created', 62, 'purchase_request', 0, '2026-09-03 08:20:52'),
+(504, 5, 'Item Request Processed', 'Purchase Request 2026-09-027 has been processed by ELAINE and is ready for your review.', '/dashboard/purchase-requests/62', NULL, NULL, 0, '2026-09-03 08:21:34'),
+(505, 6, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(506, 12, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(507, 20, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(508, 21, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(509, 7, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 1, '2026-09-03 08:33:01'),
+(510, 14, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(511, 16, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(512, 19, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(513, 5, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(514, 8, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(515, 10, 'New PR Created', 'Purchase Request 2026-09-028 has been created and is ready for your review', 'PR Created', 63, 'purchase_request', 0, '2026-09-03 08:33:01'),
+(516, 5, 'Item Request Processed', 'Purchase Request 2026-09-028 has been processed by ELAINE and is ready for your review.', '/dashboard/purchase-requests/63', NULL, NULL, 0, '2026-09-03 08:35:33'),
+(517, 6, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(518, 12, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(519, 20, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(520, 21, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(521, 7, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 1, '2026-09-03 08:59:25'),
+(522, 14, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(523, 16, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(524, 19, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(525, 5, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
+(526, 8, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:26'),
+(527, 10, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:26');
 
 -- --------------------------------------------------------
 
@@ -618,6 +817,34 @@ CREATE TABLE IF NOT EXISTS `payment_schedule_reminder_logs` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_schedule_reminder` (`schedule_id`,`reminder_type`),
   KEY `idx_psrl_type_sent_at` (`reminder_type`,`sent_at`)
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `payment_schedule_reminder_logs`
+--
+
+INSERT INTO `payment_schedule_reminder_logs` (`id`, `schedule_id`, `reminder_type`, `sent_at`) VALUES
+(1, 1, 'D_MINUS_1', '2026-08-27 02:43:16');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `po_admin_reviews`
+--
+
+DROP TABLE IF EXISTS `po_admin_reviews`;
+CREATE TABLE IF NOT EXISTS `po_admin_reviews` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `po_id` int NOT NULL,
+  `reviewer_id` int NOT NULL,
+  `review_status` enum('pending','approved','rejected') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'pending',
+  `review_comment` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
+  `is_current` tinyint(1) DEFAULT '1',
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `po_id` (`po_id`),
+  KEY `reviewer_id` (`reviewer_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- --------------------------------------------------------
@@ -1006,7 +1233,7 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   `date_needed` date DEFAULT NULL,
   `project` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `project_address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` enum('Draft','Pending','For Procurement Review','For Engineer Review','For Admin Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Payment Request Created','Completed','Rejected','Cancelled','Received','Pending Accreditation Review') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Draft',
+  `status` enum('Draft','Pending','For Admin Processing','For Procurement Review','For Engineer Review','For Admin Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Payment Request Created','Completed','Rejected','Cancelled','Received') COLLATE utf8mb4_unicode_ci DEFAULT 'Draft',
   `approved_by` int DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
   `rejection_reason` text COLLATE utf8mb4_unicode_ci,
@@ -1024,34 +1251,46 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   `supplier_name` varchar(111) COLLATE utf8mb4_unicode_ci NOT NULL,
   `accreditation_files` text COLLATE utf8mb4_unicode_ci COMMENT 'JSON array of accreditation file paths uploaded by requester',
   `supplier_accredited` tinyint(1) DEFAULT NULL COMMENT '1 if supplier was accredited at time of PR creation, 0 if not, NULL if unknown',
+  `is_bypassed` tinyint(1) DEFAULT '0',
+  `bypassed_by` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pr_number` (`pr_number`),
   KEY `requested_by` (`requested_by`),
   KEY `approved_by` (`approved_by`),
   KEY `supplier_id` (`supplier_id`),
   KEY `payment_basis` (`payment_basis`),
-  KEY `purchase_requests_payment_terms_set_by_fk` (`payment_terms_set_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=50 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `purchase_requests_payment_terms_set_by_fk` (`payment_terms_set_by`),
+  KEY `bypassed_by` (`bypassed_by`)
+) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_requests`
 --
 
-INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`, `order_number`, `payment_basis`, `payment_terms_code`, `payment_terms_note`, `payment_terms_set_by`, `payment_terms_set_at`, `supplier_name`, `accreditation_files`, `supplier_accredited`) VALUES
-(36, '2026-06-001', 5, 'hsfdfg fgh', NULL, '2026-06-12', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-05 06:16:40', NULL, 396.00, '2026-06-05 06:14:35', '2026-06-05 06:16:40', NULL, 'fd', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'fh', '[{\"filename\":\"accreditation_files-1780640075481-727453544.xlsx\",\"originalname\":\"PR-2026-06-023.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780640075481-727453544.xlsx\",\"size\":52165,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-05T06:14:35.937Z\"}]', 0),
-(37, '2026-06-002', 5, 'eg', 'sdg', '2026-06-25', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Engineer Review', NULL, NULL, NULL, 23.00, '2026-06-08 07:15:18', '2026-06-08 07:53:51', NULL, 'sdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1780902918265-169464164.jpg\",\"originalname\":\"710117906_1309349294660437_8264004531172843646_n.jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780902918265-169464164.jpg\",\"size\":247968,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-06-08T07:15:18.271Z\"}]', 0),
-(38, '2026-06-003', 5, 'qwgwertgsergs', NULL, '2026-07-03', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-06-19 03:55:19', NULL, 21.00, '2026-06-08 08:02:34', '2026-06-19 03:55:19', NULL, 'sdfgsdg', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'sdsdfgsdfg', '[{\"filename\":\"accreditation_files-1780905754493-237260569.pdf\",\"originalname\":\"RESUME._103654.pdf\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780905754493-237260569.pdf\",\"size\":596275,\"mimetype\":\"application/pdf\",\"uploaded_at\":\"2026-06-08T08:02:34.501Z\"}]', 0),
-(39, '2026-06-004', 5, 'wertwetwet', 'teyteh', '2026-07-11', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Engineer Review', NULL, NULL, NULL, 0.00, '2026-06-08 08:05:43', '2026-08-12 02:14:21', NULL, 'rethertr', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'rhrthtr', '[{\"filename\":\"accreditation_files-1780905943534-512217746.docx\",\"originalname\":\"JPACPACO Jobstreet Resume (3).docx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780905943534-512217746.docx\",\"size\":14240,\"mimetype\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"uploaded_at\":\"2026-06-08T08:05:43.538Z\"}]', 0),
-(40, '2026-06-005', 16, 'dfgsdfg', NULL, '2026-07-07', 'Panicsican', 'Panicsican, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:18', NULL, 0.00, '2026-06-08 08:07:04', '2026-06-19 03:55:18', NULL, 'dsfgf', '159166591', 'non_debt', NULL, NULL, NULL, NULL, 'sdg', '[{\"filename\":\"accreditation_files-1780906024109-892457528.docx\",\"originalname\":\"files-1780032565780-641676311.docx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780906024109-892457528.docx\",\"size\":32026,\"mimetype\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"uploaded_at\":\"2026-06-08T08:07:04.114Z\"}]', 0),
-(41, '2026-06-006', 7, 'wasfASFD DWSFEW EWF WW', NULL, '2026-06-22', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:15', NULL, 1050.00, '2026-06-19 03:52:19', '2026-06-19 03:55:15', NULL, 'Mangaan, Santol, La Union', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'This is just for testing', '[{\"filename\":\"accreditation_files-1781841139156-673085472.xlsx\",\"originalname\":\"REQUEST-FORM.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1781841139156-673085472.xlsx\",\"size\":62304,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-19T03:52:19.334Z\"}]', 0),
-(42, '2026-08-007', 5, 'Pang pasita baby', NULL, '2026-08-21', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-12 02:45:02', NULL, 4910.98, '2026-08-12 02:29:38', '2026-08-12 02:45:02', NULL, 'San Juan, La Union', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, 0),
-(43, '2026-08-008', 5, 'Para jay balay para bagyo', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 1324.00, '2026-08-12 03:23:21', '2026-08-12 03:24:58', NULL, 'Ijay igdi lacong', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, 0),
-(44, '2026-08-009', 5, 'QSD', '', '2026-08-14', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 213.00, '2026-08-12 06:44:50', '2026-08-12 06:46:26', NULL, 'asd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'ADXAs', 123.00, '2026-08-12 06:56:28', '2026-08-14 00:31:09', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(46, '2026-08-011', 5, 'asfdasdf', '', '2026-08-29', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Super Admin Final Approval', NULL, NULL, NULL, 23.00, '2026-08-12 07:10:56', '2026-08-12 07:15:18', 47, 'sdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, '', NULL, 1),
-(47, '2026-08-012', 7, 'QWAFD', NULL, '2026-08-20', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-13 01:43:25', NULL, 12.00, '2026-08-13 01:42:45', '2026-08-13 01:43:25', NULL, 'QDasd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(48, '2026-08-013', 7, 'asdf', NULL, '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'PO Created', 8, '2026-08-13 01:54:19', NULL, 12.00, '2026-08-13 01:53:35', '2026-08-13 01:56:32', NULL, 'asd', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1),
-(49, '2026-08-014', 7, 'asda', '', '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'QASAs', 123.00, '2026-08-14 00:30:56', '2026-08-14 00:31:39', NULL, 'asdas', '393859493', 'debt', NULL, NULL, NULL, NULL, 'as', NULL, 0);
+INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`, `order_number`, `payment_basis`, `payment_terms_code`, `payment_terms_note`, `payment_terms_set_by`, `payment_terms_set_at`, `supplier_name`, `accreditation_files`, `supplier_accredited`, `is_bypassed`, `bypassed_by`) VALUES
+(36, '2026-06-001', 5, 'hsfdfg fgh', NULL, '2026-06-12', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-05 06:16:40', NULL, 396.00, '2026-06-05 06:14:35', '2026-06-05 06:16:40', NULL, 'fd', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'fh', '[{\"filename\":\"accreditation_files-1780640075481-727453544.xlsx\",\"originalname\":\"PR-2026-06-023.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780640075481-727453544.xlsx\",\"size\":52165,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-05T06:14:35.937Z\"}]', 0, 0, NULL),
+(38, '2026-06-003', 5, 'qwgwertgsergs', NULL, '2026-07-03', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-06-19 03:55:19', NULL, 21.00, '2026-06-08 08:02:34', '2026-06-19 03:55:19', NULL, 'sdfgsdg', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'sdsdfgsdfg', '[{\"filename\":\"accreditation_files-1780905754493-237260569.pdf\",\"originalname\":\"RESUME._103654.pdf\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780905754493-237260569.pdf\",\"size\":596275,\"mimetype\":\"application/pdf\",\"uploaded_at\":\"2026-06-08T08:02:34.501Z\"}]', 0, 0, NULL),
+(40, '2026-06-005', 16, 'dfgsdfg', NULL, '2026-07-07', 'Panicsican', 'Panicsican, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:18', NULL, 0.00, '2026-06-08 08:07:04', '2026-06-19 03:55:18', NULL, 'dsfgf', '159166591', 'non_debt', NULL, NULL, NULL, NULL, 'sdg', '[{\"filename\":\"accreditation_files-1780906024109-892457528.docx\",\"originalname\":\"files-1780032565780-641676311.docx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780906024109-892457528.docx\",\"size\":32026,\"mimetype\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"uploaded_at\":\"2026-06-08T08:07:04.114Z\"}]', 0, 0, NULL),
+(41, '2026-06-006', 7, 'wasfASFD DWSFEW EWF WW', NULL, '2026-06-22', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:15', NULL, 1050.00, '2026-06-19 03:52:19', '2026-06-19 03:55:15', NULL, 'Mangaan, Santol, La Union', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'This is just for testing', '[{\"filename\":\"accreditation_files-1781841139156-673085472.xlsx\",\"originalname\":\"REQUEST-FORM.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1781841139156-673085472.xlsx\",\"size\":62304,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-19T03:52:19.334Z\"}]', 0, 0, NULL),
+(42, '2026-08-007', 5, 'Pang pasita baby', NULL, '2026-08-21', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-12 02:45:02', NULL, 4910.98, '2026-08-12 02:29:38', '2026-08-12 02:45:02', NULL, 'San Juan, La Union', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, 0, 0, NULL),
+(43, '2026-08-008', 5, 'Para jay balay para bagyo', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', 8, '2026-08-27 02:29:28', NULL, 1324.00, '2026-08-12 03:23:21', '2026-08-27 02:29:28', NULL, 'Ijay igdi lacong', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, 0, 0, NULL),
+(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'ADXAs', 123.00, '2026-08-12 06:56:28', '2026-08-14 00:31:09', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(47, '2026-08-012', 7, 'QWAFD', NULL, '2026-08-20', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-13 01:43:25', NULL, 12.00, '2026-08-13 01:42:45', '2026-08-13 01:43:25', NULL, 'QDasd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(48, '2026-08-013', 7, 'asdf', NULL, '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'PO Created', 8, '2026-08-13 01:54:19', NULL, 12.00, '2026-08-13 01:53:35', '2026-08-13 01:56:32', NULL, 'asd', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(49, '2026-08-014', 7, 'asda', '', '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'QASAs', 123.00, '2026-08-14 00:30:56', '2026-08-14 00:31:39', NULL, 'asdas', '393859493', 'debt', NULL, NULL, NULL, NULL, 'as', NULL, 0, 0, NULL),
+(50, '2026-08-015', 12, 'testing', '', '2026-08-29', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 6170.00, '2026-08-14 05:01:05', '2026-08-14 05:02:38', NULL, 'Bacnotan, La Union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(51, '2026-08-016', 7, 'sadfsdwaf', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 708.00, '2026-08-14 05:04:03', '2026-08-14 05:04:34', NULL, 'san juan, la union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(54, '2026-08-019', 12, 'zdfb', NULL, '2026-08-27', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-14 06:57:53', NULL, 10000.00, '2026-08-14 06:52:32', '2026-08-14 06:57:53', NULL, 'asdfsafsadfdsf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(55, '2026-08-020', 12, 'aSF', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 12.00, '2026-08-14 07:07:09', '2026-08-14 07:08:48', NULL, 'asfsdf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(56, '2026-08-021', 13, 'afasf', '', '2026-08-28', 'Panicsican', 'Panicsican, San Juan, La Union', '', NULL, NULL, NULL, 1234.00, '2026-08-27 02:30:42', '2026-08-27 02:44:50', NULL, NULL, '159166591', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"}]', 1, 0, NULL),
+(57, '2026-08-022', 21, 'for testing', '', '2026-09-02', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'mali ulitin mo, i-edit mo', 534.00, '2026-08-27 03:15:48', '2026-08-27 03:16:23', NULL, 'santol, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"}]', 1, 0, NULL),
+(58, '2026-08-023', 12, 'This is test', '', '2026-09-05', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'ulitin', 4559.98, '2026-08-27 03:31:45', '2026-08-27 03:35:12', NULL, 'bagulin, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', 1, 0, NULL),
+(59, '2026-09-024', 12, 'For the hanging cabinet', '', '2026-09-04', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'REJECTED', 50798.00, '2026-09-02 03:22:44', '2026-09-02 03:24:58', NULL, 'Pias, San Fernando La Union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(60, '2026-09-025', 12, 'for cabinetry and fabircation', '', '2026-09-30', 'Pias - Sundara', NULL, 'Rejected', NULL, NULL, 'madii', 2809.89, '2026-09-02 05:40:18', '2026-09-02 05:41:10', NULL, 'Supplier address', '228984422', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
+(61, '2026-09-026', 13, 'Pang print', 'none', '2026-09-03', 'Sto. Rosario', NULL, 'For Super Admin Final Approval', NULL, NULL, NULL, 123.00, '2026-09-03 07:19:47', '2026-09-03 08:11:09', 46, 'fd', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'fh', NULL, 0, 0, NULL),
+(62, '2026-09-027', 13, 'pangprint', '', '2026-09-03', 'Sto. Rosario', NULL, '', NULL, NULL, NULL, 12555.00, '2026-09-03 08:20:52', '2026-09-03 08:21:34', 67, 'San Juan, La Union', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, 0, NULL),
+(63, '2026-09-028', 13, 'For office supplies', 'This is the remarks', '2026-09-06', 'MAIN OFFICE', NULL, '', NULL, NULL, NULL, 12815.00, '2026-09-03 08:33:01', '2026-09-03 08:35:33', 68, 'Ijay igdi lacong', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, NULL, 0, NULL),
+(64, '2026-09-029', 13, 'asdasasds', '', '2026-09-03', 'MAIN OFFICE', NULL, 'For Admin Processing', NULL, NULL, NULL, 0.00, '2026-09-03 08:59:25', '2026-09-03 08:59:25', NULL, NULL, NULL, 'debt', NULL, NULL, NULL, NULL, 'TBD', NULL, NULL, 0, NULL);
 
 -- --------------------------------------------------------
 
@@ -1077,7 +1316,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_items` (
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `item_id` (`item_id`),
   KEY `received_by` (`received_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=52 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=83 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_items`
@@ -1085,9 +1324,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_items` (
 
 INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `unit`, `remarks`, `status`, `received_by`, `received_at`, `created_at`) VALUES
 (35, 36, 5, 3, 132.00, 396.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-05 06:14:35'),
-(36, 37, 5, 1, 23.00, 23.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 07:15:18'),
 (37, 38, 6, 1, 21.00, 21.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:02:34'),
-(38, 39, 9, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:05:43'),
 (39, 40, 5, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:07:04'),
 (40, 41, 6, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19'),
 (41, 41, 24, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19'),
@@ -1095,12 +1332,34 @@ INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `q
 (43, 42, 5, 1, 3245.00, 3245.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38'),
 (44, 42, 6, 1, 434.98, 434.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38'),
 (45, 43, 5, 1, 1324.00, 1324.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 03:23:21'),
-(46, 44, 5, 1, 213.00, 213.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:44:50'),
 (47, 45, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:56:28'),
-(48, 46, 14, 1, 23.00, 23.00, 'pcs', NULL, 'Pending', NULL, NULL, '2026-08-12 07:10:56'),
 (49, 47, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:42:45'),
 (50, 48, 5, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:53:35'),
-(51, 49, 22, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 00:30:56');
+(51, 49, 22, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 00:30:56'),
+(52, 50, 5, 5, 1234.00, 6170.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:01:05'),
+(53, 51, 22, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03'),
+(54, 51, 5, 3, 232.00, 696.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03'),
+(61, 54, 6, 1, 10000.00, 10000.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 06:52:32'),
+(62, 55, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 07:07:09'),
+(64, 56, 5, 1, 1234.00, 1234.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 02:33:54'),
+(65, 57, 5, 1, 534.00, 534.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:15:48'),
+(66, 58, 6, 1, 235.00, 235.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45'),
+(67, 58, 5, 1, 4324.98, 4324.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45'),
+(68, 59, 5, 6, 173.00, 1038.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
+(69, 59, 6, 2, 234.00, 468.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
+(70, 59, 22, 4, 12323.00, 49292.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
+(71, 60, 5, 1, 2342.00, 2342.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
+(72, 60, 6, 1, 233.98, 233.98, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
+(73, 60, 22, 1, 233.91, 233.91, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
+(74, 61, 25, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 07:19:47'),
+(75, 62, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52'),
+(76, 62, 22, 1, 12432.00, 12432.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52'),
+(77, 63, 22, 1, 143.00, 143.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
+(78, 63, 18, 1, 1456.00, 1456.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
+(79, 63, 6, 1, 5463.00, 5463.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
+(80, 63, 21, 1, 5453.00, 5453.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
+(81, 63, 17, 1, 300.00, 300.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
+(82, 64, 25, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:59:25');
 
 -- --------------------------------------------------------
 
@@ -1122,7 +1381,14 @@ CREATE TABLE IF NOT EXISTS `purchase_request_payment_schedules` (
   UNIQUE KEY `uq_pr_payment_date` (`purchase_request_id`,`payment_date`),
   KEY `idx_prps_payment_date` (`payment_date`),
   KEY `fk_pr_schedule_created_by` (`created_by`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `purchase_request_payment_schedules`
+--
+
+INSERT INTO `purchase_request_payment_schedules` (`id`, `purchase_request_id`, `payment_date`, `amount`, `note`, `created_by`, `created_at`, `updated_at`) VALUES
+(1, 56, '2026-08-28', 1234.00, NULL, 13, '2026-08-27 02:33:54', '2026-08-27 02:33:54');
 
 -- --------------------------------------------------------
 
@@ -1144,7 +1410,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_reviews` (
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `reviewer_id` (`reviewer_id`),
   KEY `review_status` (`review_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=300 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=433 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_reviews`
@@ -1156,21 +1422,11 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (206, 36, 13, 'approved', NULL, '2026-06-05 06:15:59', '2026-06-05 06:14:35'),
 (207, 36, 8, 'pending', NULL, NULL, '2026-06-05 06:14:35'),
 (208, 36, 10, 'pending', NULL, NULL, '2026-06-05 06:14:35'),
-(214, 37, 6, 'pending', NULL, NULL, '2026-06-08 07:15:18'),
-(215, 37, 12, 'pending', NULL, NULL, '2026-06-08 07:15:18'),
-(216, 37, 13, 'pending', NULL, NULL, '2026-06-08 07:15:18'),
-(217, 37, 8, 'pending', NULL, NULL, '2026-06-08 07:15:18'),
-(218, 37, 10, 'pending', NULL, NULL, '2026-06-08 07:15:18'),
 (224, 38, 6, 'approved', NULL, '2026-06-08 08:03:21', '2026-06-08 08:02:34'),
 (225, 38, 12, 'approved', NULL, '2026-06-08 08:02:57', '2026-06-08 08:02:34'),
 (226, 38, 13, 'approved', NULL, '2026-06-08 08:03:11', '2026-06-08 08:02:34'),
 (227, 38, 8, 'pending', NULL, NULL, '2026-06-08 08:02:34'),
 (228, 38, 10, 'pending', NULL, NULL, '2026-06-08 08:02:34'),
-(229, 39, 6, 'pending', NULL, NULL, '2026-06-08 08:05:43'),
-(230, 39, 12, 'pending', NULL, NULL, '2026-06-08 08:05:43'),
-(231, 39, 13, 'pending', NULL, NULL, '2026-06-08 08:05:43'),
-(232, 39, 8, 'pending', NULL, NULL, '2026-06-08 08:05:43'),
-(233, 39, 10, 'pending', NULL, NULL, '2026-06-08 08:05:43'),
 (234, 40, 7, 'approved', NULL, '2026-06-08 08:08:09', '2026-06-08 08:07:04'),
 (235, 40, 14, 'approved', NULL, '2026-06-08 08:07:33', '2026-06-08 08:07:04'),
 (236, 40, 8, 'pending', NULL, NULL, '2026-06-08 08:07:04'),
@@ -1192,14 +1448,6 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (261, 43, 16, 'approved', NULL, '2026-08-12 03:24:58', '2026-08-12 03:23:32'),
 (262, 43, 8, 'pending', NULL, NULL, '2026-08-12 03:23:32'),
 (263, 43, 10, 'pending', NULL, NULL, '2026-08-12 03:23:32'),
-(264, 44, 6, 'approved', NULL, '2026-08-12 06:45:44', '2026-08-12 06:44:50'),
-(265, 44, 12, 'approved', NULL, '2026-08-12 06:45:15', '2026-08-12 06:44:50'),
-(266, 44, 13, 'approved', NULL, '2026-08-12 06:45:27', '2026-08-12 06:44:50'),
-(267, 44, 7, 'approved', NULL, '2026-08-12 06:46:10', '2026-08-12 06:44:50'),
-(268, 44, 14, 'approved', NULL, '2026-08-12 06:46:18', '2026-08-12 06:44:50'),
-(269, 44, 16, 'approved', NULL, '2026-08-12 06:46:26', '2026-08-12 06:44:50'),
-(270, 44, 8, 'pending', NULL, NULL, '2026-08-12 06:44:50'),
-(271, 44, 10, 'pending', NULL, NULL, '2026-08-12 06:44:50'),
 (272, 45, 6, 'approved', NULL, '2026-08-12 06:57:39', '2026-08-12 06:56:28'),
 (273, 45, 12, 'approved', NULL, '2026-08-12 06:56:44', '2026-08-12 06:56:28'),
 (274, 45, 13, 'approved', NULL, '2026-08-12 06:57:18', '2026-08-12 06:56:28'),
@@ -1208,14 +1456,6 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (277, 45, 16, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
 (278, 45, 8, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
 (279, 45, 10, 'pending', NULL, NULL, '2026-08-12 06:56:28'),
-(280, 46, 12, 'approved', NULL, '2026-08-12 07:11:06', '2026-08-12 07:10:56'),
-(281, 46, 13, 'approved', NULL, '2026-08-12 07:11:14', '2026-08-12 07:10:56'),
-(282, 46, 7, 'approved', NULL, '2026-08-12 07:11:26', '2026-08-12 07:10:56'),
-(283, 46, 14, 'approved', NULL, '2026-08-12 07:11:42', '2026-08-12 07:10:56'),
-(284, 46, 16, 'approved', NULL, '2026-08-12 07:11:33', '2026-08-12 07:10:56'),
-(285, 46, 6, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
-(286, 46, 8, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
-(287, 46, 10, 'pending', NULL, NULL, '2026-08-12 07:10:56'),
 (288, 47, 14, 'approved', NULL, '2026-08-13 01:42:54', '2026-08-13 01:42:45'),
 (289, 47, 16, 'approved', NULL, '2026-08-13 01:43:04', '2026-08-13 01:42:45'),
 (290, 47, 8, 'pending', NULL, NULL, '2026-08-13 01:42:45'),
@@ -1227,7 +1467,165 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (296, 49, 14, 'rejected', 'QASAs', '2026-08-14 00:31:39', '2026-08-14 00:31:25'),
 (297, 49, 16, 'pending', NULL, NULL, '2026-08-14 00:31:25'),
 (298, 49, 8, 'pending', NULL, NULL, '2026-08-14 00:31:25'),
-(299, 49, 10, 'pending', NULL, NULL, '2026-08-14 00:31:25');
+(299, 49, 10, 'pending', NULL, NULL, '2026-08-14 00:31:25'),
+(300, 50, 13, 'approved', NULL, '2026-08-14 05:01:19', '2026-08-14 05:01:05'),
+(301, 50, 7, 'approved', NULL, '2026-08-14 05:01:40', '2026-08-14 05:01:05'),
+(302, 50, 14, 'approved', NULL, '2026-08-14 05:01:49', '2026-08-14 05:01:05'),
+(303, 50, 16, 'approved', NULL, '2026-08-14 05:01:58', '2026-08-14 05:01:05'),
+(304, 50, 5, 'approved', NULL, '2026-08-14 05:02:38', '2026-08-14 05:01:05'),
+(305, 50, 8, 'pending', NULL, NULL, '2026-08-14 05:01:05'),
+(306, 50, 10, 'pending', NULL, NULL, '2026-08-14 05:01:05'),
+(307, 51, 14, 'approved', NULL, '2026-08-14 05:04:12', '2026-08-14 05:04:03'),
+(308, 51, 16, 'approved', NULL, '2026-08-14 05:04:18', '2026-08-14 05:04:03'),
+(309, 51, 5, 'approved', NULL, '2026-08-14 05:04:34', '2026-08-14 05:04:03'),
+(310, 51, 8, 'pending', NULL, NULL, '2026-08-14 05:04:03'),
+(311, 51, 10, 'pending', NULL, NULL, '2026-08-14 05:04:03'),
+(323, 54, 6, 'approved', NULL, '2026-08-14 06:52:58', '2026-08-14 06:52:32'),
+(324, 54, 13, 'approved', NULL, '2026-08-14 06:52:46', '2026-08-14 06:52:32'),
+(325, 54, 20, 'approved', NULL, '2026-08-14 06:53:08', '2026-08-14 06:52:32'),
+(326, 54, 21, 'approved', NULL, '2026-08-14 06:53:18', '2026-08-14 06:52:32'),
+(327, 54, 7, 'approved', NULL, '2026-08-14 06:53:29', '2026-08-14 06:52:32'),
+(328, 54, 14, 'approved', NULL, '2026-08-14 06:53:37', '2026-08-14 06:52:32'),
+(329, 54, 16, 'approved', NULL, '2026-08-14 06:53:45', '2026-08-14 06:52:32'),
+(330, 54, 19, 'approved', NULL, '2026-08-14 06:54:04', '2026-08-14 06:52:32'),
+(331, 54, 5, 'approved', NULL, '2026-08-14 06:54:21', '2026-08-14 06:52:32'),
+(332, 54, 8, 'pending', NULL, NULL, '2026-08-14 06:52:32'),
+(333, 54, 10, 'pending', NULL, NULL, '2026-08-14 06:52:32'),
+(334, 55, 6, 'approved', NULL, '2026-08-14 07:07:53', '2026-08-14 07:07:09'),
+(335, 55, 13, 'approved', NULL, '2026-08-14 07:07:23', '2026-08-14 07:07:09'),
+(336, 55, 20, 'approved', NULL, '2026-08-14 07:07:35', '2026-08-14 07:07:09'),
+(337, 55, 21, 'approved', NULL, '2026-08-14 07:07:43', '2026-08-14 07:07:09'),
+(338, 55, 7, 'approved', NULL, '2026-08-14 07:08:06', '2026-08-14 07:07:09'),
+(339, 55, 14, 'approved', NULL, '2026-08-14 07:08:22', '2026-08-14 07:07:09'),
+(340, 55, 16, 'approved', NULL, '2026-08-14 07:08:14', '2026-08-14 07:07:09'),
+(341, 55, 19, 'approved', NULL, '2026-08-14 07:08:30', '2026-08-14 07:07:09'),
+(342, 55, 5, 'approved', NULL, '2026-08-14 07:08:48', '2026-08-14 07:07:09'),
+(343, 55, 8, 'pending', NULL, NULL, '2026-08-14 07:07:09'),
+(344, 55, 10, 'pending', NULL, NULL, '2026-08-14 07:07:09'),
+(345, 56, 6, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(346, 56, 12, 'approved', NULL, '2026-08-27 02:31:44', '2026-08-27 02:30:42'),
+(347, 56, 20, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(348, 56, 21, 'rejected', 'mali', '2026-08-27 02:32:47', '2026-08-27 02:30:42'),
+(349, 56, 7, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(350, 56, 14, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(351, 56, 16, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(352, 56, 19, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(353, 56, 5, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(354, 56, 8, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(355, 56, 10, 'pending', NULL, NULL, '2026-08-27 02:30:42'),
+(356, 57, 6, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(357, 57, 12, 'rejected', 'mali ulitin mo, i-edit mo', '2026-08-27 03:16:23', '2026-08-27 03:15:48'),
+(358, 57, 13, 'approved', NULL, '2026-08-27 03:16:07', '2026-08-27 03:15:48'),
+(359, 57, 20, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(360, 57, 7, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(361, 57, 14, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(362, 57, 16, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(363, 57, 19, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(364, 57, 5, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(365, 57, 8, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(366, 57, 10, 'pending', NULL, NULL, '2026-08-27 03:15:48'),
+(367, 58, 6, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(368, 58, 13, 'approved', NULL, '2026-08-27 03:34:58', '2026-08-27 03:31:45'),
+(369, 58, 20, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(370, 58, 21, 'rejected', 'ulitin', '2026-08-27 03:35:12', '2026-08-27 03:31:45'),
+(371, 58, 7, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(372, 58, 14, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(373, 58, 16, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(374, 58, 19, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(375, 58, 5, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(376, 58, 8, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(377, 58, 10, 'pending', NULL, NULL, '2026-08-27 03:31:45'),
+(378, 59, 6, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(379, 59, 13, 'approved', NULL, '2026-09-02 03:23:38', '2026-09-02 03:22:44'),
+(380, 59, 20, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(381, 59, 21, 'rejected', 'REJECTED', '2026-09-02 03:24:58', '2026-09-02 03:22:44'),
+(382, 59, 7, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(383, 59, 14, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(384, 59, 16, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(385, 59, 19, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(386, 59, 5, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(387, 59, 8, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(388, 59, 10, 'pending', NULL, NULL, '2026-09-02 03:22:44'),
+(389, 60, 6, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(390, 60, 13, 'rejected', 'madii', '2026-09-02 05:41:10', '2026-09-02 05:40:18'),
+(391, 60, 20, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(392, 60, 21, 'approved', NULL, '2026-09-02 05:40:51', '2026-09-02 05:40:18'),
+(393, 60, 7, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(394, 60, 14, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(395, 60, 16, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(396, 60, 19, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(397, 60, 5, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(398, 60, 8, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(399, 60, 10, 'pending', NULL, NULL, '2026-09-02 05:40:18'),
+(400, 62, 6, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(401, 62, 12, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(402, 62, 20, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(403, 62, 21, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(404, 62, 7, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(405, 62, 14, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(406, 62, 16, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(407, 62, 19, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(408, 62, 5, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(409, 62, 8, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(410, 62, 10, 'pending', NULL, NULL, '2026-09-03 08:20:52'),
+(411, 63, 6, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(412, 63, 12, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(413, 63, 20, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(414, 63, 21, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(415, 63, 7, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(416, 63, 14, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(417, 63, 16, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(418, 63, 19, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(419, 63, 5, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(420, 63, 8, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(421, 63, 10, 'pending', NULL, NULL, '2026-09-03 08:33:01'),
+(422, 64, 6, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(423, 64, 12, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(424, 64, 20, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(425, 64, 21, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(426, 64, 7, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(427, 64, 14, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(428, 64, 16, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(429, 64, 19, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(430, 64, 5, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(431, 64, 8, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(432, 64, 10, 'pending', NULL, NULL, '2026-09-03 08:59:25');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `push_subscriptions`
+--
+
+DROP TABLE IF EXISTS `push_subscriptions`;
+CREATE TABLE IF NOT EXISTS `push_subscriptions` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `employee_id` int NOT NULL,
+  `endpoint` text COLLATE utf8mb4_unicode_ci NOT NULL,
+  `p256dh` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `auth` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `employee_id` (`employee_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=15 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `push_subscriptions`
+--
+
+INSERT INTO `push_subscriptions` (`id`, `employee_id`, `endpoint`, `p256dh`, `auth`, `created_at`) VALUES
+(12, 6, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-09-02 03:23:57'),
+(2, 10, 'https://fcm.googleapis.com/fcm/send/d0oY7RlS-2k:APA91bEmka7Vs8BDr7LG4InVJUV8NMoOmXCI2-gMAXtpN9xftPqYzAVn8mE7stSGKVv_j6zNe2L2VKAMyXvuDwmC4Q-FbBTeJcCEwQ9ACRMH-wc51ji1zoovK96yKJ68_V2VoDOKDd2X', 'BJfL5VrIL_YhVWbmntfE_QrbUoyZdhunvaHCnNLlbfl_fayLf3EYHkL7aDFOFa5Znvd1jzWq2B1XR0I_B7aPUGM', 'lf6tOL_oYqSi6Se3wOv_RA', '2026-08-27 03:29:54'),
+(13, 21, 'https://fcm.googleapis.com/fcm/send/d0oY7RlS-2k:APA91bEmka7Vs8BDr7LG4InVJUV8NMoOmXCI2-gMAXtpN9xftPqYzAVn8mE7stSGKVv_j6zNe2L2VKAMyXvuDwmC4Q-FbBTeJcCEwQ9ACRMH-wc51ji1zoovK96yKJ68_V2VoDOKDd2X', 'BJfL5VrIL_YhVWbmntfE_QrbUoyZdhunvaHCnNLlbfl_fayLf3EYHkL7aDFOFa5Znvd1jzWq2B1XR0I_B7aPUGM', 'lf6tOL_oYqSi6Se3wOv_RA', '2026-09-03 06:24:50'),
+(4, 12, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-08-27 03:31:00'),
+(5, 13, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-08-27 03:34:49'),
+(6, 21, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-08-27 03:35:04'),
+(7, 13, 'https://fcm.googleapis.com/fcm/send/d0oY7RlS-2k:APA91bEmka7Vs8BDr7LG4InVJUV8NMoOmXCI2-gMAXtpN9xftPqYzAVn8mE7stSGKVv_j6zNe2L2VKAMyXvuDwmC4Q-FbBTeJcCEwQ9ACRMH-wc51ji1zoovK96yKJ68_V2VoDOKDd2X', 'BJfL5VrIL_YhVWbmntfE_QrbUoyZdhunvaHCnNLlbfl_fayLf3EYHkL7aDFOFa5Znvd1jzWq2B1XR0I_B7aPUGM', 'lf6tOL_oYqSi6Se3wOv_RA', '2026-08-29 05:29:47'),
+(8, 16, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-09-02 03:11:28'),
+(9, 16, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-09-02 03:11:28'),
+(10, 8, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-09-02 03:11:32'),
+(11, 8, 'https://fcm.googleapis.com/fcm/send/ehZKowbJ-NE:APA91bEy2h-r2y8wPslTJzAZFg5X_N72QNyuBFWsXJeFOBfhVGTqgozLxtvyZN4K-Tgi87Wfk_uVEQgGAH69icUHJmmMFUxM7PARFqzHSjqIvWxMEnr50rh3U5nzeFybTX8BVH6ZFAdE', 'BIAqTvNsAVxSGzF4Y5z9TK8DHizatEvDAimV5lfmsKzb9A_3EFWRvdjPGjzUmcs3Ebr0oklyrA7M1yEZZMt0wus', 'fXRwb7fy4N2xFkipcQ0XYg', '2026-09-02 03:11:32'),
+(14, 7, 'https://fcm.googleapis.com/fcm/send/d0oY7RlS-2k:APA91bEmka7Vs8BDr7LG4InVJUV8NMoOmXCI2-gMAXtpN9xftPqYzAVn8mE7stSGKVv_j6zNe2L2VKAMyXvuDwmC4Q-FbBTeJcCEwQ9ACRMH-wc51ji1zoovK96yKJ68_V2VoDOKDd2X', 'BJfL5VrIL_YhVWbmntfE_QrbUoyZdhunvaHCnNLlbfl_fayLf3EYHkL7aDFOFa5Znvd1jzWq2B1XR0I_B7aPUGM', 'lf6tOL_oYqSi6Se3wOv_RA', '2026-09-03 06:25:05');
 
 -- --------------------------------------------------------
 
@@ -1428,7 +1826,7 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
   UNIQUE KEY `supplier_code` (`supplier_code`),
   UNIQUE KEY `email` (`email`),
   KEY `fk_accredited_by` (`accredited_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=72 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `suppliers`
@@ -1436,7 +1834,7 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
 
 INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person`, `email`, `phone`, `address`, `status`, `created_at`, `updated_at`, `accredited`, `accredited_by`, `accredited_at`, `accreditation_files`, `accreditation_notes`) VALUES
 (46, 'SUP09497652', 'fh', NULL, NULL, NULL, 'fd', 'Active', '2026-06-05 06:14:54', '2026-06-05 06:15:29', 1, 8, '2026-06-05 06:15:29', NULL, NULL),
-(47, 'SUP64822836', 'asdfa', 'Dante Obaldo Rillera', '', '', 'sdf', 'Active', '2026-06-08 07:27:28', '2026-06-09 00:54:49', 1, 8, '2026-06-08 07:53:51', NULL, NULL),
+(47, 'SUP64822836', 'asdfa', 'Dante Obaldo Rillera', '', '', 'sdf', 'Active', '2026-06-08 07:27:28', '2026-08-27 03:31:45', 1, 8, '2026-06-08 07:53:51', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"},{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"},{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', NULL),
 (48, 'SUP46201036', 'rhrthtr', NULL, NULL, NULL, 'rethertr', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:21', 1, 8, '2026-08-12 02:14:21', NULL, NULL),
 (49, 'SUP46201279', 'sdg', NULL, NULL, NULL, 'dsfgf', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:22', 1, 8, '2026-08-12 02:14:22', NULL, NULL),
 (50, 'SUP46201431', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:22', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
@@ -1458,7 +1856,9 @@ INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person
 (66, 'SUP16634148', 'This is just for testing', NULL, NULL, NULL, 'Mangaan, Santol, La Union', 'Active', '2026-06-19 03:52:46', '2026-06-19 03:52:57', 1, 8, '2026-06-19 03:52:57', NULL, NULL),
 (67, 'SUP80713854', 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, NULL, 'San Juan, La Union', 'Active', '2026-08-12 02:30:07', '2026-08-12 02:30:09', 1, 8, '2026-08-12 02:30:09', NULL, NULL),
 (68, 'SUP01041444', 'NI mang dante', NULL, NULL, NULL, 'Ijay igdi lacong', 'Active', '2026-08-12 03:23:30', '2026-08-12 03:23:32', 1, 8, '2026-08-12 03:23:32', NULL, NULL),
-(69, 'SUP48368464', 'as', NULL, NULL, NULL, 'asdas', 'Active', '2026-08-14 00:31:23', '2026-08-14 00:31:25', 1, 8, '2026-08-14 00:31:25', NULL, NULL);
+(69, 'SUP48368464', 'as', NULL, NULL, NULL, 'asdas', 'Active', '2026-08-14 00:31:23', '2026-08-14 00:31:25', 1, 8, '2026-08-14 00:31:25', NULL, NULL),
+(70, 'SUP22567257', 'wfasdf', NULL, NULL, NULL, 'asdfawfas', 'Active', '2026-08-14 06:50:25', '2026-08-14 06:50:28', 1, 8, '2026-08-14 06:50:28', NULL, NULL),
+(71, 'SUP42196780', 'TBD', NULL, NULL, NULL, NULL, 'Active', '2026-09-03 07:27:01', '2026-09-03 07:27:01', 0, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1480,6 +1880,101 @@ CREATE TABLE IF NOT EXISTS `supplier_items` (
   UNIQUE KEY `unique_supplier_item` (`supplier_id`,`item_id`),
   KEY `item_id` (`item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `system_audit_logs`
+--
+
+DROP TABLE IF EXISTS `system_audit_logs`;
+CREATE TABLE IF NOT EXISTS `system_audit_logs` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int DEFAULT NULL,
+  `action` varchar(255) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `entity_type` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `entity_id` int DEFAULT NULL,
+  `details` text COLLATE utf8mb4_unicode_ci,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `user_id` (`user_id`)
+) ENGINE=MyISAM AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+--
+-- Dumping data for table `system_audit_logs`
+--
+
+INSERT INTO `system_audit_logs` (`id`, `user_id`, `action`, `entity_type`, `entity_id`, `details`, `created_at`) VALUES
+(1, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-08-27 01:51:39'),
+(2, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-08-27 02:02:58'),
+(3, 8, 'Request Deleted', 'purchase_requests', 53, '{\"pr_number\":\"2026-08-018\"}', '2026-08-27 02:20:15'),
+(4, 8, 'Request Deleted', 'purchase_requests', 52, '{\"pr_number\":\"2026-08-017\"}', '2026-08-27 02:20:17'),
+(5, 8, 'Request Deleted', 'purchase_requests', 46, '{\"pr_number\":\"2026-08-011\"}', '2026-08-27 02:20:19'),
+(6, 8, 'Request Deleted', 'purchase_requests', 44, '{\"pr_number\":\"2026-08-009\"}', '2026-08-27 02:20:20'),
+(7, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-27 02:30:02'),
+(8, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-08-27 02:30:49'),
+(9, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-08-27 02:31:27'),
+(10, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-27 02:31:40'),
+(11, 5, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0001\"}', '2026-08-27 02:32:07'),
+(12, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-08-27 02:32:33'),
+(13, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-08-27 02:32:41'),
+(14, 13, 'Request Resubmitted', 'purchase_requests', 56, '{\"pr_number\":\"2026-08-021\"}', '2026-08-27 02:33:54'),
+(15, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-08-27 03:15:05'),
+(16, 5, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0001\"}', '2026-08-27 03:15:58'),
+(17, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-27 03:16:02'),
+(18, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-08-27 03:16:11'),
+(19, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-08-27 03:16:41'),
+(20, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-27 03:27:15'),
+(21, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-08-27 03:29:49'),
+(22, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-08-27 03:30:55'),
+(23, 10, 'Request Deleted', 'purchase_requests', 37, '{\"pr_number\":\"2026-06-002\",\"project\":\"BCDA - CCTV\"}', '2026-08-27 03:34:35'),
+(24, 10, 'Request Deleted', 'purchase_requests', 39, '{\"pr_number\":\"2026-06-004\",\"project\":\"BCDA - Control Tower\"}', '2026-08-27 03:34:39'),
+(25, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-27 03:34:49'),
+(26, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-08-27 03:35:04'),
+(27, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-08-29 05:29:47'),
+(28, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-08-29 06:22:25'),
+(29, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-02 03:11:13'),
+(30, 16, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ADMIN-2026-0004\"}', '2026-09-02 03:11:28'),
+(31, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-09-02 03:11:32'),
+(32, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-09-02 03:11:44'),
+(33, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-09-02 03:23:28'),
+(34, 6, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"PRO-2026-0001\"}', '2026-09-02 03:23:57'),
+(35, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-09-02 03:24:39'),
+(36, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-02 03:24:47'),
+(37, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-09-02 03:25:03'),
+(38, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-02 05:40:33'),
+(39, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-09-02 05:40:59'),
+(40, 12, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0005\"}', '2026-09-02 05:41:14'),
+(41, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-09-02 06:00:32'),
+(42, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-02 07:12:30'),
+(43, 8, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA-2026-004\"}', '2026-09-02 07:20:37'),
+(44, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 05:31:14'),
+(45, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 05:36:11'),
+(46, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 05:52:43'),
+(47, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 05:57:48'),
+(48, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 06:23:48'),
+(49, 10, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"SA001\"}', '2026-09-03 06:23:59'),
+(50, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-03 06:24:35'),
+(51, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-03 06:24:49'),
+(52, 7, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ADMIN-2026-0001\"}', '2026-09-03 06:25:05'),
+(53, 5, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0001\"}', '2026-09-03 06:26:49'),
+(54, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-09-03 06:42:01');
+
+-- --------------------------------------------------------
+
+--
+-- Table structure for table `user_push_tokens`
+--
+
+DROP TABLE IF EXISTS `user_push_tokens`;
+CREATE TABLE IF NOT EXISTS `user_push_tokens` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `user_id` int NOT NULL,
+  `token` varchar(191) COLLATE utf8mb4_unicode_ci NOT NULL,
+  `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `user_token` (`user_id`,`token`)
+) ENGINE=MyISAM DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Constraints for dumped tables
@@ -1592,6 +2087,13 @@ ALTER TABLE `payment_schedule_reminder_logs`
   ADD CONSTRAINT `fk_reminder_schedule` FOREIGN KEY (`schedule_id`) REFERENCES `purchase_request_payment_schedules` (`id`) ON DELETE CASCADE;
 
 --
+-- Constraints for table `po_admin_reviews`
+--
+ALTER TABLE `po_admin_reviews`
+  ADD CONSTRAINT `po_reviews_po_fk` FOREIGN KEY (`po_id`) REFERENCES `purchase_orders` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `po_reviews_reviewer_fk` FOREIGN KEY (`reviewer_id`) REFERENCES `employees` (`id`) ON DELETE CASCADE;
+
+--
 -- Constraints for table `po_attachments`
 --
 ALTER TABLE `po_attachments`
@@ -1618,6 +2120,7 @@ ALTER TABLE `purchase_orders`
 -- Constraints for table `purchase_requests`
 --
 ALTER TABLE `purchase_requests`
+  ADD CONSTRAINT `purchase_requests_ibfk_1` FOREIGN KEY (`bypassed_by`) REFERENCES `employees` (`id`),
   ADD CONSTRAINT `purchase_requests_payment_terms_set_by_fk` FOREIGN KEY (`payment_terms_set_by`) REFERENCES `employees` (`id`) ON DELETE SET NULL;
 
 --

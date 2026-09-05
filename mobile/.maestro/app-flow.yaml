@@ -1,0 +1,12 @@
+appId: com.yourcompany.procurement
+---
+- launchApp
+- assertVisible: "Login"
+- tapOn: "Username"
+- inputText: "admin"
+- tapOn: "Password"
+- inputText: "password123"
+- tapOn: "Sign In"
+- assertVisible: "Dashboard"
+- tapOn: "Create Request"
+- assertVisible: "New Purchase Request"

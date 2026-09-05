@@ -87,6 +87,8 @@ const TextArea = ({ label, value, onChange, placeholder, rows = 3 }) => (
 const AddItem = () => {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [imageFile, setImageFile] = useState(null)
+  const [imagePreview, setImagePreview] = useState('')
   const [formData, setFormData] = useState({
     item_code: '',
     item_name: '',
@@ -131,6 +133,14 @@ const AddItem = () => {
     }))
   }
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0]
+    if (file) {
+      setImageFile(file)
+      setImagePreview(URL.createObjectURL(file))
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     
@@ -141,8 +151,28 @@ const AddItem = () => {
 
     try {
       setLoading(true)
+
+      let imageUrl = null;
+      if (imageFile) {
+        const formDataUpload = new FormData();
+        formDataUpload.append('image', imageFile);
+        
+        const uploadRes = await fetch('http://localhost:5005/api/uploads', {
+          method: 'POST',
+          body: formDataUpload
+        });
+        
+        const uploadData = await uploadRes.json();
+        if (uploadData.success) {
+          imageUrl = uploadData.imageUrl;
+        } else {
+          throw new Error('Image upload failed');
+        }
+      }
+
       const dataToSubmit = {
         ...formData,
+        image_url: imageUrl,
         unit_price: formData.unit_price ? parseFloat(formData.unit_price) : null,
         reorder_level: formData.reorder_level ? parseInt(formData.reorder_level) : null
       }
@@ -178,6 +208,21 @@ const AddItem = () => {
 
       <Card className="p-6 max-w-2xl">
         <form onSubmit={handleSubmit}>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Product Image</label>
+            <div className="flex items-center gap-4">
+              {imagePreview && (
+                <img src={imagePreview} alt="Preview" className="w-24 h-24 object-cover rounded-lg border border-gray-200" />
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-yellow-50 file:text-yellow-700 hover:file:bg-yellow-100"
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="SKU"

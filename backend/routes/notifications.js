@@ -93,4 +93,26 @@ router.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });
 });
 
+// Register mobile push token
+router.post('/register-token', authenticate, async (req, res) => {
+  const { token } = req.body;
+  const userId = req.user.id;
+
+  if (!token) {
+    return res.status(400).json({ message: 'Token is required' });
+  }
+
+  try {
+    // Insert token if it doesn't exist, using IGNORE to handle duplicate (user_id, token) pairs
+    await db.query(
+      'INSERT IGNORE INTO user_push_tokens (user_id, token) VALUES (?, ?)',
+      [userId, token]
+    );
+    res.status(200).json({ message: 'Push token registered successfully' });
+  } catch (error) {
+    console.error('Failed to register push token:', error);
+    res.status(500).json({ message: 'Failed to register push token' });
+  }
+});
+
 export default router;

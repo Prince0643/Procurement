@@ -43,6 +43,14 @@ export const navigationItems = [
     roles: ['engineer', 'procurement', 'admin', 'super_admin_rep']
   },
 
+  // For Admin Processing
+  {
+    path: '/dashboard/purchase-requests?tab=admin_processing',
+    label: 'For Admin Processing',
+    icon: FileText,
+    roles: ['admin', 'super_admin_rep', 'super_admin']
+  },
+
   // Service Requests - TEMPORARILY COMMENTED OUT
   // {
   //   path: '/dashboard/service-requests',
@@ -177,7 +185,7 @@ export const navigationItems = [
 export const navigationGroups = [
   {
     title: null,
-    items: ['/dashboard', '/dashboard/purchase-requests', '/dashboard/purchase-requests?tab=reviews'] // service-requests temporarily commented out
+    items: ['/dashboard', '/dashboard/purchase-requests', '/dashboard/purchase-requests?tab=reviews', '/dashboard/purchase-requests?tab=admin_processing'] // service-requests temporarily commented out
   },
   {
     title: 'Orders & Vouchers',

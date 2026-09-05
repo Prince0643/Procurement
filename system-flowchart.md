@@ -106,13 +106,43 @@
    ALL APPROVE      ANY DISAPPROVE
       │                 │
       ▼                 ▼
-(Proceed to       ┌─────────────────────────┐
- Step 5)          │ PR sent back to the     │
-                  │ Engineer who created it │
-                  │ to EDIT the PR          │
-                  │ (Notifies requester)    │
-                  │ Status: RETURNED        │
-                  └─────────────────────────┘
+┌─────────────┐   ┌─────────────────────────┐
+│   Status:   │   │ PR sent back to the     │
+│ APPROVED    │   │ Engineer who created it │
+└─────────────┘   │ to EDIT the PR          │
+      │             │ (Notifies requester)    │
+      ▼             │ Status: RETURNED        │
+┌────────────────────────┐  └─────────────────────────┘
+│  Final Approval (All    │            │
+│  Super Admin Reps)     │            ▼
+└──────────────┬─────────┘   ┌─────────────────────────┐
+               │             │ Engineer edits & re-    │
+     ┌─────────┴─────────┐   │ submits PR              │
+     │                   │   │ Status: PENDING         │
+   ALL APPROVE      ANY DISAPPROVE └─────────────┬───────────┘
+     │                   │                     │
+     ▼                   ▼                     └──► (Back to Step 2)
+┌─────────────┐   ┌─────────────────────────┐
+│   Status:   │   │ PR sent back to the     │
+│ APPROVED    │   │ Engineer who created it │
+└─────────────┘   │ to EDIT the PR          │
+      │             │ (Notifies requester)    │
+      ▼             │ Status: RETURNED        │
+┌────────────────────────┐  └─────────────────────────┘
+│  Receive Items         │            │
+│  (Engineer confirms)     │            ▼
+└──────────────┬─────────┘   ┌─────────────────────────┐
+               │             │ Engineer edits & re-    │
+     ┌─────────┴────────┐    │ submits PR              │
+     │                  │    │ Status: PENDING         │
+   CONFIRMED        NOT CONFIRMED └─────────────┬───────────┘
+     │                                           │
+     ▼                                           └──► (Back to Step 2)
+┌─────────────┐
+│   Status:   │
+│  COMPLETED  │
+└─────────────┘
+```
                             │
                             ▼
                   ┌─────────────────────────┐

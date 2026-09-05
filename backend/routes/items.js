@@ -240,7 +240,7 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create item (procurement, admin, super_admin, engineer can create)
 router.post('/', authenticate, requireItemManagement, async (req, res) => {
   try {
-    const { item_name, description, category_id, unit, brand, product_type, material, color, size } = req.body;
+    const { item_name, description, category_id, unit, brand, product_type, material, color, size, image_url } = req.body;
     const created_by = req.user.id;
 
     if (!item_name || !String(item_name).trim()) {
@@ -268,8 +268,8 @@ router.post('/', authenticate, requireItemManagement, async (req, res) => {
       item_code = await getNextSku(skuParts);
       try {
         [result] = await db.query(
-          'INSERT INTO items (item_code, item_name, description, category_id, unit, created_by) VALUES (?, ?, ?, ?, ?, ?)',
-          [item_code, item_name, description, normalizedCategoryId, unit, created_by]
+          'INSERT INTO items (item_code, item_name, description, category_id, unit, created_by, image_url) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [item_code, item_name, description, normalizedCategoryId, unit, created_by, image_url || null]
         );
         break;
       } catch (error) {

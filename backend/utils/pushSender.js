@@ -1,43 +1,41 @@
-import webpush from 'web-push';
+import { Expo } from 'expo-server-sdk';
 import pool from '../config/database.js';
-import dotenv from 'dotenv';
 
-dotenv.config();
-
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT,
-  process.env.VAPID_PUBLIC_KEY,
-  process.env.VAPID_PRIVATE_KEY
-);
+const expo = new Expo();
 
 export const sendPushNotification = async (employeeId, payload) => {
   try {
-    const [subscriptions] = await pool.query(
-      'SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE employee_id = ?',
+    const [rows] = await pool.query(
+      'SELECT fcm_token FROM employees WHERE id = ?',
       [employeeId]
     );
 
-    if (subscriptions.length === 0) return;
+    if (rows.length === 0 || !rows[0].fcm_token) return;
 
-    const pushPayload = JSON.stringify(payload);
+    const pushToken = rows[0].fcm_token;
 
-    for (const sub of subscriptions) {
-      const subscriptionInfo = {
-        endpoint: sub.endpoint,
-        keys: {
-          p256dh: sub.p256dh,
-          auth: sub.auth,
-        }
-      };
+    if (!Expo.isExpoPushToken(pushToken)) {
+      console.error(`Push token ${pushToken} is not a valid Expo push token`);
+      return;
+    }
 
+    const messages = [{
+      to: pushToken,
+      sound: 'default',
+      title: payload.title || 'Procurement System',
+      body: payload.message || 'You have a new notification',
+      data: payload,
+    }];
+
+    const chunks = expo.chunkPushNotifications(messages);
+    const tickets = [];
+
+    for (let chunk of chunks) {
       try {
-        await webpush.sendNotification(subscriptionInfo, pushPayload);
-      } catch (err) {
-        console.error('Error sending push to endpoint:', sub.endpoint, err);
-        if (err.statusCode === 410 || err.statusCode === 404) {
-          // Subscription has expired or is no longer valid, we could remove it from DB
-          await pool.query('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]);
-        }
+        const ticketChunk = await expo.sendPushNotificationsAsync(chunk);
+        tickets.push(...ticketChunk);
+      } catch (error) {
+        console.error('Error sending push chunk', error);
       }
     }
   } catch (err) {

@@ -485,7 +485,9 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     console.log('📦 Request body keys:', Object.keys(req.body));
     console.log('📦 Files received:', req.files?.length || 0);
 
-    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules } = req.body;
+    const { purpose, remarks, items, date_needed, project, project_address, order_number, save_as_draft, payment_basis, payment_terms_note, supplier_id, supplier_name, payment_schedules, is_item_request } = req.body;
+
+    const isItemRequest = is_item_request === true || is_item_request === 'true';
 
     // Parse JSON strings from FormData
     let parsedItems = items;
@@ -529,7 +531,7 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
 
       const invalidItems = parsedItems.filter(item => {
         const up = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
-        return !Number.isFinite(up) || up <= 0;
+        return !isItemRequest && (!Number.isFinite(up) || up <= 0);
       });
       if (invalidItems.length > 0) {
         return res.status(400).json({ message: 'All items must have a unit price strictly greater than 0' });
@@ -565,6 +567,8 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     let status;
     if (isDraft) {
       status = 'Draft';
+    } else if (isItemRequest) {
+      status = 'For Admin Processing';
     } else if (req.user.role === 'engineer') {
       status = 'For Engineer Review';
     } else if (req.user.role === 'admin') {
@@ -576,7 +580,7 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     const paymentBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
     const paymentTermsNote = normalizePaymentTermsNote(payment_terms_note);
     const paymentTermsCode = paymentTermsNote ? 'CUSTOM' : null;
-    const freeTextSupplierName = normalizeSupplierName(supplier_name);
+    const freeTextSupplierName = isItemRequest ? 'TBD' : normalizeSupplierName(supplier_name);
     const normalizedPaymentSchedules = normalizePaymentSchedules(parsedPaymentSchedules);
 
     // Handle accreditation files and check supplier accreditation status
@@ -585,7 +589,7 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
     let matchedSupplierId = supplier_id || null;
 
     // Check supplier accreditation status if supplier name is provided
-    if (freeTextSupplierName && !isDraft) {
+    if (freeTextSupplierName && !isDraft && !isItemRequest) {
       const normalizedSupplierName = freeTextSupplierName.trim().toLowerCase();
       const [supplierCheck] = await conn.query(`
         SELECT id, accredited
@@ -801,6 +805,7 @@ router.post('/', authenticate, prAccreditationUpload.array('accreditation_files'
       }
     }
     console.error('Create purchase request error:', error);
+    try { require('fs').appendFileSync('error.log', '\n[PR CREATE ERROR] ' + (error.stack || error.message) + '\n'); } catch (e) {}
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({ message: statusCode === 500 ? 'Failed to create purchase request: ' + error.message : error.message });
   } finally {
@@ -1721,6 +1726,155 @@ router.put('/:id/super-admin-first-approve', authenticate, requireSuperAdmin, as
     }
   });
 
+  // Process Item Request (Admin finalizes supplier and prices)
+  router.put('/:id/process', authenticate, async (req, res) => {
+    let conn;
+    try {
+      if (req.user.role !== 'admin' && req.user.role !== 'super_admin' && req.user.role !== 'super_admin_rep') {
+        return res.status(403).json({ message: 'Only an Admin can process item requests.' });
+      }
+
+      const { supplier_id, supplier_name, payment_basis, payment_terms_note, items, payment_schedules } = req.body;
+
+      let parsedItems = items;
+      if (typeof items === 'string') {
+        try { parsedItems = JSON.parse(items); } catch (e) { parsedItems = []; }
+      }
+
+      if (!Array.isArray(parsedItems) || parsedItems.length === 0) {
+        return res.status(400).json({ message: 'At least one item is required' });
+      }
+
+      const invalidItems = parsedItems.filter(item => {
+        const up = Number(item.unit_price ?? item.estimated_unit_price ?? 0);
+        return !Number.isFinite(up) || up <= 0;
+      });
+      if (invalidItems.length > 0) {
+        return res.status(400).json({ message: 'All items must have a unit price strictly greater than 0' });
+      }
+
+      conn = await db.getConnection();
+      await conn.beginTransaction();
+
+      const [prs] = await conn.query('SELECT * FROM purchase_requests WHERE id = ?', [req.params.id]);
+      if (prs.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: 'Purchase request not found' });
+      }
+
+      const pr = prs[0];
+      if (pr.status !== 'For Admin Processing') {
+        await conn.rollback();
+        return res.status(400).json({ message: 'This PR is not in For Admin Processing status.' });
+      }
+
+      const pBasis = payment_basis === 'non_debt' ? 'non_debt' : 'debt';
+      const pNote = normalizePaymentTermsNote(payment_terms_note);
+      
+      let supAddress = null;
+      let matchedSupplierId = supplier_id || null;
+      let freeTextSupplierName = normalizeSupplierName(supplier_name);
+      
+      if (matchedSupplierId) {
+        const [supRows] = await conn.query('SELECT id, supplier_name, address FROM suppliers WHERE id = ? LIMIT 1', [matchedSupplierId]);
+        if (supRows.length > 0) {
+          freeTextSupplierName = supRows[0].supplier_name;
+          supAddress = supRows[0].address;
+        } else {
+          matchedSupplierId = null;
+        }
+      }
+
+      if (!freeTextSupplierName) {
+        await conn.rollback();
+        return res.status(400).json({ message: 'A valid supplier is required to process the item request.' });
+      }
+
+      let totalAmount = 0;
+      const normalizedItems = parsedItems.map(item => {
+        const itemId = item.item_id ?? item.id;
+        const quantity = Number(item.quantity);
+        const unitPrice = Number(item.unit_price);
+        const totalPrice = quantity * unitPrice;
+        totalAmount += totalPrice;
+        return { itemId, quantity, unitPrice, totalPrice };
+      });
+
+      const newStatus = 'For Super Admin Rep Review';
+
+      await conn.query(
+        `UPDATE purchase_requests SET 
+          supplier_id = ?, 
+          supplier_name = ?, 
+          supplier_address = ?, 
+          payment_basis = ?, 
+          payment_terms_note = ?, 
+          payment_terms_code = ?, 
+          total_amount = ?, 
+          status = ?
+        WHERE id = ?`,
+        [matchedSupplierId, freeTextSupplierName, supAddress, pBasis, pNote, pNote ? 'CUSTOM' : null, totalAmount, newStatus, req.params.id]
+      );
+
+      // Update prices in PR items
+      for (const item of normalizedItems) {
+        await conn.query(
+          `UPDATE purchase_request_items SET unit_price = ?, total_price = ? WHERE purchase_request_id = ? AND item_id = ?`,
+          [item.unitPrice, item.totalPrice, req.params.id, item.itemId]
+        );
+      }
+
+      // Handle payment schedules
+      await conn.query('DELETE FROM purchase_request_payment_schedules WHERE purchase_request_id = ?', [req.params.id]);
+      if (pBasis === 'debt') {
+        let parsedSchedules = payment_schedules;
+        if (typeof payment_schedules === 'string') {
+          try { parsedSchedules = JSON.parse(payment_schedules); } catch (e) { parsedSchedules = []; }
+        }
+        const schedules = normalizePaymentSchedules(parsedSchedules);
+        
+        let sumSchedules = 0;
+        const scheduleValues = [];
+        schedules.forEach(sched => {
+          sumSchedules += sched.amount;
+          scheduleValues.push([req.params.id, sched.paymentDate, sched.amount, sched.note]);
+        });
+        
+        if (Math.abs(sumSchedules - totalAmount) > 0.01) {
+          await conn.rollback();
+          return res.status(400).json({ message: 'Payment schedules total must equal the request total amount.' });
+        }
+
+        if (scheduleValues.length > 0) {
+          await conn.query(
+            'INSERT INTO purchase_request_payment_schedules (purchase_request_id, payment_date, amount, note) VALUES ?',
+            [scheduleValues]
+          );
+        }
+      }
+
+      // Notify Super Admin Reps
+      const superAdminReps = await getSuperAdminReps();
+      for (const repId of superAdminReps) {
+        await createNotification(
+          repId,
+          'Item Request Processed',
+          `Purchase Request ${pr.pr_number} has been processed by ${req.user.first_name} and is ready for your review.`,
+          `/dashboard/purchase-requests/${req.params.id}`
+        );
+      }
+
+      await conn.commit();
+      res.json({ message: 'Item request processed successfully', status: newStatus });
+    } catch (error) {
+      if (conn) await conn.rollback();
+      console.error('Error processing item request:', error);
+      res.status(500).json({ message: 'Error processing item request' });
+    } finally {
+      if (conn) conn.release();
+    }
+  });
+
 // Approve/Reject PR by Super Admin Rep (to Super Admin Final Approval)
 router.put('/:id/super_admin_rep-approve', authenticate, async (req, res) => {
   let conn;
@@ -2512,45 +2666,85 @@ router.put('/:id/resubmit', authenticate, async (req, res) => {
 
 // Legacy endpoint - remove requireSuperAdmin restriction for backward compatibility
 router.put('/:id/approve', authenticate, async (req, res) => {
+  let conn;
   try {
-    const { status, remarks } = req.body;
-    const [prs] = await db.query('SELECT order_number, status FROM purchase_requests WHERE id = ?', [req.params.id]);
+    const { status, remarks } = req.body; // status is 'approved' or 'rejected' or something
+    
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+
+    const [prs] = await conn.query('SELECT order_number, status, total_amount, processed_by FROM purchase_requests WHERE id = ?', [req.params.id]);
     if (prs.length === 0) {
+      await conn.rollback();
       return res.status(404).json({ message: 'Purchase request not found' });
     }
     await assertOrderNumberUnlocked(prs[0].order_number, 'approval');
 
-    const currentStatus = prs[0].status;
+    const pr = prs[0];
+    const currentStatus = pr.status;
     const userRole = req.user.role;
 
-    // Validate that user's role matches the current status
-    if (currentStatus === 'For Engineer Review' && userRole !== 'engineer') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Engineer review. You do not have permission to approve at this stage.' });
+    // Validate role matches current status
+    if (currentStatus === 'Under Admin Review' && userRole !== 'admin') {
+      await conn.rollback();
+      return res.status(403).json({ message: 'This PR is awaiting Admin review.' });
     }
-
-    if (currentStatus === 'For Admin Review' && userRole !== 'admin') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Admin review. You do not have permission to approve at this stage.' });
-    }
-
     if (currentStatus === 'For Super Admin Rep Review' && userRole !== 'super_admin_rep') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin Rep review. You do not have permission to approve at this stage.' });
+      await conn.rollback();
+      return res.status(403).json({ message: 'This PR is awaiting Super Admin Rep review.' });
     }
-
     if (currentStatus === 'For Super Admin Final Approval' && userRole !== 'super_admin') {
-      return res.status(403).json({ message: 'This purchase request is currently awaiting Super Admin final approval. You do not have permission to approve at this stage.' });
+      await conn.rollback();
+      return res.status(403).json({ message: 'This PR is awaiting Super Admin Final approval.' });
     }
 
-    await db.query(
-      'UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?',
-      [status, req.user.id, remarks, req.params.id]
-    );
+    if (userRole === 'admin' && currentStatus === 'Under Admin Review') {
+      if (status === 'Rejected' || status === 'rejected') {
+         // Return to processing admin
+         await conn.query('UPDATE purchase_requests SET status = ?, remarks = ? WHERE id = ?', ['Pending Admin Processing', remarks || 'Returned by Admin', req.params.id]);
+         // Optionally reset reviews
+         await conn.query('DELETE FROM purchase_request_reviews WHERE purchase_request_id = ?', [req.params.id]);
+      } else {
+         // Insert or update review
+         await conn.query('INSERT INTO purchase_request_reviews (purchase_request_id, reviewer_id, review_status, review_comment, reviewed_at) VALUES (?, ?, ?, ?, NOW()) ON DUPLICATE KEY UPDATE review_status = VALUES(review_status), review_comment = VALUES(review_comment), reviewed_at = NOW()', [req.params.id, req.user.id, 'approved', remarks]);
+         
+         // Check if all admins approved
+         const [adminCountRes] = await conn.query("SELECT count(*) as count FROM users WHERE role = 'admin' AND is_active = 1");
+         const [reviewCountRes] = await conn.query("SELECT count(*) as count FROM purchase_request_reviews WHERE purchase_request_id = ? AND review_status = 'approved'", [req.params.id]);
+         
+         if (reviewCountRes[0].count >= adminCountRes[0].count) {
+           // All admins approved! Move to next stage based on amount
+           let nextStatus = 'For Super Admin Rep Review';
+           if (pr.total_amount > 10000) {
+             nextStatus = 'For Super Admin Final Approval';
+           }
+           await conn.query('UPDATE purchase_requests SET status = ?, remarks = ? WHERE id = ?', [nextStatus, 'All admins approved', req.params.id]);
+         }
+      }
+    } else if (userRole === 'super_admin_rep' && currentStatus === 'For Super Admin Rep Review') {
+       if (status === 'Rejected' || status === 'rejected') {
+         await conn.query('UPDATE purchase_requests SET status = ?, remarks = ? WHERE id = ?', ['Pending Admin Processing', remarks || 'Returned by Super Admin Rep', req.params.id]);
+       } else {
+         await conn.query('UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?', ['Completed', req.user.id, remarks, req.params.id]);
+       }
+    } else if (userRole === 'super_admin' && currentStatus === 'For Super Admin Final Approval') {
+       if (status === 'Rejected' || status === 'rejected') {
+         await conn.query('UPDATE purchase_requests SET status = ?, remarks = ? WHERE id = ?', ['Pending Admin Processing', remarks || 'Returned by Super Admin', req.params.id]);
+       } else {
+         await conn.query('UPDATE purchase_requests SET status = ?, approved_by = ?, approved_at = NOW(), remarks = ? WHERE id = ?', ['Completed', req.user.id, remarks, req.params.id]);
+       }
+    }
 
+    await conn.commit();
     res.json({ message: `Purchase request ${status} successfully` });
   } catch (error) {
+    if (conn) await conn.rollback();
     if (error?.statusCode) {
       return res.status(error.statusCode).json({ message: error.message });
     }
     res.status(500).json({ message: 'Failed to update purchase request' });
+  } finally {
+    if (conn) conn.release();
   }
 });
 

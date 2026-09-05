@@ -174,6 +174,11 @@ create: async (prData, accreditationFiles = []) => {
     return response.data;
   },
 
+  process: async (id, prData) => {
+    const response = await api.put(`/purchase-requests/${id}/process`, prData);
+    return response.data;
+  },
+
 saveDraft: async (prData) => {
   const response = await api.post('/purchase-requests', {
     purpose: prData.purpose,

@@ -208,14 +208,14 @@ router.get('/:id', authenticate, async (req, res) => {
 // Create supplier (admin only)
 router.post('/', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, contact_person, phone, email, address, tin } = req.body;
+    const { name, contact_person, phone, email, address, rating_delivery, rating_quality, rating_pricing, performance_notes } = req.body;
     
     // Generate supplier code
     const supplierCode = 'SUP' + Date.now().toString().slice(-6);
     
     const [result] = await db.query(
-      'INSERT INTO suppliers (supplier_code, supplier_name, contact_person, phone, email, address) VALUES (?, ?, ?, ?, ?, ?)',
-      [supplierCode, name, contact_person, phone, email, address]
+      'INSERT INTO suppliers (supplier_code, supplier_name, contact_person, phone, email, address, rating_delivery, rating_quality, rating_pricing, performance_notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [supplierCode, name, contact_person, phone, email, address, rating_delivery || null, rating_quality || null, rating_pricing || null, performance_notes || null]
     );
 
     res.status(201).json({ 
@@ -231,11 +231,11 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
 // Update supplier (admin only)
 router.put('/:id', authenticate, requireAdmin, async (req, res) => {
   try {
-    const { name, contact_person, phone, email, address } = req.body;
+    const { name, contact_person, phone, email, address, rating_delivery, rating_quality, rating_pricing, performance_notes } = req.body;
     
     await db.query(
-      'UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone = ?, email = ?, address = ? WHERE id = ?',
-      [name, contact_person, phone, email, address, req.params.id]
+      'UPDATE suppliers SET supplier_name = ?, contact_person = ?, phone = ?, email = ?, address = ?, rating_delivery = ?, rating_quality = ?, rating_pricing = ?, performance_notes = ? WHERE id = ?',
+      [name, contact_person, phone, email, address, rating_delivery || null, rating_quality || null, rating_pricing || null, performance_notes || null, req.params.id]
     );
 
     res.json({ message: 'Supplier updated successfully' });

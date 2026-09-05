@@ -96,6 +96,26 @@ router.post('/login', [
   }
 });
 
+// Update push notification token
+router.post('/push-token', authenticate, async (req, res) => {
+  try {
+    const { token } = req.body;
+    if (!token) {
+      return res.status(400).json({ message: 'Token is required' });
+    }
+
+    await db.query(
+      'UPDATE employees SET fcm_token = ? WHERE id = ?',
+      [token, req.user.id]
+    );
+
+    res.json({ message: 'Push token updated successfully' });
+  } catch (error) {
+    console.error('Update push token error:', error);
+    res.status(500).json({ message: 'Server error while updating push token' });
+  }
+});
+
 // Get current user profile (protected)
 router.get('/me', async (req, res) => {
   try {

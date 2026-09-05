@@ -329,7 +329,11 @@ const Suppliers = () => {
       contact_person: '',
       phone: '',
       email: '',
-      address: ''
+      address: '',
+      rating_delivery: '',
+      rating_quality: '',
+      rating_pricing: '',
+      performance_notes: ''
     })
     setShowModal(true)
   }
@@ -341,7 +345,11 @@ const Suppliers = () => {
       contact_person: supplier.contact_person || '',
       phone: supplier.phone || '',
       email: supplier.email || '',
-      address: supplier.address || ''
+      address: supplier.address || '',
+      rating_delivery: supplier.rating_delivery || '',
+      rating_quality: supplier.rating_quality || '',
+      rating_pricing: supplier.rating_pricing || '',
+      performance_notes: supplier.performance_notes || ''
     })
     setShowModal(true)
   }
@@ -456,6 +464,7 @@ const Suppliers = () => {
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Phone</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Address</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Items</th>
                 <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Files</th>
                 {isSuperAdmin && <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Accredited</th>}
@@ -465,13 +474,13 @@ const Suppliers = () => {
             <tbody className="divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 8 : 7} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isSuperAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
                     Loading suppliers...
                   </td>
                 </tr>
               ) : filteredSuppliers.length === 0 ? (
                 <tr>
-                  <td colSpan={isSuperAdmin ? 9 : 8} className="px-4 py-8 text-center text-gray-500">
+                  <td colSpan={isSuperAdmin ? 10 : 9} className="px-4 py-8 text-center text-gray-500">
                     No suppliers found
                   </td>
                 </tr>
@@ -495,6 +504,14 @@ const Suppliers = () => {
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {supplier.address || '-'}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-500">
+                      {(() => {
+                        const count = (supplier.rating_delivery ? 1 : 0) + (supplier.rating_quality ? 1 : 0) + (supplier.rating_pricing ? 1 : 0);
+                        if (count === 0) return '-';
+                        const avg = (Number(supplier.rating_delivery || 0) + Number(supplier.rating_quality || 0) + Number(supplier.rating_pricing || 0)) / count;
+                        return <span className="flex items-center gap-1"><span className="text-yellow-500">★</span>{avg.toFixed(1)}</span>;
+                      })()}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-500">
                       {supplier.items_count || 0}
@@ -627,6 +644,59 @@ const Suppliers = () => {
               onChange={handleInputChange}
               placeholder="Enter address"
               rows={3}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Delivery Rating</label>
+              <select
+                name="rating_delivery"
+                value={formData.rating_delivery || ''}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">Not Rated</option>
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Stars</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Quality Rating</label>
+              <select
+                name="rating_quality"
+                value={formData.rating_quality || ''}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">Not Rated</option>
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Stars</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Pricing Rating</label>
+              <select
+                name="rating_pricing"
+                value={formData.rating_pricing || ''}
+                onChange={handleInputChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
+              >
+                <option value="">Not Rated</option>
+                {[1,2,3,4,5].map(n => <option key={n} value={n}>{n} Stars</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Performance Notes
+            </label>
+            <textarea
+              name="performance_notes"
+              value={formData.performance_notes || ''}
+              onChange={handleInputChange}
+              placeholder="Notes on supplier performance, reliability, etc."
+              rows={2}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500"
             />
           </div>

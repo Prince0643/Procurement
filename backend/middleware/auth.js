@@ -50,8 +50,9 @@ export const authorize = (...roles) => {
     }
 
     if (!roles.includes(req.user.role)) {
+      console.log(`Access Denied: User role '${req.user.role}' not in required roles [${roles.join(', ')}]`);
       return res.status(403).json({ 
-        message: 'Access denied. Required role: ' + roles.join(' or ')
+        message: `Access denied. Required role: ${roles.join(' or ')}. Your role: ${req.user.role}`
       });
     }
 
@@ -60,9 +61,9 @@ export const authorize = (...roles) => {
 };
 
 // Role-specific middleware helpers
-export const requireEngineer = authorize('engineer', 'procurement', 'admin', 'super_admin');
-export const requireProcurement = authorize('procurement', 'admin', 'super_admin');
-export const requireItemManagement = authorize('procurement', 'admin', 'super_admin', 'engineer');
-export const requireAdmin = authorize('admin', 'super_admin');
+export const requireEngineer = authorize('engineer', 'procurement', 'admin', 'super_admin', 'super_admin_rep');
+export const requireProcurement = authorize('procurement', 'admin', 'super_admin', 'super_admin_rep');
+export const requireItemManagement = authorize('procurement', 'admin', 'super_admin', 'super_admin_rep', 'engineer');
+export const requireAdmin = authorize('admin', 'super_admin', 'super_admin_rep');
 export const requireAdminOnly = authorize('admin');
-export const requireSuperAdmin = authorize('super_admin');
+export const requireSuperAdmin = authorize('super_admin', 'super_admin_rep');

@@ -140,7 +140,7 @@ const SignatureBox = ({
   </div>
 );
 
-const PRPreviewModal = ({
+const PRDetailsModal = ({
   pr,
   loading,
   onClose,
@@ -546,4 +546,4 @@ const PRPreviewModal = ({
   );
 };
 
-export default PRPreviewModal;
+export default PRDetailsModal;

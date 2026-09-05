@@ -83,9 +83,10 @@ const Sidebar = ({ user, onLogout, pendingCount }) => {
                           // Custom active state check for purchase requests and reviews
                           const isPurchaseRequests = item.path === '/dashboard/purchase-requests';
                           const isForReviews = item.path === '/dashboard/purchase-requests?tab=reviews';
+                          const isForAdminProcessing = item.path === '/dashboard/purchase-requests?tab=admin_processing';
 
                           let customActive = isActive;
-                          if (isPurchaseRequests || isForReviews) {
+                          if (isPurchaseRequests || isForReviews || isForAdminProcessing) {
                             customActive = currentPath === item.path;
                           }
 

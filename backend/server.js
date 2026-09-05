@@ -35,6 +35,7 @@ import orderNumberRoutes from './routes/orderNumbers.js';
 import projectRoutes from './routes/projects.js';
 import auditRoutes from './routes/audit.js';
 import settingsRoutes from './routes/settings.js';
+import uploadRoutes from './routes/uploads.js';
 import { startPaymentScheduleReminderJob } from './jobs/paymentScheduleReminders.js';
 
 dotenv.config();
@@ -149,13 +150,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve static files from uploads folder with CORS headers
-app.use('/uploads', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Test database connection
 app.get('/api/health', async (req, res) => {
@@ -196,6 +192,8 @@ app.use('/api/order-numbers', orderNumberRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/audit-logs', auditRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/uploads', uploadRoutes);
+
 app.use((err, req, res, next) => {
   logger.error(err.stack);
   res.status(500).json({ 
@@ -209,7 +207,7 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-httpServer.listen(PORT, () => {
+httpServer.listen(PORT, '0.0.0.0', () => {
   logger.info(`Server running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
   if (paymentReminderEnabled) {

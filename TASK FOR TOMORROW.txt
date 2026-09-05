@@ -1,0 +1,30 @@
+
+FIX TOMORROW
+mobile app PR quantity should be editable
+provide a calendar in date need in mobile PR
+bottom navigation icon
+profile page
+enhance the dashboard page
+push notification
+color theme change
+toggle light mode and dark mode
+refactor the request page
+icon or logo 
+bottom navigation UI enhancement  
+Web and mobile app integration
+header enhancement
+notification bell
+product/items images
+profile image
+offline mode auto sync if online
+purchase request status if the pr from mobile app has been process
+email notification if pr from offline is sync and pr status change
+mobile app dashboard should be quick actions and report and updates
+layout the super admin, admin, and super admin representative mobile app UI and UX
+in app alert message if there's a new request
+success message interface
+put a loading time as a rate limiter
+category of item
+payment terms
+payment schedule
+remove the amount column

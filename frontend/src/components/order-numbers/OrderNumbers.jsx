@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { useAuth } from '../../contexts/AuthContext';
-import PRPreviewModal from '../purchase-requests/PRPreviewModal';
+import PRDetailsModal from '../purchase-requests/PRDetailsModal';
 import SRPreviewModal from '../service-requests/SRPreviewModal';
 import CRPreviewModal from '../cash-requests/CRPreviewModal';
 
@@ -987,7 +987,7 @@ const OrderNumbers = () => {
             </div>
 
             {/* External Preview Modals */}
-            <PRPreviewModal 
+            <PRDetailsModal 
               pr={previewType === 'purchaseRequests' ? previewItem : null}
               loading={previewLoading}
               onClose={closePreview}

@@ -9,7 +9,7 @@ import { paymentOrderService } from '../../services/paymentOrders';
 import { reimbursementService } from '../../services/reimbursements';
 import api from '../../services/api';
 import { socketService } from '../../services/socket';
-import PRPreviewModal from '../purchase-requests/PRPreviewModal';
+import PRDetailsModal from '../purchase-requests/PRDetailsModal';
 import POPreviewModal from '../purchase-orders/POPreviewModal';
 import PaymentRequestPreviewModal from '../payment-requests/PaymentRequestPreviewModal';
 import DVPreviewModal from '../disbursement-vouchers/DVPreviewModal';
@@ -4171,7 +4171,7 @@ const Approvals = () => {
 
       {/* PR Preview Modal */}
       {previewPR && (
-        <PRPreviewModal
+        <PRDetailsModal
           pr={previewPRDetails || previewPR}
           loading={loadingPreview}
           onClose={() => setPreviewPR(null)}
