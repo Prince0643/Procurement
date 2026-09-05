@@ -197,6 +197,19 @@ export const PRTable = ({
                             </Button>
                           </>
                         )}
+                        {urlTab === 'admin_processing' && pr.status === 'For Admin Processing' && (user?.role === 'admin' || user?.role === 'super_admin') && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              openProcessModal(pr)
+                            }}
+                            title="Process Request"
+                          >
+                            <Settings className="w-4 h-4 text-blue-600" />
+                          </Button>
+                        )}
                         <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); setExpandedId(expandedId === pr.id ? null : pr.id); }}>
                           {expandedId === pr.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                         </Button>

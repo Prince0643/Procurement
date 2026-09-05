@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1:3306
--- Generation Time: Sep 04, 2026 at 12:34 AM
+-- Generation Time: Sep 05, 2026 at 05:07 AM
 -- Server version: 8.4.7
 -- PHP Version: 8.3.28
 
@@ -235,6 +235,7 @@ CREATE TABLE IF NOT EXISTS `employees` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `email` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
+  `fcm_token` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `employee_no` (`employee_no`)
 ) ENGINE=InnoDB AUTO_INCREMENT=22 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -243,19 +244,19 @@ CREATE TABLE IF NOT EXISTS `employees` (
 -- Dumping data for table `employees`
 --
 
-INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `middle_initial`, `last_name`, `role`, `department`, `password`, `is_active`, `created_at`, `updated_at`, `email`) VALUES
-(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'super_admin_rep', 'Engineering', '$2a$10$g5BT/XyIWksZvK4LqqQTjuL/pjSglLqGdRQCGoPw375t5Q2g4XkKK', 1, '2026-02-10 02:36:33', '2026-08-14 04:52:27', NULL),
-(6, 'PRO-2026-0001', 'Junnel', 'B', 'Tadina', 'engineer', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-14 06:47:24', NULL),
-(7, 'ADMIN-2026-0001', 'ELAINE', 'M', 'AGUILAR', 'admin', 'Administration', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-12 06:06:26', NULL),
-(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$axW..03rjtzmDLOgyvn2ceyJResqKMyiyWQD7vYUa3gmTWvRqaENq', 1, '2026-02-10 02:36:33', '2026-04-14 01:20:11', NULL),
-(10, 'SA001', 'Super', 'D', 'Adminesu', 'super_admin', 'Management', '$2a$10$2VAa8J7EZDnfspG1/t4G1ez6MXGEnf3DLiPNqcJEm4ypE0p9RATNq', 1, '2026-02-12 00:55:00', '2026-02-12 02:48:05', NULL),
-(12, 'ENG-2026-0005', 'Joylene', 'F', 'Balanon', 'engineer', 'Engineering', '$2a$10$fFUgVn7r1fE8YPLnwcTDZOhWhEhjxY1gg3rULIps0uoMBVsBE95W.', 1, '2026-02-12 02:45:21', '2026-02-12 02:50:16', NULL),
-(13, 'ENG-2026-0006', 'Winnielyn Kaye', 'W', 'Olarte', 'engineer', 'Procurement', '$2a$10$.GDmwlv/XvEmPJzt3oIb0.39RVYiJMsxBwcTaMbmFInk3th76KpIu', 1, '2026-02-12 02:45:41', '2026-02-12 02:54:11', NULL),
-(14, 'ADMIN-2026-0002', 'RONALYN', 'W', 'MALLARE', 'admin', 'Administration', '$2a$10$zZXZI/tYRPS37ZQVDeThpeaBi5uCv1P1e1EsBkScqRmt/1.iZPFWK', 1, '2026-02-12 02:46:45', '2026-08-12 06:06:09', NULL),
-(16, 'ADMIN-2026-0004', 'MARJORIE', 'O', 'GARCIA', 'admin', 'Administration', '$2a$10$pj5HrIzaIYIkWlCbcOy9sOBNxrQitgV2.Umuh.wldfJWEYy5t0Ta6', 1, '2026-02-12 02:47:46', '2026-08-12 06:06:00', NULL),
-(19, 'ADMIN-2026-0005', 'LYRA', 'F', 'JAVONILLO', 'admin', 'Administration', '$2a$10$xHUq1Y4DXeC9lhhcLPiTy.Y/s2MXaqR737x4Rdw8iHK4Cfw8q5qjG', 1, '2026-08-14 06:48:34', '2026-08-14 06:48:34', NULL),
-(20, 'ENG-2026-0008', 'EARL', 'N', 'NISPEROS', 'engineer', 'Engineering', '$2a$10$HwoxtxQmy2HMokTt1s6tie1PfKKbP24wZ7gJHMBCDX16kLKo8SXy2', 1, '2026-08-14 06:51:13', '2026-08-14 06:51:13', NULL),
-(21, 'ENG-2026-0009', 'JOANA', 'M', 'BAAGEN', 'engineer', 'Engineering', '$2a$10$opLKGHpkkVuulYRfKf3L3uNrDdGj3LkQM0GKa3nBF3orWE.YcoSz2', 1, '2026-08-14 06:51:30', '2026-08-14 06:51:30', NULL);
+INSERT INTO `employees` (`id`, `employee_no`, `first_name`, `middle_initial`, `last_name`, `role`, `department`, `password`, `is_active`, `created_at`, `updated_at`, `email`, `fcm_token`) VALUES
+(5, 'ENG-2026-0001', 'Michelle', 'T', 'Norial', 'super_admin_rep', 'Engineering', '$2a$10$g5BT/XyIWksZvK4LqqQTjuL/pjSglLqGdRQCGoPw375t5Q2g4XkKK', 1, '2026-02-10 02:36:33', '2026-08-14 04:52:27', NULL, NULL),
+(6, 'PRO-2026-0001', 'Junnel', 'B', 'Tadina', 'engineer', 'Procurement', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-14 06:47:24', NULL, NULL),
+(7, 'ADMIN-2026-0001', 'ELAINE', 'M', 'AGUILAR', 'admin', 'Administration', '$2a$10$gqG3xZE0xaT/aA5BvUMpJeVQ3vbYoOoiqS2QP7HBC3XZwm.4qusQu', 1, '2026-02-10 02:36:33', '2026-08-12 06:06:26', NULL, NULL),
+(8, 'SA-2026-004', 'Marc', 'J', 'Arzadon', 'super_admin', 'Management', '$2a$10$axW..03rjtzmDLOgyvn2ceyJResqKMyiyWQD7vYUa3gmTWvRqaENq', 1, '2026-02-10 02:36:33', '2026-04-14 01:20:11', NULL, NULL),
+(10, 'SA001', 'Super', 'D', 'Adminesu', 'super_admin', 'Management', '$2a$10$2VAa8J7EZDnfspG1/t4G1ez6MXGEnf3DLiPNqcJEm4ypE0p9RATNq', 1, '2026-02-12 00:55:00', '2026-02-12 02:48:05', NULL, NULL),
+(12, 'ENG-2026-0005', 'Joylene', 'F', 'Balanon', 'engineer', 'Engineering', '$2a$10$fFUgVn7r1fE8YPLnwcTDZOhWhEhjxY1gg3rULIps0uoMBVsBE95W.', 1, '2026-02-12 02:45:21', '2026-02-12 02:50:16', NULL, NULL),
+(13, 'ENG-2026-0006', 'Winnielyn Kaye', 'W', 'Olarte', 'engineer', 'Procurement', '$2a$10$.GDmwlv/XvEmPJzt3oIb0.39RVYiJMsxBwcTaMbmFInk3th76KpIu', 1, '2026-02-12 02:45:41', '2026-02-12 02:54:11', NULL, NULL),
+(14, 'ADMIN-2026-0002', 'RONALYN', 'W', 'MALLARE', 'admin', 'Administration', '$2a$10$zZXZI/tYRPS37ZQVDeThpeaBi5uCv1P1e1EsBkScqRmt/1.iZPFWK', 1, '2026-02-12 02:46:45', '2026-08-12 06:06:09', NULL, NULL),
+(16, 'ADMIN-2026-0004', 'MARJORIE', 'O', 'GARCIA', 'admin', 'Administration', '$2a$10$pj5HrIzaIYIkWlCbcOy9sOBNxrQitgV2.Umuh.wldfJWEYy5t0Ta6', 1, '2026-02-12 02:47:46', '2026-08-12 06:06:00', NULL, NULL),
+(19, 'ADMIN-2026-0005', 'LYRA', 'F', 'JAVONILLO', 'admin', 'Administration', '$2a$10$xHUq1Y4DXeC9lhhcLPiTy.Y/s2MXaqR737x4Rdw8iHK4Cfw8q5qjG', 1, '2026-08-14 06:48:34', '2026-08-14 06:48:34', NULL, NULL),
+(20, 'ENG-2026-0008', 'EARL', 'N', 'NISPEROS', 'engineer', 'Engineering', '$2a$10$HwoxtxQmy2HMokTt1s6tie1PfKKbP24wZ7gJHMBCDX16kLKo8SXy2', 1, '2026-08-14 06:51:13', '2026-08-14 06:51:13', NULL, NULL),
+(21, 'ENG-2026-0009', 'JOANA', 'M', 'BAAGEN', 'engineer', 'Engineering', '$2a$10$opLKGHpkkVuulYRfKf3L3uNrDdGj3LkQM0GKa3nBF3orWE.YcoSz2', 1, '2026-08-14 06:51:30', '2026-08-14 06:51:30', NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -275,6 +276,7 @@ CREATE TABLE IF NOT EXISTS `items` (
   `status` enum('Active','Inactive') COLLATE utf8mb4_unicode_ci DEFAULT 'Active',
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `image_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `item_code` (`item_code`),
   UNIQUE KEY `item_name` (`item_name`),
@@ -286,32 +288,32 @@ CREATE TABLE IF NOT EXISTS `items` (
 -- Dumping data for table `items`
 --
 
-INSERT INTO `items` (`id`, `item_code`, `item_name`, `description`, `category_id`, `unit`, `created_by`, `status`, `created_at`, `updated_at`) VALUES
-(1, 'sdfgsdfg', 'sdfgsdg', 'sadgfs', 10, 'pcs', 8, 'Active', '2026-05-22 02:01:54', '2026-05-22 02:01:54'),
-(2, 'asefsdfgdsg', 'dsfgdf', 'afrwfasdtgsdg', 10, 'set', 8, 'Active', '2026-05-22 02:02:38', '2026-05-22 02:02:38'),
-(3, 'ITM001', 'Laptop Dell Latitude', 'Business laptop 15.6 inch', 1, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(4, 'ITM002', 'Wireless Mouse', 'USB wireless mouse', 1, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(5, 'ITM003', 'A4 Paper (Ream)', 'Premium quality A4 paper', 2, 'ream', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(6, 'ITM004', 'Ballpen Blue (Box)', 'Box of 12 blue ballpens', 2, 'box', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(7, 'ITM005', 'Safety Helmet', 'Hard hat for construction', 3, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(8, 'ITM006', 'Safety Vest Reflective', 'High-vis safety vest', 3, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(9, 'ITM007', 'Cordless Drill 18V', 'Cordless drill driver', 4, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(10, 'ITM008', 'Hammer Claw 16oz', 'Fiberglass handle hammer', 4, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(11, 'ITM009', 'Portland Cement 40kg', 'Type I cement bag', 5, 'bag', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(12, 'ITM010', 'Steel Rod 10mm', 'Deformed steel bar', 5, 'length', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(13, 'ITM011', 'THHN Wire 2.0mm', 'Electrical building wire roll', 6, 'roll', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(14, 'ITM012', 'Circuit Breaker 20A', 'Single pole breaker', 6, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(15, 'ITM013', 'PVC Pipe 2 inch', '6m Schedule 40 PVC pipe', 7, 'length', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(16, 'ITM014', 'Gate Valve 1 inch', 'Brass gate valve', 7, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(17, 'ITM015', 'Latex Paint White 4L', 'White latex paint', 8, 'gal', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(18, 'ITM016', 'Paint Roller 9 inch', 'Foam roller', 8, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(19, 'ITM017', 'Hydraulic Oil 46', '20L hydraulic fluid', 9, 'drum', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(20, 'ITM018', 'Floor Cleaner 5L', 'Industrial floor cleaner', 10, 'bottle', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(21, 'ITM019', 'Office Chair Ergonomic', 'Mesh office chair', 11, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(22, 'ITM020', 'Carton Box Medium', 'Corrugated shipping box', 12, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05'),
-(23, 'SKU-023', 'junell tadina', 'xfdhfgh', 3, 'pcs', 5, 'Active', '2026-06-08 01:53:24', '2026-06-08 01:53:24'),
-(24, 'SKU-024', 'Laminator', 'this is just for testing', 2, 'pcs', 7, 'Active', '2026-06-19 03:50:52', '2026-06-19 03:50:52'),
-(25, 'SKU-025', 'Bond Paper', '', 2, 'pcs', 13, 'Active', '2026-09-03 06:42:21', '2026-09-03 06:42:21');
+INSERT INTO `items` (`id`, `item_code`, `item_name`, `description`, `category_id`, `unit`, `created_by`, `status`, `created_at`, `updated_at`, `image_url`) VALUES
+(1, 'sdfgsdfg', 'sdfgsdg', 'sadgfs', 10, 'pcs', 8, 'Active', '2026-05-22 02:01:54', '2026-05-22 02:01:54', NULL),
+(2, 'asefsdfgdsg', 'dsfgdf', 'afrwfasdtgsdg', 10, 'set', 8, 'Active', '2026-05-22 02:02:38', '2026-05-22 02:02:38', NULL),
+(3, 'ITM001', 'Laptop Dell Latitude', 'Business laptop 15.6 inch', 1, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(4, 'ITM002', 'Wireless Mouse', 'USB wireless mouse', 1, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(5, 'ITM003', 'A4 Paper (Ream)', 'Premium quality A4 paper', 2, 'ream', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(6, 'ITM004', 'Ballpen Blue (Box)', 'Box of 12 blue ballpens', 2, 'box', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(7, 'ITM005', 'Safety Helmet', 'Hard hat for construction', 3, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(8, 'ITM006', 'Safety Vest Reflective', 'High-vis safety vest', 3, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(9, 'ITM007', 'Cordless Drill 18V', 'Cordless drill driver', 4, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(10, 'ITM008', 'Hammer Claw 16oz', 'Fiberglass handle hammer', 4, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(11, 'ITM009', 'Portland Cement 40kg', 'Type I cement bag', 5, 'bag', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(12, 'ITM010', 'Steel Rod 10mm', 'Deformed steel bar', 5, 'length', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(13, 'ITM011', 'THHN Wire 2.0mm', 'Electrical building wire roll', 6, 'roll', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(14, 'ITM012', 'Circuit Breaker 20A', 'Single pole breaker', 6, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(15, 'ITM013', 'PVC Pipe 2 inch', '6m Schedule 40 PVC pipe', 7, 'length', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(16, 'ITM014', 'Gate Valve 1 inch', 'Brass gate valve', 7, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(17, 'ITM015', 'Latex Paint White 4L', 'White latex paint', 8, 'gal', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(18, 'ITM016', 'Paint Roller 9 inch', 'Foam roller', 8, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(19, 'ITM017', 'Hydraulic Oil 46', '20L hydraulic fluid', 9, 'drum', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(20, 'ITM018', 'Floor Cleaner 5L', 'Industrial floor cleaner', 10, 'bottle', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(21, 'ITM019', 'Office Chair Ergonomic', 'Mesh office chair', 11, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(22, 'ITM020', 'Carton Box Medium', 'Corrugated shipping box', 12, 'pcs', NULL, 'Active', '2026-05-22 02:03:05', '2026-05-22 02:03:05', NULL),
+(23, 'SKU-023', 'junell tadina', 'xfdhfgh', 3, 'pcs', 5, 'Active', '2026-06-08 01:53:24', '2026-06-08 01:53:24', NULL),
+(24, 'SKU-024', 'Laminator', 'this is just for testing', 2, 'pcs', 7, 'Active', '2026-06-19 03:50:52', '2026-06-19 03:50:52', NULL),
+(25, 'SKU-025', 'Bond Paper', '', 2, 'pcs', 13, 'Active', '2026-09-03 06:42:21', '2026-09-03 06:42:21', NULL);
 
 -- --------------------------------------------------------
 
@@ -353,7 +355,7 @@ CREATE TABLE IF NOT EXISTS `notifications` (
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `recipient_id` (`recipient_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=528 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=541 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `notifications`
@@ -669,7 +671,20 @@ INSERT INTO `notifications` (`id`, `recipient_id`, `title`, `message`, `type`, `
 (524, 19, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
 (525, 5, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:25'),
 (526, 8, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:26'),
-(527, 10, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:26');
+(527, 10, 'New PR Created', 'Purchase Request 2026-09-029 has been created and is ready for your review', 'PR Created', 64, 'purchase_request', 0, '2026-09-03 08:59:26'),
+(528, 8, 'New PR Created', 'Purchase Request 2026-09-030 has been created and is ready for your review', 'PR Created', 65, 'purchase_request', 0, '2026-09-04 01:00:34'),
+(529, 10, 'New PR Created', 'Purchase Request 2026-09-030 has been created and is ready for your review', 'PR Created', 65, 'purchase_request', 0, '2026-09-04 01:00:34'),
+(530, 6, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(531, 12, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(532, 13, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(533, 20, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(534, 7, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 1, '2026-09-04 01:16:59'),
+(535, 14, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(536, 16, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(537, 19, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(538, 5, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(539, 8, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59'),
+(540, 10, 'New PR Created', 'Purchase Request 2026-09-031 has been created and is ready for your review', 'PR Created', 66, 'purchase_request', 0, '2026-09-04 01:16:59');
 
 -- --------------------------------------------------------
 
@@ -1233,7 +1248,7 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   `date_needed` date DEFAULT NULL,
   `project` varchar(100) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   `project_address` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
-  `status` enum('Draft','Pending','For Admin Processing','For Procurement Review','For Engineer Review','For Admin Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Payment Request Created','Completed','Rejected','Cancelled','Received') COLLATE utf8mb4_unicode_ci DEFAULT 'Draft',
+  `status` enum('Draft','Pending','Pending Admin Processing','Under Admin Review','For Admin Processing','For Procurement Review','For Engineer Review','For Admin Review','For Super Admin Rep Review','For Super Admin Final Approval','On Hold','For Purchase','PO Created','Payment Request Created','Completed','Rejected','Cancelled','Received') CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci DEFAULT 'Draft',
   `approved_by` int DEFAULT NULL,
   `approved_at` timestamp NULL DEFAULT NULL,
   `rejection_reason` text COLLATE utf8mb4_unicode_ci,
@@ -1253,6 +1268,7 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   `supplier_accredited` tinyint(1) DEFAULT NULL COMMENT '1 if supplier was accredited at time of PR creation, 0 if not, NULL if unknown',
   `is_bypassed` tinyint(1) DEFAULT '0',
   `bypassed_by` int DEFAULT NULL,
+  `processed_by` int DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `pr_number` (`pr_number`),
   KEY `requested_by` (`requested_by`),
@@ -1261,36 +1277,38 @@ CREATE TABLE IF NOT EXISTS `purchase_requests` (
   KEY `payment_basis` (`payment_basis`),
   KEY `purchase_requests_payment_terms_set_by_fk` (`payment_terms_set_by`),
   KEY `bypassed_by` (`bypassed_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=65 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=67 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_requests`
 --
 
-INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`, `order_number`, `payment_basis`, `payment_terms_code`, `payment_terms_note`, `payment_terms_set_by`, `payment_terms_set_at`, `supplier_name`, `accreditation_files`, `supplier_accredited`, `is_bypassed`, `bypassed_by`) VALUES
-(36, '2026-06-001', 5, 'hsfdfg fgh', NULL, '2026-06-12', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-05 06:16:40', NULL, 396.00, '2026-06-05 06:14:35', '2026-06-05 06:16:40', NULL, 'fd', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'fh', '[{\"filename\":\"accreditation_files-1780640075481-727453544.xlsx\",\"originalname\":\"PR-2026-06-023.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780640075481-727453544.xlsx\",\"size\":52165,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-05T06:14:35.937Z\"}]', 0, 0, NULL),
-(38, '2026-06-003', 5, 'qwgwertgsergs', NULL, '2026-07-03', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-06-19 03:55:19', NULL, 21.00, '2026-06-08 08:02:34', '2026-06-19 03:55:19', NULL, 'sdfgsdg', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'sdsdfgsdfg', '[{\"filename\":\"accreditation_files-1780905754493-237260569.pdf\",\"originalname\":\"RESUME._103654.pdf\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780905754493-237260569.pdf\",\"size\":596275,\"mimetype\":\"application/pdf\",\"uploaded_at\":\"2026-06-08T08:02:34.501Z\"}]', 0, 0, NULL),
-(40, '2026-06-005', 16, 'dfgsdfg', NULL, '2026-07-07', 'Panicsican', 'Panicsican, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:18', NULL, 0.00, '2026-06-08 08:07:04', '2026-06-19 03:55:18', NULL, 'dsfgf', '159166591', 'non_debt', NULL, NULL, NULL, NULL, 'sdg', '[{\"filename\":\"accreditation_files-1780906024109-892457528.docx\",\"originalname\":\"files-1780032565780-641676311.docx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780906024109-892457528.docx\",\"size\":32026,\"mimetype\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"uploaded_at\":\"2026-06-08T08:07:04.114Z\"}]', 0, 0, NULL),
-(41, '2026-06-006', 7, 'wasfASFD DWSFEW EWF WW', NULL, '2026-06-22', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:15', NULL, 1050.00, '2026-06-19 03:52:19', '2026-06-19 03:55:15', NULL, 'Mangaan, Santol, La Union', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'This is just for testing', '[{\"filename\":\"accreditation_files-1781841139156-673085472.xlsx\",\"originalname\":\"REQUEST-FORM.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1781841139156-673085472.xlsx\",\"size\":62304,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-19T03:52:19.334Z\"}]', 0, 0, NULL),
-(42, '2026-08-007', 5, 'Pang pasita baby', NULL, '2026-08-21', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-12 02:45:02', NULL, 4910.98, '2026-08-12 02:29:38', '2026-08-12 02:45:02', NULL, 'San Juan, La Union', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, 0, 0, NULL),
-(43, '2026-08-008', 5, 'Para jay balay para bagyo', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', 8, '2026-08-27 02:29:28', NULL, 1324.00, '2026-08-12 03:23:21', '2026-08-27 02:29:28', NULL, 'Ijay igdi lacong', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, 0, 0, NULL),
-(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'ADXAs', 123.00, '2026-08-12 06:56:28', '2026-08-14 00:31:09', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(47, '2026-08-012', 7, 'QWAFD', NULL, '2026-08-20', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-13 01:43:25', NULL, 12.00, '2026-08-13 01:42:45', '2026-08-13 01:43:25', NULL, 'QDasd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(48, '2026-08-013', 7, 'asdf', NULL, '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'PO Created', 8, '2026-08-13 01:54:19', NULL, 12.00, '2026-08-13 01:53:35', '2026-08-13 01:56:32', NULL, 'asd', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(49, '2026-08-014', 7, 'asda', '', '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'QASAs', 123.00, '2026-08-14 00:30:56', '2026-08-14 00:31:39', NULL, 'asdas', '393859493', 'debt', NULL, NULL, NULL, NULL, 'as', NULL, 0, 0, NULL),
-(50, '2026-08-015', 12, 'testing', '', '2026-08-29', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 6170.00, '2026-08-14 05:01:05', '2026-08-14 05:02:38', NULL, 'Bacnotan, La Union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(51, '2026-08-016', 7, 'sadfsdwaf', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 708.00, '2026-08-14 05:04:03', '2026-08-14 05:04:34', NULL, 'san juan, la union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(54, '2026-08-019', 12, 'zdfb', NULL, '2026-08-27', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-14 06:57:53', NULL, 10000.00, '2026-08-14 06:52:32', '2026-08-14 06:57:53', NULL, 'asdfsafsadfdsf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(55, '2026-08-020', 12, 'aSF', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 12.00, '2026-08-14 07:07:09', '2026-08-14 07:08:48', NULL, 'asfsdf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(56, '2026-08-021', 13, 'afasf', '', '2026-08-28', 'Panicsican', 'Panicsican, San Juan, La Union', '', NULL, NULL, NULL, 1234.00, '2026-08-27 02:30:42', '2026-08-27 02:44:50', NULL, NULL, '159166591', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"}]', 1, 0, NULL),
-(57, '2026-08-022', 21, 'for testing', '', '2026-09-02', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'mali ulitin mo, i-edit mo', 534.00, '2026-08-27 03:15:48', '2026-08-27 03:16:23', NULL, 'santol, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"}]', 1, 0, NULL),
-(58, '2026-08-023', 12, 'This is test', '', '2026-09-05', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'ulitin', 4559.98, '2026-08-27 03:31:45', '2026-08-27 03:35:12', NULL, 'bagulin, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', 1, 0, NULL),
-(59, '2026-09-024', 12, 'For the hanging cabinet', '', '2026-09-04', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'REJECTED', 50798.00, '2026-09-02 03:22:44', '2026-09-02 03:24:58', NULL, 'Pias, San Fernando La Union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(60, '2026-09-025', 12, 'for cabinetry and fabircation', '', '2026-09-30', 'Pias - Sundara', NULL, 'Rejected', NULL, NULL, 'madii', 2809.89, '2026-09-02 05:40:18', '2026-09-02 05:41:10', NULL, 'Supplier address', '228984422', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL),
-(61, '2026-09-026', 13, 'Pang print', 'none', '2026-09-03', 'Sto. Rosario', NULL, 'For Super Admin Final Approval', NULL, NULL, NULL, 123.00, '2026-09-03 07:19:47', '2026-09-03 08:11:09', 46, 'fd', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'fh', NULL, 0, 0, NULL),
-(62, '2026-09-027', 13, 'pangprint', '', '2026-09-03', 'Sto. Rosario', NULL, '', NULL, NULL, NULL, 12555.00, '2026-09-03 08:20:52', '2026-09-03 08:21:34', 67, 'San Juan, La Union', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, 0, NULL),
-(63, '2026-09-028', 13, 'For office supplies', 'This is the remarks', '2026-09-06', 'MAIN OFFICE', NULL, '', NULL, NULL, NULL, 12815.00, '2026-09-03 08:33:01', '2026-09-03 08:35:33', 68, 'Ijay igdi lacong', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, NULL, 0, NULL),
-(64, '2026-09-029', 13, 'asdasasds', '', '2026-09-03', 'MAIN OFFICE', NULL, 'For Admin Processing', NULL, NULL, NULL, 0.00, '2026-09-03 08:59:25', '2026-09-03 08:59:25', NULL, NULL, NULL, 'debt', NULL, NULL, NULL, NULL, 'TBD', NULL, NULL, 0, NULL);
+INSERT INTO `purchase_requests` (`id`, `pr_number`, `requested_by`, `purpose`, `remarks`, `date_needed`, `project`, `project_address`, `status`, `approved_by`, `approved_at`, `rejection_reason`, `total_amount`, `created_at`, `updated_at`, `supplier_id`, `supplier_address`, `order_number`, `payment_basis`, `payment_terms_code`, `payment_terms_note`, `payment_terms_set_by`, `payment_terms_set_at`, `supplier_name`, `accreditation_files`, `supplier_accredited`, `is_bypassed`, `bypassed_by`, `processed_by`) VALUES
+(36, '2026-06-001', 5, 'hsfdfg fgh', NULL, '2026-06-12', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-05 06:16:40', NULL, 396.00, '2026-06-05 06:14:35', '2026-06-05 06:16:40', NULL, 'fd', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'fh', '[{\"filename\":\"accreditation_files-1780640075481-727453544.xlsx\",\"originalname\":\"PR-2026-06-023.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780640075481-727453544.xlsx\",\"size\":52165,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-05T06:14:35.937Z\"}]', 0, 0, NULL, NULL),
+(38, '2026-06-003', 5, 'qwgwertgsergs', NULL, '2026-07-03', 'BCDA - CCA', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-06-19 03:55:19', NULL, 21.00, '2026-06-08 08:02:34', '2026-06-19 03:55:19', NULL, 'sdfgsdg', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'sdsdfgsdfg', '[{\"filename\":\"accreditation_files-1780905754493-237260569.pdf\",\"originalname\":\"RESUME._103654.pdf\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780905754493-237260569.pdf\",\"size\":596275,\"mimetype\":\"application/pdf\",\"uploaded_at\":\"2026-06-08T08:02:34.501Z\"}]', 0, 0, NULL, NULL),
+(40, '2026-06-005', 16, 'dfgsdfg', NULL, '2026-07-07', 'Panicsican', 'Panicsican, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:18', NULL, 0.00, '2026-06-08 08:07:04', '2026-06-19 03:55:18', NULL, 'dsfgf', '159166591', 'non_debt', NULL, NULL, NULL, NULL, 'sdg', '[{\"filename\":\"accreditation_files-1780906024109-892457528.docx\",\"originalname\":\"files-1780032565780-641676311.docx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1780906024109-892457528.docx\",\"size\":32026,\"mimetype\":\"application/vnd.openxmlformats-officedocument.wordprocessingml.document\",\"uploaded_at\":\"2026-06-08T08:07:04.114Z\"}]', 0, 0, NULL, NULL),
+(41, '2026-06-006', 7, 'wasfASFD DWSFEW EWF WW', NULL, '2026-06-22', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'For Purchase', 8, '2026-06-19 03:55:15', NULL, 1050.00, '2026-06-19 03:52:19', '2026-06-19 03:55:15', NULL, 'Mangaan, Santol, La Union', '299269388', 'non_debt', NULL, NULL, NULL, NULL, 'This is just for testing', '[{\"filename\":\"accreditation_files-1781841139156-673085472.xlsx\",\"originalname\":\"REQUEST-FORM.xlsx\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1781841139156-673085472.xlsx\",\"size\":62304,\"mimetype\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"uploaded_at\":\"2026-06-19T03:52:19.334Z\"}]', 0, 0, NULL, NULL),
+(42, '2026-08-007', 5, 'Pang pasita baby', NULL, '2026-08-21', 'BCDA - CCTV', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-12 02:45:02', NULL, 4910.98, '2026-08-12 02:29:38', '2026-08-12 02:45:02', NULL, 'San Juan, La Union', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, 0, 0, NULL, NULL),
+(43, '2026-08-008', 5, 'Para jay balay para bagyo', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', 8, '2026-08-27 02:29:28', NULL, 1324.00, '2026-08-12 03:23:21', '2026-08-27 02:29:28', NULL, 'Ijay igdi lacong', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, 0, 0, NULL, NULL),
+(45, '2026-08-010', 5, 'AWSFASDF SAF', '', '2026-08-14', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'ADXAs', 123.00, '2026-08-12 06:56:28', '2026-08-14 00:31:09', NULL, 'asdfasdf', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(47, '2026-08-012', 7, 'QWAFD', NULL, '2026-08-20', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-13 01:43:25', NULL, 12.00, '2026-08-13 01:42:45', '2026-08-13 01:43:25', NULL, 'QDasd', '393859493', 'non_debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(48, '2026-08-013', 7, 'asdf', NULL, '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'PO Created', 8, '2026-08-13 01:54:19', NULL, 12.00, '2026-08-13 01:53:35', '2026-08-13 01:56:32', NULL, 'asd', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(49, '2026-08-014', 7, 'asda', '', '2026-08-22', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'Rejected', NULL, NULL, 'QASAs', 123.00, '2026-08-14 00:30:56', '2026-08-14 00:31:39', NULL, 'asdas', '393859493', 'debt', NULL, NULL, NULL, NULL, 'as', NULL, 0, 0, NULL, NULL),
+(50, '2026-08-015', 12, 'testing', '', '2026-08-29', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 6170.00, '2026-08-14 05:01:05', '2026-08-14 05:02:38', NULL, 'Bacnotan, La Union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(51, '2026-08-016', 7, 'sadfsdwaf', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 708.00, '2026-08-14 05:04:03', '2026-08-14 05:04:34', NULL, 'san juan, la union', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(54, '2026-08-019', 12, 'zdfb', NULL, '2026-08-27', 'BCDA - Control Tower', 'Poro point, San Fernando City, La Union', 'For Purchase', 8, '2026-08-14 06:57:53', NULL, 10000.00, '2026-08-14 06:52:32', '2026-08-14 06:57:53', NULL, 'asdfsafsadfdsf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(55, '2026-08-020', 12, 'aSF', '', '2026-08-28', 'BCDA - Admin', 'Poro point, San Fernando City, La Union', 'For Purchase', NULL, NULL, NULL, 12.00, '2026-08-14 07:07:09', '2026-08-14 07:08:48', NULL, 'asfsdf', '393859493', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(56, '2026-08-021', 13, 'afasf', '', '2026-08-28', 'Panicsican', 'Panicsican, San Juan, La Union', '', NULL, NULL, NULL, 1234.00, '2026-08-27 02:30:42', '2026-08-27 02:44:50', NULL, NULL, '159166591', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"}]', 1, 0, NULL, NULL),
+(57, '2026-08-022', 21, 'for testing', '', '2026-09-02', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'mali ulitin mo, i-edit mo', 534.00, '2026-08-27 03:15:48', '2026-08-27 03:16:23', NULL, 'santol, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"}]', 1, 0, NULL, NULL),
+(58, '2026-08-023', 12, 'This is test', '', '2026-09-05', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'ulitin', 4559.98, '2026-08-27 03:31:45', '2026-08-27 03:35:12', NULL, 'bagulin, la union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', '[{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', 1, 0, NULL, NULL),
+(59, '2026-09-024', 12, 'For the hanging cabinet', '', '2026-09-04', 'Sto. Rosario', 'Sto. Rosario, San Juan, La Union', 'Rejected', NULL, NULL, 'REJECTED', 50798.00, '2026-09-02 03:22:44', '2026-09-02 03:24:58', NULL, 'Pias, San Fernando La Union', '299269388', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(60, '2026-09-025', 12, 'for cabinetry and fabircation', '', '2026-09-30', 'Pias - Sundara', NULL, 'Rejected', NULL, NULL, 'madii', 2809.89, '2026-09-02 05:40:18', '2026-09-02 05:41:10', NULL, 'Supplier address', '228984422', 'debt', NULL, NULL, NULL, NULL, 'asdfa', NULL, 1, 0, NULL, NULL),
+(61, '2026-09-026', 13, 'Pang print', 'none', '2026-09-03', 'Sto. Rosario', NULL, 'For Super Admin Final Approval', NULL, NULL, NULL, 123.00, '2026-09-03 07:19:47', '2026-09-03 08:11:09', 46, 'fd', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'fh', NULL, 0, 0, NULL, NULL),
+(62, '2026-09-027', 13, 'pangprint', '', '2026-09-03', 'Sto. Rosario', NULL, '', NULL, NULL, NULL, 12555.00, '2026-09-03 08:20:52', '2026-09-03 08:21:34', 67, 'San Juan, La Union', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, 0, NULL, NULL),
+(63, '2026-09-028', 13, 'For office supplies', 'This is the remarks', '2026-09-06', 'MAIN OFFICE', NULL, '', NULL, NULL, NULL, 12815.00, '2026-09-03 08:33:01', '2026-09-03 08:35:33', 68, 'Ijay igdi lacong', NULL, 'non_debt', NULL, NULL, NULL, NULL, 'NI mang dante', NULL, NULL, 0, NULL, NULL),
+(64, '2026-09-029', 13, 'asdasasds', '', '2026-09-03', 'MAIN OFFICE', NULL, 'For Admin Processing', NULL, NULL, NULL, 0.00, '2026-09-03 08:59:25', '2026-09-03 08:59:25', NULL, NULL, NULL, 'debt', NULL, NULL, NULL, NULL, 'TBD', NULL, NULL, 0, NULL, NULL),
+(65, '2026-09-030', 5, 'opawehifeasrog', '', '2026-09-04', 'BCDA - CCA', NULL, 'For Admin Processing', NULL, NULL, NULL, 0.00, '2026-09-04 01:00:34', '2026-09-04 01:00:34', NULL, NULL, NULL, 'debt', NULL, NULL, NULL, NULL, 'TBD', NULL, NULL, 0, NULL, NULL),
+(66, '2026-09-031', 21, 'For testing', 'wwala', '2026-09-04', 'BCDA - Admin', NULL, 'For Admin Processing', NULL, NULL, NULL, 0.00, '2026-09-04 01:16:59', '2026-09-04 01:16:59', NULL, NULL, NULL, 'debt', NULL, NULL, NULL, NULL, 'TBD', NULL, NULL, 0, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1312,54 +1330,58 @@ CREATE TABLE IF NOT EXISTS `purchase_request_items` (
   `received_by` int DEFAULT NULL,
   `received_at` timestamp NULL DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `image_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `item_id` (`item_id`),
   KEY `received_by` (`received_by`)
-) ENGINE=InnoDB AUTO_INCREMENT=83 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=86 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_items`
 --
 
-INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `unit`, `remarks`, `status`, `received_by`, `received_at`, `created_at`) VALUES
-(35, 36, 5, 3, 132.00, 396.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-05 06:14:35'),
-(37, 38, 6, 1, 21.00, 21.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:02:34'),
-(39, 40, 5, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:07:04'),
-(40, 41, 6, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19'),
-(41, 41, 24, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19'),
-(42, 42, 22, 1, 1231.00, 1231.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38'),
-(43, 42, 5, 1, 3245.00, 3245.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38'),
-(44, 42, 6, 1, 434.98, 434.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38'),
-(45, 43, 5, 1, 1324.00, 1324.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 03:23:21'),
-(47, 45, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:56:28'),
-(49, 47, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:42:45'),
-(50, 48, 5, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:53:35'),
-(51, 49, 22, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 00:30:56'),
-(52, 50, 5, 5, 1234.00, 6170.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:01:05'),
-(53, 51, 22, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03'),
-(54, 51, 5, 3, 232.00, 696.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03'),
-(61, 54, 6, 1, 10000.00, 10000.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 06:52:32'),
-(62, 55, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 07:07:09'),
-(64, 56, 5, 1, 1234.00, 1234.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 02:33:54'),
-(65, 57, 5, 1, 534.00, 534.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:15:48'),
-(66, 58, 6, 1, 235.00, 235.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45'),
-(67, 58, 5, 1, 4324.98, 4324.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45'),
-(68, 59, 5, 6, 173.00, 1038.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
-(69, 59, 6, 2, 234.00, 468.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
-(70, 59, 22, 4, 12323.00, 49292.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44'),
-(71, 60, 5, 1, 2342.00, 2342.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
-(72, 60, 6, 1, 233.98, 233.98, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
-(73, 60, 22, 1, 233.91, 233.91, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18'),
-(74, 61, 25, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 07:19:47'),
-(75, 62, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52'),
-(76, 62, 22, 1, 12432.00, 12432.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52'),
-(77, 63, 22, 1, 143.00, 143.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
-(78, 63, 18, 1, 1456.00, 1456.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
-(79, 63, 6, 1, 5463.00, 5463.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
-(80, 63, 21, 1, 5453.00, 5453.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
-(81, 63, 17, 1, 300.00, 300.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01'),
-(82, 64, 25, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:59:25');
+INSERT INTO `purchase_request_items` (`id`, `purchase_request_id`, `item_id`, `quantity`, `unit_price`, `total_price`, `unit`, `remarks`, `status`, `received_by`, `received_at`, `created_at`, `image_url`) VALUES
+(35, 36, 5, 3, 132.00, 396.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-05 06:14:35', NULL),
+(37, 38, 6, 1, 21.00, 21.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:02:34', NULL),
+(39, 40, 5, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-08 08:07:04', NULL),
+(40, 41, 6, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19', NULL),
+(41, 41, 24, 1, 525.00, 525.00, NULL, NULL, 'Pending', NULL, NULL, '2026-06-19 03:52:19', NULL),
+(42, 42, 22, 1, 1231.00, 1231.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38', NULL),
+(43, 42, 5, 1, 3245.00, 3245.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38', NULL),
+(44, 42, 6, 1, 434.98, 434.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 02:29:38', NULL),
+(45, 43, 5, 1, 1324.00, 1324.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 03:23:21', NULL),
+(47, 45, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-12 06:56:28', NULL),
+(49, 47, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:42:45', NULL),
+(50, 48, 5, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-13 01:53:35', NULL),
+(51, 49, 22, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 00:30:56', NULL),
+(52, 50, 5, 5, 1234.00, 6170.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:01:05', NULL),
+(53, 51, 22, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03', NULL),
+(54, 51, 5, 3, 232.00, 696.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 05:04:03', NULL),
+(61, 54, 6, 1, 10000.00, 10000.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 06:52:32', NULL),
+(62, 55, 6, 1, 12.00, 12.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-14 07:07:09', NULL),
+(64, 56, 5, 1, 1234.00, 1234.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 02:33:54', NULL),
+(65, 57, 5, 1, 534.00, 534.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:15:48', NULL),
+(66, 58, 6, 1, 235.00, 235.00, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45', NULL),
+(67, 58, 5, 1, 4324.98, 4324.98, NULL, NULL, 'Pending', NULL, NULL, '2026-08-27 03:31:45', NULL),
+(68, 59, 5, 6, 173.00, 1038.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44', NULL),
+(69, 59, 6, 2, 234.00, 468.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44', NULL),
+(70, 59, 22, 4, 12323.00, 49292.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 03:22:44', NULL),
+(71, 60, 5, 1, 2342.00, 2342.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18', NULL),
+(72, 60, 6, 1, 233.98, 233.98, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18', NULL),
+(73, 60, 22, 1, 233.91, 233.91, NULL, NULL, 'Pending', NULL, NULL, '2026-09-02 05:40:18', NULL),
+(74, 61, 25, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 07:19:47', NULL),
+(75, 62, 5, 1, 123.00, 123.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52', NULL),
+(76, 62, 22, 1, 12432.00, 12432.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:20:52', NULL),
+(77, 63, 22, 1, 143.00, 143.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01', NULL),
+(78, 63, 18, 1, 1456.00, 1456.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01', NULL),
+(79, 63, 6, 1, 5463.00, 5463.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01', NULL),
+(80, 63, 21, 1, 5453.00, 5453.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01', NULL),
+(81, 63, 17, 1, 300.00, 300.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:33:01', NULL),
+(82, 64, 25, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-03 08:59:25', NULL),
+(83, 65, 14, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-04 01:00:34', NULL),
+(84, 66, 24, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-04 01:16:59', NULL),
+(85, 66, 6, 1, 0.00, 0.00, NULL, NULL, 'Pending', NULL, NULL, '2026-09-04 01:16:59', NULL);
 
 -- --------------------------------------------------------
 
@@ -1410,7 +1432,7 @@ CREATE TABLE IF NOT EXISTS `purchase_request_reviews` (
   KEY `purchase_request_id` (`purchase_request_id`),
   KEY `reviewer_id` (`reviewer_id`),
   KEY `review_status` (`review_status`)
-) ENGINE=InnoDB AUTO_INCREMENT=433 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=446 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `purchase_request_reviews`
@@ -1589,7 +1611,20 @@ INSERT INTO `purchase_request_reviews` (`id`, `purchase_request_id`, `reviewer_i
 (429, 64, 19, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
 (430, 64, 5, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
 (431, 64, 8, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
-(432, 64, 10, 'pending', NULL, NULL, '2026-09-03 08:59:25');
+(432, 64, 10, 'pending', NULL, NULL, '2026-09-03 08:59:25'),
+(433, 65, 8, 'pending', NULL, NULL, '2026-09-04 01:00:34'),
+(434, 65, 10, 'pending', NULL, NULL, '2026-09-04 01:00:34'),
+(435, 66, 6, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(436, 66, 12, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(437, 66, 13, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(438, 66, 20, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(439, 66, 7, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(440, 66, 14, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(441, 66, 16, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(442, 66, 19, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(443, 66, 5, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(444, 66, 8, 'pending', NULL, NULL, '2026-09-04 01:16:59'),
+(445, 66, 10, 'pending', NULL, NULL, '2026-09-04 01:16:59');
 
 -- --------------------------------------------------------
 
@@ -1822,6 +1857,10 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
   `accredited_at` timestamp NULL DEFAULT NULL COMMENT 'Timestamp when supplier was accredited',
   `accreditation_files` text COLLATE utf8mb4_unicode_ci COMMENT 'JSON array of accreditation file paths',
   `accreditation_notes` text COLLATE utf8mb4_unicode_ci COMMENT 'Notes about accreditation documents',
+  `rating_delivery` decimal(3,2) DEFAULT NULL,
+  `rating_quality` decimal(3,2) DEFAULT NULL,
+  `rating_pricing` decimal(3,2) DEFAULT NULL,
+  `performance_notes` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci,
   PRIMARY KEY (`id`),
   UNIQUE KEY `supplier_code` (`supplier_code`),
   UNIQUE KEY `email` (`email`),
@@ -1832,33 +1871,33 @@ CREATE TABLE IF NOT EXISTS `suppliers` (
 -- Dumping data for table `suppliers`
 --
 
-INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person`, `email`, `phone`, `address`, `status`, `created_at`, `updated_at`, `accredited`, `accredited_by`, `accredited_at`, `accreditation_files`, `accreditation_notes`) VALUES
-(46, 'SUP09497652', 'fh', NULL, NULL, NULL, 'fd', 'Active', '2026-06-05 06:14:54', '2026-06-05 06:15:29', 1, 8, '2026-06-05 06:15:29', NULL, NULL),
-(47, 'SUP64822836', 'asdfa', 'Dante Obaldo Rillera', '', '', 'sdf', 'Active', '2026-06-08 07:27:28', '2026-08-27 03:31:45', 1, 8, '2026-06-08 07:53:51', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"},{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"},{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', NULL),
-(48, 'SUP46201036', 'rhrthtr', NULL, NULL, NULL, 'rethertr', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:21', 1, 8, '2026-08-12 02:14:21', NULL, NULL),
-(49, 'SUP46201279', 'sdg', NULL, NULL, NULL, 'dsfgf', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:22', 1, 8, '2026-08-12 02:14:22', NULL, NULL),
-(50, 'SUP46201431', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:22', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(51, 'SUP46388670', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:23', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(52, 'SUP46628356', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:26', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(53, 'SUP90319766', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:01:43', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(54, 'SUP9061019', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:01:46', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(55, 'SUP95983896', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:02:39', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(56, 'SUP9774432', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:02:57', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(57, 'SUP98590149', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:03:05', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(58, 'SUP99064934', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:03:10', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(59, 'SUP11313868', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:05:13', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(60, 'SUP50310056', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:43', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(61, 'SUP50591577', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:45', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(62, 'SUP51188185', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:51', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(63, 'SUP52213241', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:12:02', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(64, 'SUP53150066', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:12:11', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(65, 'SUP63034425', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Active', '2026-06-09 01:13:50', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL),
-(66, 'SUP16634148', 'This is just for testing', NULL, NULL, NULL, 'Mangaan, Santol, La Union', 'Active', '2026-06-19 03:52:46', '2026-06-19 03:52:57', 1, 8, '2026-06-19 03:52:57', NULL, NULL),
-(67, 'SUP80713854', 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, NULL, 'San Juan, La Union', 'Active', '2026-08-12 02:30:07', '2026-08-12 02:30:09', 1, 8, '2026-08-12 02:30:09', NULL, NULL),
-(68, 'SUP01041444', 'NI mang dante', NULL, NULL, NULL, 'Ijay igdi lacong', 'Active', '2026-08-12 03:23:30', '2026-08-12 03:23:32', 1, 8, '2026-08-12 03:23:32', NULL, NULL),
-(69, 'SUP48368464', 'as', NULL, NULL, NULL, 'asdas', 'Active', '2026-08-14 00:31:23', '2026-08-14 00:31:25', 1, 8, '2026-08-14 00:31:25', NULL, NULL),
-(70, 'SUP22567257', 'wfasdf', NULL, NULL, NULL, 'asdfawfas', 'Active', '2026-08-14 06:50:25', '2026-08-14 06:50:28', 1, 8, '2026-08-14 06:50:28', NULL, NULL),
-(71, 'SUP42196780', 'TBD', NULL, NULL, NULL, NULL, 'Active', '2026-09-03 07:27:01', '2026-09-03 07:27:01', 0, NULL, NULL, NULL, NULL);
+INSERT INTO `suppliers` (`id`, `supplier_code`, `supplier_name`, `contact_person`, `email`, `phone`, `address`, `status`, `created_at`, `updated_at`, `accredited`, `accredited_by`, `accredited_at`, `accreditation_files`, `accreditation_notes`, `rating_delivery`, `rating_quality`, `rating_pricing`, `performance_notes`) VALUES
+(46, 'SUP09497652', 'fh', NULL, NULL, NULL, 'fd', 'Active', '2026-06-05 06:14:54', '2026-06-05 06:15:29', 1, 8, '2026-06-05 06:15:29', NULL, NULL, NULL, NULL, NULL, NULL),
+(47, 'SUP64822836', 'asdfa', 'Dante Obaldo Rillera', '', '', 'sdf', 'Active', '2026-06-08 07:27:28', '2026-08-27 03:31:45', 1, 8, '2026-06-08 07:53:51', '[{\"filename\":\"accreditation_files-1787797842077-186972126.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787797842077-186972126.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T02:30:42.095Z\"},{\"filename\":\"accreditation_files-1787800548037-580315619.png\",\"originalname\":\"ChatGPT Image Aug 22, 2026, 02_42_52 PM.png\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787800548037-580315619.png\",\"size\":2121105,\"mimetype\":\"image/png\",\"uploaded_at\":\"2026-08-27T03:15:48.048Z\"},{\"filename\":\"accreditation_files-1787801505551-619821284.jpg\",\"originalname\":\"Gemini_Generated_Image_g5mbh7g5mbh7g5mb (1).jpg\",\"path\":\"uploads\\\\pr-accreditation\\\\accreditation_files-1787801505551-619821284.jpg\",\"size\":2640436,\"mimetype\":\"image/jpeg\",\"uploaded_at\":\"2026-08-27T03:31:45.562Z\"}]', NULL, NULL, NULL, NULL, NULL),
+(48, 'SUP46201036', 'rhrthtr', NULL, NULL, NULL, 'rethertr', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:21', 1, 8, '2026-08-12 02:14:21', NULL, NULL, NULL, NULL, NULL, NULL),
+(49, 'SUP46201279', 'sdg', NULL, NULL, NULL, 'dsfgf', 'Active', '2026-06-09 00:54:22', '2026-08-12 02:14:22', 1, 8, '2026-08-12 02:14:22', NULL, NULL, NULL, NULL, NULL, NULL),
+(50, 'SUP46201431', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:22', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(51, 'SUP46388670', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:23', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(52, 'SUP46628356', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 00:54:26', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(53, 'SUP90319766', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:01:43', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(54, 'SUP9061019', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:01:46', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(55, 'SUP95983896', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:02:39', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(56, 'SUP9774432', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:02:57', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(57, 'SUP98590149', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:03:05', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(58, 'SUP99064934', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:03:10', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(59, 'SUP11313868', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:05:13', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(60, 'SUP50310056', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:43', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(61, 'SUP50591577', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:45', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(62, 'SUP51188185', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:11:51', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(63, 'SUP52213241', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:12:02', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(64, 'SUP53150066', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Inactive', '2026-06-09 01:12:11', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(65, 'SUP63034425', 'sdsdfgsdfg', NULL, NULL, NULL, 'sdfgsdg', 'Active', '2026-06-09 01:13:50', '2026-08-12 02:14:23', 1, 8, '2026-08-12 02:14:23', NULL, NULL, NULL, NULL, NULL, NULL),
+(66, 'SUP16634148', 'This is just for testing', NULL, NULL, NULL, 'Mangaan, Santol, La Union', 'Active', '2026-06-19 03:52:46', '2026-06-19 03:52:57', 1, 8, '2026-06-19 03:52:57', NULL, NULL, NULL, NULL, NULL, NULL),
+(67, 'SUP80713854', 'Ni Bombo Daniel ijay igi kalsada', NULL, NULL, NULL, 'San Juan, La Union', 'Active', '2026-08-12 02:30:07', '2026-08-12 02:30:09', 1, 8, '2026-08-12 02:30:09', NULL, NULL, NULL, NULL, NULL, NULL),
+(68, 'SUP01041444', 'NI mang dante', NULL, NULL, NULL, 'Ijay igdi lacong', 'Active', '2026-08-12 03:23:30', '2026-08-12 03:23:32', 1, 8, '2026-08-12 03:23:32', NULL, NULL, NULL, NULL, NULL, NULL),
+(69, 'SUP48368464', 'as', NULL, NULL, NULL, 'asdas', 'Active', '2026-08-14 00:31:23', '2026-08-14 00:31:25', 1, 8, '2026-08-14 00:31:25', NULL, NULL, NULL, NULL, NULL, NULL),
+(70, 'SUP22567257', 'wfasdf', NULL, NULL, NULL, 'asdfawfas', 'Active', '2026-08-14 06:50:25', '2026-08-14 06:50:28', 1, 8, '2026-08-14 06:50:28', NULL, NULL, NULL, NULL, NULL, NULL),
+(71, 'SUP42196780', 'TBD', NULL, NULL, NULL, NULL, 'Active', '2026-09-03 07:27:01', '2026-09-03 07:27:01', 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
 
 -- --------------------------------------------------------
 
@@ -1898,7 +1937,7 @@ CREATE TABLE IF NOT EXISTS `system_audit_logs` (
   `created_at` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `user_id` (`user_id`)
-) ENGINE=MyISAM AUTO_INCREMENT=55 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=MyISAM AUTO_INCREMENT=70 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 --
 -- Dumping data for table `system_audit_logs`
@@ -1958,7 +1997,22 @@ INSERT INTO `system_audit_logs` (`id`, `user_id`, `action`, `entity_type`, `enti
 (51, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-03 06:24:49'),
 (52, 7, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ADMIN-2026-0001\"}', '2026-09-03 06:25:05'),
 (53, 5, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0001\"}', '2026-09-03 06:26:49'),
-(54, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-09-03 06:42:01');
+(54, 13, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0006\"}', '2026-09-03 06:42:01'),
+(55, 5, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0001\"}', '2026-09-04 00:57:49'),
+(56, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 01:16:30'),
+(57, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 01:18:56'),
+(58, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 01:20:00'),
+(59, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 01:28:23'),
+(60, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 03:00:03'),
+(61, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 05:58:30'),
+(62, 7, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ADMIN-2026-0001\"}', '2026-09-04 06:50:31'),
+(63, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 06:50:56'),
+(64, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 07:03:59'),
+(65, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 07:13:46'),
+(66, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 07:20:03'),
+(67, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 07:43:03'),
+(68, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-04 07:51:28'),
+(69, 21, 'User Logged In', 'auth', NULL, '{\"employee_no\":\"ENG-2026-0009\"}', '2026-09-05 01:07:38');
 
 -- --------------------------------------------------------
 

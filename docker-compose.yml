@@ -40,6 +40,9 @@ services:
       ATTENDANCE_API_URL: ${ATTENDANCE_API_URL:-}
       ATTENDANCE_API_KEY: ${ATTENDANCE_API_KEY:-}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://procurement.xandree.com}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_SUBJECT: ${VAPID_SUBJECT}
     ports:
       - "127.0.0.1:5001:5000"
     volumes:

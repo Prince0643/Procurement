@@ -70,9 +70,49 @@ curl -i http://127.0.0.1:5001/api/health
 
 ---
 
+## 4. Mobile App Update (Expo / React Native)
+
+The mobile app is built with Expo. To build and deploy the app using EAS (Expo Application Services):
+
+### Prerequisites (First time only)
+1. Install EAS CLI: `npm install -g eas-cli`
+2. Log in to your Expo account: `eas login`
+3. If not already configured, initialize EAS: `eas build:configure`
+
+### Over-The-Air (OTA) Updates (Fastest)
+If you only changed JavaScript/React code (no new native packages), you can push an OTA update directly to users' devices without app store review:
+```bash
+cd /var/www/Procurement/mobile
+# Ensure your local .env is set to production before updating
+eas update --branch production --message "Update description"
+```
+
+### Full Build (Android / iOS)
+If you added new native dependencies or need a fresh binary (.apk, .aab, .ipa):
+```bash
+cd /var/www/Procurement/mobile
+
+# Build Android APK for direct install/testing
+eas build -p android --profile preview
+
+# Build Android App Bundle (AAB) for Google Play
+eas build -p android --profile production
+
+# Build iOS for App Store
+eas build -p ios --profile production
+```
+
+### Troubleshooting API / Login Issues
+If the mobile app fails to log in or throws an error, you can view the live API logs on the production server to see exactly what is failing in the backend. Run this command on the server to tail the logs:
+```bash
+docker logs procurement_backend -f --tail 100
+```
+*(Press `Ctrl+C` to exit the log viewer)*
+
+---
 
 
-## 4. The Database Update
+## 5. The Database Update
 
 If the update includes new tables or columns, apply SQL **before** or **after** the code deploy (match your team's instructions).
 
@@ -114,7 +154,7 @@ Use `setup-db` only when you understand what it does; prefer controlled SQL patc
 
 ---
 
-## 5. Environment Persistence (`.env.prod`)
+## 6. Environment Persistence (`.env.prod`)
 
 Production secrets live **outside** Git at:
 
@@ -151,7 +191,7 @@ If only `VITE_API_URL` changed, rebuild **frontend** only.
 
 ---
 
-## 6. Quick-Reference Table
+## 7. Quick-Reference Table
 
 | Task | Command | Why? |
 |------|---------|------|
@@ -168,7 +208,7 @@ If only `VITE_API_URL` changed, rebuild **frontend** only.
 
 ---
 
-## 7. Summary "One-Liner" (Full deploy)
+## 8. Summary "One-Liner" (Full deploy)
 
 ```bash
 cd /var/www/Procurement && \
@@ -191,7 +231,7 @@ docker compose --env-file /opt/procurement/.env.prod ps
 
 ---
 
-## 8. Troubleshooting Common Issues
+## 9. Troubleshooting Common Issues
 
 ### Issue: 502 Bad Gateway on `procurement.xandree.com`
 
@@ -260,7 +300,7 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 
 ---
 
-## 9. Project Structure on Server
+## 10. Project Structure on Server
 
 ```
 /var/www/Procurement/
@@ -286,7 +326,7 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 
 ---
 
-## 10. Service Ports (Docker → Host)
+## 11. Service Ports (Docker → Host)
 
 | Service | Container | Host bind | Public URL |
 |---------|-----------|-----------|------------|
@@ -297,7 +337,7 @@ docker compose --env-file /opt/procurement/.env.prod up -d --build frontend
 
 ---
 
-## 11. Emergency Rollback
+## 12. Emergency Rollback
 
 If a deployment breaks, revert Git and rebuild:
 
@@ -312,7 +352,7 @@ curl -i https://procurement-api.xandree.com/api/health
 
 ---
 
-## 12. Post-Deployment Verification Checklist
+## 13. Post-Deployment Verification Checklist
 
 After every deployment, verify:
 
@@ -326,7 +366,7 @@ After every deployment, verify:
 
 ---
 
-## 13. Local Git: Files to Stage Before Push
+## 14. Local Git: Files to Stage Before Push
 
 When committing from a developer machine, stage only the changed files, for example:
 
